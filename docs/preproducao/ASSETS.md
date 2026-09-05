@@ -1,0 +1,45 @@
+# Inventário de produção e limites iniciais
+
+Todos os tamanhos abaixo são orçamentos propostos, não medições de assets finais. Origem “produção própria” indica trabalho ainda necessário; não atribui autoria a material não produzido. Prioridade P0: validar mecânica; P1: produção principal; P2: exploração adicional.
+
+| ID              | Material / origem                               | Formato                       | Estados ou animações                                                    | Limite inicial                                                 | Prioridade / status                                 |
+| --------------- | ----------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------- |
+| REF-01/02       | Logos fornecidas pelo usuário                   | PNG                           | Referência de rosto/gesto                                               | Preservar originais                                            | P0 / disponíveis                                    |
+| CON-01          | Conceito do trio, ferramenta integrada imagegen | PNG                           | Trio e quatro idades                                                    | Prancha de revisão; não incluir no carregamento público        | P0 / gerado, revisão pendente                       |
+| ILL-01–08       | Quadros esquemáticos próprios                   | SVG/TSX                       | Oito cenas e deslocamentos reversíveis                                  | Compartilhar formas; sem textura externa                       | P0 / implementados                                  |
+| BRD-01–06       | Storyboard jogável próprio                      | SVG/TSX                       | Seis composições sem texto interno                                      | Somente caderno                                                | P0 / implementado                                   |
+| MAP-01          | Mapa conceitual próprio                         | SVG/TSX                       | Caminho principal e retornos                                            | Somente caderno                                                | P0 / implementado                                   |
+| CHR-01–03       | Macacos procedurais próprios                    | Geometria Three.js            | Parado, movimento, gestos                                               | Substituir após validação                                      | P0 / implementados                                  |
+| CHR-FINAL-01–03 | Trio definitivo, produção própria a definir     | GLB + texturas KTX2           | Rig comum com proporções específicas                                    | Até 20 mil triângulos/personagem e 1,5 MB comprimido/modelo    | P1 / pendente                                       |
+| CHR-AGE-01–04   | Idades de Calado, produção própria              | GLB ou ilustração em camadas  | Bebê, criança, universitário, adulto                                    | Reutilizar rig/materiais quando viável                         | P1 / conceito disponível                            |
+| ANM-01          | Locomoção do trio, produção própria             | Clipes GLB                    | Idle, andar, pular, cair, pousar, recuperar                             | Clipes compartilhados; medir compressão                        | P1 / rig pendente                                   |
+| ANM-02          | Expressão/cooperação, produção própria          | Clipes GLB                    | Olhar, sugerir, cobrir olhos/ouvidos/boca, sustentar, construir, reagir | Gesto legível em câmera de jogo                                | P1 / pendente                                       |
+| ENV-00          | Terrenos de teste próprios                      | Geometria Three.js            | Colisores, ponte, estações, portão                                      | Duas plataformas sem downloads de modelo                       | P0 / implementado                                   |
+| ENV-01–05       | Jardim, Cidade, Oficina, Templo, Conexões       | Kits GLB + KTX2               | Estados antes/depois; marcos e retornos                                 | Até 5 MB/região comprimida para primeiro estudo                | P1 / pendente                                       |
+| PROP-01         | Pontes, sensores e construção                   | GLB                           | Oculto/revelado/permanente; ruidoso/silenciado; peças/montagem          | Colisores simples e estados dirigidos por dados                | P1 / geometria provisória                           |
+| PROP-02         | Máquinas de automação, sistema web, acervo      | GLB + instancing              | Desorganizado, em transformação, funcional                              | Instanciar peças/documentos; evitar milhares de corpos físicos | P1 / pendente                                       |
+| FX-01           | Malha, campo, montagem, fragmentação            | Shaders/geometria/partículas  | Sinal fraco, ativo, sustentado, resolvido                               | Desativação/redução por qualidade                              | P1 / efeitos básicos implementados                  |
+| AUD-00          | Tons sintetizados próprios                      | Web Audio API                 | Ambiente, poder, confirmação de construção                              | Sem arquivo; volume baixo, áudio opt-in                        | P0 / implementado                                   |
+| AUD-01–03       | Temas originais/licenciados do trio             | Ogg/MP3                       | Camadas combináveis e transições                                        | Até 2 MB/região no primeiro estudo                             | P1 / produção/licença pendentes                     |
+| AUD-FX          | Ambientes e efeitos originais/licenciados       | Ogg/MP3                       | Passos, poderes, máquinas, gestos não verbais                           | Pool de fontes; suspender fora de uso                          | P1 / pendente                                       |
+| UI-01           | Símbolos e controles próprios                   | SVG/CSS                       | Ativo, sustentado, foco, pausa, erro                                    | Sem catálogo de conteúdo                                       | P0 / implementado                                   |
+| PROJECT-01–04   | Estuda, iBuy, Acervo UFMG, AJÊ                  | Miniaturas/prévias a fornecer | Aproximação e prévia do portal                                          | Até 250 KB/prévia estática como primeiro orçamento             | P1 / URLs extraídas do currículo, imagens pendentes |
+| SOCIAL-01       | Imagem social do trio validado                  | PNG/WebP                      | Composição final                                                        | Derivar da arte aprovada                                       | P1 / pendente                                       |
+
+Antes de integrar material definitivo, registrar autor/origem, licença ou permissão de uso, arquivo-fonte, tamanho real, versão e exportação. Nenhum asset de GTA VI ou Bruno Simon será incorporado. O conceito gerado preserva o original e seu prompt em arquivo; não é apresentado como arte humana licenciada de terceiros.
+
+## Plano de desempenho para PC
+
+Meta: 60 fps em computador intermediário a selecionar. O ambiente headless com renderização por software serve para verificar comportamento; não valida a meta de desempenho de uma GPU real.
+
+| Qualidade | Pixel ratio máximo | Sombras    | Propostas para produção                              |
+| --------- | ------------------ | ---------- | ---------------------------------------------------- |
+| Baixa     | 1                  | Desligadas | Efeitos simples, partículas mínimas, sem reflexos    |
+| Média     | 1,5                | Mapa 1024  | Sombras limitadas e partículas moderadas             |
+| Alta      | 2                  | Mapa 2048  | Melhor definição, sem ultrapassar orçamento de frame |
+
+Implementado: importação tardia do módulo do jogo, geometria provisória leve, física em passo fixo, limitação de delta após pausa, qualidades configuráveis, pausa da simulação/áudio e redução de movimentos. Carregamento inicial indica a preparação real da física/cenário, sem percentual simulado.
+
+Pendente para produção: perfilar GPU/memória; limitar chamadas de desenho por região; comprimir modelos/texturas; medir transferências sob rede limitada; carregar regiões por proximidade; manter regiões de sustentadores residentes; descartar geometria, materiais e áudio sem uso. A primeira medição representativa ajustará os limites de tabela.
+
+Celular está fora do escopo jogável por decisão posterior do usuário. A página mostra orientação para usar PC e não inicia o carregamento 3D. Isso não substitui as verificações de teclado, contraste, movimento reduzido e pistas visuais sem áudio.

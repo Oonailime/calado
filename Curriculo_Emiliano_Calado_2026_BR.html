@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Currículo — Emiliano José Guimarães de Almeida Calado</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 8mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      background: #dce5eb;
+    }
+
+    body {
+      width: 194mm;
+      min-height: 281mm;
+      margin: 0 auto;
+      padding: 0;
+      color: #17212b;
+      background:
+        linear-gradient(rgba(15, 118, 110, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(15, 118, 110, 0.025) 1px, transparent 1px),
+        #ffffff;
+      background-size: 16px 16px;
+      font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+      font-size: 9pt;
+      line-height: 1.32;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .terminal-hero {
+      overflow: hidden;
+      color: #dce7ef;
+      background: #0b1320;
+      border: 1px solid #233247;
+      border-radius: 9px;
+      box-shadow: 0 6px 18px rgba(15, 35, 50, 0.16);
+    }
+
+    .terminal-bar {
+      display: grid;
+      grid-template-columns: 66px 1fr 66px;
+      align-items: center;
+      min-height: 25px;
+      padding: 0 10px;
+      color: #8fa1b3;
+      background: #121e2e;
+      border-bottom: 1px solid #26364a;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 7.5pt;
+    }
+
+    .terminal-dots {
+      display: flex;
+      gap: 5px;
+    }
+
+    .terminal-dots span {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+    }
+
+    .dot-red {
+      background: #ff6b6b;
+    }
+
+    .dot-yellow {
+      background: #ffd166;
+    }
+
+    .dot-green {
+      background: #4ade80;
+    }
+
+    .terminal-title {
+      text-align: center;
+    }
+
+    .terminal-body {
+      padding: 11px 15px 12px;
+      background:
+        radial-gradient(circle at 90% 15%, rgba(56, 189, 248, 0.09), transparent 28%),
+        #0b1320;
+    }
+
+    .command {
+      margin: 0 0 4px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 8pt;
+    }
+
+    .terminal-user {
+      color: #4ade80;
+      font-weight: 700;
+    }
+
+    .terminal-path {
+      color: #60a5fa;
+    }
+
+    h1 {
+      margin: 0 0 2px;
+      color: #f4f8fb;
+      font-size: 21pt;
+      line-height: 1.05;
+      letter-spacing: -0.45px;
+    }
+
+    .headline {
+      margin: 0 0 5px;
+      color: #67e8f9;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 10.5pt;
+      font-weight: 700;
+    }
+
+    .contact {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px 15px;
+      color: #aebdca;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 7.8pt;
+    }
+
+    .contact span::before {
+      color: #4ade80;
+    }
+
+    .contact span:nth-child(1)::before {
+      content: "location=";
+    }
+
+    .contact span:nth-child(2)::before {
+      content: "phone=";
+    }
+
+    .contact span:nth-child(3)::before {
+      content: "mail=";
+    }
+
+    .contact span:nth-child(4)::before {
+      content: "linkedin=";
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    main {
+      padding: 0 3px;
+    }
+
+    section {
+      margin-top: 7px;
+    }
+
+    h2 {
+      margin: 0 0 5px;
+      padding: 4px 7px;
+      color: #17384a;
+      background: linear-gradient(90deg, #edf6f5, rgba(237, 246, 245, 0.22));
+      border-left: 3px solid #0f9f75;
+      border-radius: 0 5px 5px 0;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 10pt;
+      line-height: 1.1;
+      letter-spacing: 0.15px;
+    }
+
+    h2::before {
+      content: "~/cv $ ";
+      color: #0b8f68;
+    }
+
+    p {
+      margin: 0;
+    }
+
+    .summary {
+      margin: 0 7px;
+      padding-left: 9px;
+      border-left: 1px dashed #9cb7b1;
+    }
+
+    .skills {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 7px;
+    }
+
+    .skill-line {
+      min-height: 26px;
+      padding: 5px 7px;
+      background: #f7fafb;
+      border: 1px solid #dbe7e7;
+      border-radius: 5px;
+    }
+
+    .skill-line strong {
+      color: #08785b;
+      font-family: Consolas, "Courier New", monospace;
+    }
+
+    .role {
+      position: relative;
+      margin: 6px 3px 0 7px;
+      padding-left: 13px;
+      border-left: 2px solid #72b9a7;
+      break-inside: avoid;
+    }
+
+    .role::before {
+      position: absolute;
+      top: 3px;
+      left: -5px;
+      width: 8px;
+      height: 8px;
+      content: "";
+      background: #0f9f75;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 0 1px #0f9f75;
+    }
+
+    .role:first-of-type {
+      margin-top: 0;
+    }
+
+    .role-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 1px;
+    }
+
+    .role-title {
+      color: #152c3b;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 9.7pt;
+      font-weight: 700;
+    }
+
+    .role-date {
+      flex: none;
+      padding: 1px 6px;
+      color: #486372;
+      background: #edf3f5;
+      border-radius: 8px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 7.9pt;
+      font-weight: 700;
+    }
+
+    .company {
+      margin-bottom: 2px;
+      color: #0a795d;
+      font-family: Consolas, "Courier New", monospace;
+      font-weight: 700;
+    }
+
+    .company::before {
+      content: "@ ";
+      color: #55a9be;
+    }
+
+    ul {
+      margin: 2px 0 0 16px;
+      padding: 0;
+    }
+
+    li {
+      margin: 0.5px 0;
+      padding-left: 1px;
+    }
+
+    li::marker {
+      color: #0f9f75;
+    }
+
+    .projects {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .project {
+      min-height: 73px;
+      padding: 7px 8px 6px;
+      background: #f8fafb;
+      border: 1px solid #d7e3e8;
+      border-radius: 6px;
+      box-shadow: inset 3px 0 #55a9be;
+      break-inside: avoid;
+    }
+
+    .project-name {
+      color: #17384a;
+      font-family: Consolas, "Courier New", monospace;
+      font-weight: 700;
+    }
+
+    .project-name::before {
+      content: "repo://";
+      color: #0b8f68;
+      font-weight: 400;
+    }
+
+    .project-stack {
+      margin: 1px 0 2px;
+      color: #657786;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 7.6pt;
+      font-weight: 700;
+    }
+
+    .education-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      margin: 4px 4px 0;
+      padding: 5px 8px;
+      background: #f8fafb;
+      border: 1px solid #dbe5e9;
+      border-radius: 5px;
+    }
+
+    .education-item:first-of-type {
+      margin-top: 0;
+    }
+
+    .education-title {
+      color: #17384a;
+      font-family: Consolas, "Courier New", monospace;
+      font-weight: 700;
+    }
+
+    .education-school {
+      color: #0a795d;
+    }
+
+    .education-date {
+      color: #596773;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 7.9pt;
+      font-weight: 700;
+    }
+
+    footer {
+      margin: 7px 3px 0;
+      padding: 4px 7px;
+      color: #8ba0af;
+      background: #0b1320;
+      border-radius: 5px;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 7pt;
+      text-align: center;
+    }
+
+    footer::before {
+      content: "emiliano@dev:~$ exit 0  // ";
+      color: #4ade80;
+    }
+
+    @media print {
+      html,
+      body {
+        background-color: #ffffff;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="terminal-hero">
+    <div class="terminal-bar">
+      <div class="terminal-dots" aria-hidden="true">
+        <span class="dot-red"></span>
+        <span class="dot-yellow"></span>
+        <span class="dot-green"></span>
+      </div>
+      <a class="terminal-title" href="https://github.com/Oonailime" target="_blank" rel="noopener noreferrer">Oonailime@github — ~/curriculo</a>
+      <span></span>
+    </div>
+    <div class="terminal-body">
+      <p class="command"><span class="terminal-user">emiliano@dev</span>:<span class="terminal-path">~</span>$ whoami</p>
+      <h1>Emiliano José Guimarães de Almeida Calado</h1>
+      <p class="headline">Desenvolvedor de Software Full Stack</p>
+      <div class="contact">
+        <span> Brasil</span>
+        <span><a href="https://web.whatsapp.com/send?phone=5521965559976" target="_blank" rel="noopener noreferrer">(21)96555-9976</a></span>
+        <span><a href="mailto:emiliano.jgac@gmail.com" target="_blank" rel="noopener noreferrer">emiliano.jgac@gmail.com</a></span>
+        <span><a href="https://www.linkedin.com/in/emiliano-calado" target="_blank" rel="noopener noreferrer">linkedin.com/in/emiliano-calado</a></span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>Resumo profissional</h2>
+      <p class="summary">
+        Desenvolvedor Full Stack com experiência na construção e evolução de aplicações web, APIs REST
+        e integrações. Atuação com TypeScript, React, Next.js, NestJS e C#/.NET, incluindo
+        manutenção de sistemas corporativos, diagnóstico de incidentes e modelagem de dados. Perfil analítico,
+        orientado à resolução de problemas, qualidade de código e aprendizado contínuo.
+      </p>
+    </section>
+
+    <section>
+      <h2>Competências técnicas</h2>
+      <div class="skills">
+        <p class="skill-line"><strong>Linguagens:</strong> TypeScript, JavaScript, C#, SQL, Python, Java e Dart</p>
+        <p class="skill-line"><strong>Frontend:</strong> React, Next.js, Flutter, HTML e CSS</p>
+        <p class="skill-line"><strong>Backend:</strong> Node.js, NestJS, .NET e APIs REST</p>
+        <p class="skill-line"><strong>Dados:</strong> PostgreSQL, Firebase e Prisma ORM</p>
+        <p class="skill-line"><strong>Infraestrutura:</strong> Docker, Kubernetes, Rancher e Amazon SQS</p>
+        <p class="skill-line"><strong>Versionamento:</strong> Git, GitHub e GitLab</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Experiência profissional</h2>
+
+      <article class="role">
+        <div class="role-head">
+          <span class="role-title">Desenvolvedor</span>
+          
+        </div>
+        <p class="company">AEDAS — Associação Estadual de Defesa Ambiental e Social</p>
+        <ul>
+          <li>Manutenção e refatoração de aplicações corporativas, com levantamento de requisitos e organização de dados.</li>
+          <li>Migração e automação de processos utilizando Power Apps, SharePoint, Dataverse, Power Automate e Excel.</li>
+          <li>Apoio à evolução de fluxos internos com foco em consistência das informações e redução de tarefas manuais.</li>
+        </ul>
+      </article>
+
+      <article class="role">
+        <div class="role-head">
+          <span class="role-title">Desenvolvedor de Software</span>
+          
+        </div>
+        <p class="company">ArcH</p>
+        <ul>
+          <li>Desenvolvimento e manutenção de aplicações corporativas e integrações com TypeScript, React e C#/.NET.</li>
+          <li>Evolução de APIs REST e fluxos assíncronos com mensageria, Docker, Kubernetes e CI/CD.</li>
+          <li>Diagnóstico de falhas em sistemas distribuídos de pagamentos por meio de logs, rastreamento de fluxos e análise de filas.</li>
+          <li>Correção de um fluxo PIX em homologação, alinhando BFF, API, mensageria, feature toggles e contrato do provedor.</li>
+          <li>Identificação de workflow malicioso em repositório legado, contribuindo para interromper a exposição de segredos e apoiar a investigação.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section>
+      <h2>Projetos selecionados</h2>
+      <div class="projects">
+        <article class="project">
+          <p><a class="project-name" href="https://github.com/Oonailime/studyLocal" target="_blank" rel="noopener noreferrer">Estuda — plataforma de preparação para concursos</a></p>
+          <p class="project-stack">Next.js · React · NestJS · PostgreSQL · Prisma · Docker</p>
+          <p>
+            Aplicação full stack com planos de estudo, simulados cronometrados, retomada de rascunhos,
+            histórico de desempenho e processamento de provas em PDF.
+          </p>
+        </article>
+
+        <article class="project">
+          <p><a class="project-name" href="https://ibuy-bym.web.app/" target="_blank" rel="noopener noreferrer">iBuy — gerenciamento de listas de compras</a></p>
+          <p class="project-stack">Flutter · Dart · Firebase</p>
+          <p>
+            Aplicação voltada à criação e organização de listas, com foco em usabilidade,
+            experiência responsiva e sincronização de dados.
+          </p>
+        </article>
+
+        <article class="project">
+          <p><a class="project-name" href="https://github.com/Oonailime/time-line-tainacan" target="_blank" rel="noopener noreferrer">Acervo digital acadêmico UFMG</a></p>
+          <p class="project-stack">WordPress · Tainacan · PHP · Open Source</p>
+          <p>
+            Desenvolvimento de plugin open source para visualização de acervos em linha do tempo,
+            além da estruturação de metadados e do repositório digital.
+          </p>
+        </article>
+
+        <article class="project">
+          <p><a class="project-name" href="https://www.assessoriajuridicaespecializada.com/" target="_blank" rel="noopener noreferrer">Landing page institucional - AJÊ </a></p>
+          <p class="project-stack">Next.js · SEO técnico · Web Performance</p>
+          <p>
+            Desenvolvimento de site institucional responsivo, com otimização de indexação,
+            desempenho e apresentação do conteúdo.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Formação acadêmica</h2>
+      <div class="education-item">
+        <div>
+          <p class="education-title">Ciência da Computação</p>
+          <p class="education-school">Universidade Federal de Minas Gerais — UFMG</p>
+        </div>
+        <span class="education-date">Mobilidade acadêmica · 2026.2</span>
+      </div>
+      <div class="education-item">
+        <div>
+          <p class="education-title">Engenharia da Computação</p>
+          <p class="education-school">Universidade Federal da Bahia — UFBA</p>
+        </div>
+        <span class="education-date">Em andamento</span>
+      </div>
+      <div class="education-item">
+        <div>
+          <p class="education-title">Bacharelado Interdisciplinar em Ciência e Tecnologia</p>
+          <p class="education-school">Universidade Federal da Bahia — UFBA</p>
+        </div>
+        <span class="education-date">2020 – 2024</span>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Currículo atualizado em julho de 2026
+  </footer>
+</body>
+</html>
