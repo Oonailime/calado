@@ -4,7 +4,10 @@ export type PuzzleState = {
   selected: CharacterId;
   powers: [boolean, boolean, boolean];
   sustained: [boolean, boolean, boolean];
+  logs: [boolean, boolean, boolean];
   bridge: boolean;
+  codeProgress: number;
+  unlocked: boolean;
   built: boolean;
   revision: number;
 };
@@ -12,7 +15,10 @@ export const initialPuzzle = (): PuzzleState => ({
   selected: 2,
   powers: [false, false, false],
   sustained: [false, false, false],
+  logs: [false, false, false],
   bridge: false,
+  codeProgress: 0,
+  unlocked: false,
   built: false,
   revision: 0,
 });
@@ -22,8 +28,19 @@ export const anchors = {
   reveal: { x: 3, y: ISLAND_SURFACE_Y, z: -21 },
   silence: { x: -3, y: ISLAND_SURFACE_Y, z: -21 },
   bridgeBuild: { x: 0, y: ISLAND_SURFACE_Y, z: -15.5 },
+  padlock: { x: 0, y: ISLAND_SURFACE_Y, z: -21.8 },
   finalBuild: { x: 0, y: ISLAND_SURFACE_Y, z: -26 },
+  logs: [
+    { x: -2.4, y: ISLAND_SURFACE_Y, z: -2.2 },
+    { x: 2.4, y: ISLAND_SURFACE_Y, z: -2.2 },
+    { x: 0, y: ISLAND_SURFACE_Y, z: -5.6 },
+  ],
 };
+const LOG_RANGE = 2.4;
+// Calado reads this on the totem's padlock as four sound pulses per digit;
+// only Mizaru can see them (see World.tsx's SoundWaves).
+export const LOCK_CODE = [1, 9, 9, 8] as const;
+export const LOCK_RANGE = 2.3;
 export function selectCharacter(
   state: PuzzleState,
   id: CharacterId,
@@ -54,11 +71,42 @@ export function startPower(
   powers[id] = true;
   return { ...state, powers };
 }
+// Calado only gathers wood while Mizaru's reveal keeps the palms marked,
+// and before the bridge exists — collecting is the precondition to build it.
+export function collectLog(state: PuzzleState, position: Vec3): PuzzleState {
+  if (state.selected !== 2 || state.bridge || !state.powers[0]) return state;
+  const index = anchors.logs.findIndex(
+    (anchor, i) => !state.logs[i] && distance(position, anchor) < LOG_RANGE,
+  );
+  if (index === -1) return state;
+  const logs = [...state.logs] as PuzzleState["logs"];
+  logs[index] = true;
+  return { ...state, logs };
+}
+// Calado enters one digit at a time. A correct digit advances the broadcast;
+// a wrong digit leaves the current step unchanged so it can be tried again.
+export function submitCodeDigit(
+  state: PuzzleState,
+  position: Vec3,
+  digit: number,
+): PuzzleState {
+  if (state.selected !== 2 || state.unlocked) return state;
+  if (distance(position, anchors.padlock) > LOCK_RANGE) return state;
+  if (digit !== LOCK_CODE[state.codeProgress]) return state;
+
+  const codeProgress = state.codeProgress + 1;
+  return {
+    ...state,
+    codeProgress,
+    unlocked: codeProgress === LOCK_CODE.length,
+  };
+}
 export function construct(state: PuzzleState, position: Vec3): PuzzleState {
   if (state.selected !== 2) return state;
   if (
     !state.bridge &&
     state.powers[0] &&
+    state.logs.every(Boolean) &&
     distance(position, anchors.bridgeBuild) < 2.3
   ) {
     return {
@@ -72,6 +120,7 @@ export function construct(state: PuzzleState, position: Vec3): PuzzleState {
     state.bridge &&
     state.powers[0] &&
     state.powers[1] &&
+    state.unlocked &&
     distance(position, anchors.finalBuild) < 2.3
   ) {
     return {

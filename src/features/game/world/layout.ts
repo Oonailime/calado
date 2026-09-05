@@ -7,21 +7,23 @@ export const ISLAND_BASE_Y = ISLAND_SURFACE_Y - ISLAND_THICKNESS;
 export const BEACH_RAMP_SCALE = 1.32;
 export const BEACH_BRIDGE_SCALE = 1.06;
 export const BEACH_SHORE_Y = 0.05;
+// Wider islands leave room for denser forests. Their centers move away from
+// the river as depth grows, preserving the original bridge-facing shoreline.
 export const ISLANDS = [
   {
     x: 0,
-    z: 1,
-    halfWidth: 6,
-    halfDepth: 7,
+    z: 5.25,
+    halfWidth: 9,
+    halfDepth: 10,
     seed: 4471,
     grass: "#708d4d",
     earth: "#694a31",
   },
   {
     x: 0,
-    z: -21,
-    halfWidth: 7,
-    halfDepth: 8,
+    z: -25.25,
+    halfWidth: 10,
+    halfDepth: 11,
     seed: 9142,
     grass: "#637f45",
     earth: "#5e422e",

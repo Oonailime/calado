@@ -176,3 +176,45 @@
 .contrast .portrait {
   border-color: #fff;
 }
+.lockDigits {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  margin: 22px 0;
+}
+.lockDigit {
+  width: 48px;
+  height: 60px;
+  display: grid;
+  place-items: center;
+  font:
+    30px Georgia,
+    serif;
+  background: #15291f;
+  border: 1px solid #a5b19155;
+  color: #ece1c7;
+}
+.lockDigitActive {
+  border-color: #cfb579;
+  color: #f0dfa8;
+  box-shadow: 0 0 0 2px #cfb57955;
+}
+.lockDigitCorrect {
+  background: #183426;
+  border-color: #78bd83;
+  color: #9de0a4;
+  box-shadow: 0 0 0 2px #78bd8338;
+}
+.lockDigitLocked {
+  background: #18211d;
+  border-color: #68736a55;
+  color: #707972;
+  opacity: 0.68;
+}
+.lockHint {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #cfd2bd;
+  text-align: center;
+  margin: 0;
+}

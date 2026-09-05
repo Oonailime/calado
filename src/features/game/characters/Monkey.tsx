@@ -13,16 +13,22 @@ import {
   LoadingManager,
   Mesh,
   MeshStandardMaterial,
+  Quaternion,
   SkinnedMesh,
   Vector3,
   type AnimationAction,
   type Object3D,
 } from "three";
 import { CHARACTERS, type CharacterId } from "../types";
+import { runtime } from "../state/store";
 import {
   classifyMonkeySurface,
+  MONKEY_POWER_POSES,
   monkeyAnimation,
   monkeySurfaceColor,
+  nextPowerPoseBlend,
+  type PowerPoseGesture,
+  type PowerPoseHand,
   type BoneInfluence,
 } from "./monkeyAppearance";
 
@@ -45,20 +51,24 @@ class MonkeyFBXLoader extends FBXLoader {
 }
 
 type Bones = {
-  shoulderL?: Bone;
   armL?: Bone;
+  forearmL?: Bone;
   handL?: Bone;
-  shoulderR?: Bone;
   armR?: Bone;
+  forearmR?: Bone;
   handR?: Bone;
   head?: Bone;
+  eyeL?: Bone;
+  eyeR?: Bone;
+  earL?: Bone;
+  earR?: Bone;
+  mouth?: Bone;
 };
 type Rig = {
   model: Group;
   mixer: AnimationMixer;
   actions: { idle?: AnimationAction; run?: AnimationAction };
   bones: Bones;
-  rest: Map<Bone, { x: number; y: number; z: number }>;
   baseScale: number;
 };
 const RIG_CACHE = new WeakMap<Group, Partial<Record<CharacterId, Rig>>>();
@@ -67,6 +77,17 @@ function findBone(root: Object3D, name: string): Bone | undefined {
   let found: Bone | undefined;
   root.traverse((o) => {
     if (!found && (o as Bone).isBone && o.name === name) found = o as Bone;
+  });
+  return found;
+}
+function findBoneStartingWith(
+  root: Object3D,
+  prefix: string,
+): Bone | undefined {
+  let found: Bone | undefined;
+  root.traverse((object) => {
+    if (!found && (object as Bone).isBone && object.name.startsWith(prefix))
+      found = object as Bone;
   });
   return found;
 }
@@ -142,27 +163,22 @@ function buildRig(template: Group, id: CharacterId): Rig {
   });
 
   const bones: Bones = {
-    shoulderL: findBone(model, "Shoulder_L"),
     armL: findBone(model, "Arm01_L"),
+    forearmL: findBone(model, "Arm02_L"),
     handL: findBone(model, "Hand_L"),
-    shoulderR: findBone(model, "Shoulder_R"),
     armR: findBone(model, "Arm01_R"),
+    forearmR: findBone(model, "Arm02_R"),
     handR: findBone(model, "Hand_R"),
     head: findBone(model, "Head"),
+    eyeL: findBone(model, "eye_L"),
+    eyeR: findBone(model, "eye_R"),
+    earL: findBoneStartingWith(model, "ear_L"),
+    earR: findBoneStartingWith(model, "ear_R"),
+    mouth: findBone(model, "mouth"),
   };
-  const rest = new Map<Bone, { x: number; y: number; z: number }>();
-  Object.values(bones).forEach((bone) => {
-    if (bone)
-      rest.set(bone, {
-        x: bone.rotation.x,
-        y: bone.rotation.y,
-        z: bone.rotation.z,
-      });
-  });
 
   if (id === 0 && bones.head) {
-    const eyeL = findBone(model, "eye_L");
-    const eyeR = findBone(model, "eye_R");
+    const { eyeL, eyeR } = bones;
     if (eyeL && eyeR) {
       const band = bandana(CHARACTERS[0].light);
       const mid = eyeL.position.clone().add(eyeR.position).multiplyScalar(0.5);
@@ -187,7 +203,6 @@ function buildRig(template: Group, id: CharacterId): Rig {
     mixer,
     actions: { idle, run },
     bones,
-    rest,
     baseScale: scale,
   };
 }
@@ -204,18 +219,145 @@ function getRig(template: Group, id: CharacterId): Rig {
   }
   return rig;
 }
-function poseTo(bone: Bone, x: number, y: number, z: number) {
-  bone.rotation.x += (x - bone.rotation.x) * 0.25;
-  bone.rotation.y += (y - bone.rotation.y) * 0.25;
-  bone.rotation.z += (z - bone.rotation.z) * 0.25;
+const Y_AXIS = new Vector3(0, 1, 0);
+const WORLD_DOWN = new Vector3(0, -1, 0);
+const IK = {
+  shoulder: new Vector3(),
+  elbow: new Vector3(),
+  wrist: new Vector3(),
+  head: new Vector3(),
+  anchor: new Vector3(),
+  target: new Vector3(),
+  direction: new Vector3(),
+  radial: new Vector3(),
+  outward: new Vector3(),
+  bend: new Vector3(),
+  solvedElbow: new Vector3(),
+  currentAxis: new Vector3(),
+  bonePosition: new Vector3(),
+  parentWorld: new Quaternion(),
+  boneWorld: new Quaternion(),
+  rotationDelta: new Quaternion(),
+  desiredWorld: new Quaternion(),
+};
+
+// Rotate only enough to point the bone's natural +Y chain axis at a target.
+// Keeping the existing twist from the source animation prevents corkscrew-like
+// deformation in the arm and hand meshes.
+function aimBoneAt(bone: Bone, target: Vector3) {
+  if (!bone.parent) return;
+  bone.updateWorldMatrix(true, false);
+  bone.getWorldPosition(IK.bonePosition);
+  IK.direction.subVectors(target, IK.bonePosition);
+  if (IK.direction.lengthSq() < 1e-8) return;
+  IK.direction.normalize();
+  bone.getWorldQuaternion(IK.boneWorld);
+  IK.currentAxis.copy(Y_AXIS).applyQuaternion(IK.boneWorld).normalize();
+  IK.rotationDelta.setFromUnitVectors(IK.currentAxis, IK.direction);
+  IK.desiredWorld.copy(IK.rotationDelta).multiply(IK.boneWorld);
+  bone.parent.getWorldQuaternion(IK.parentWorld);
+  IK.parentWorld.invert();
+  bone.quaternion.copy(IK.parentWorld.multiply(IK.desiredWorld));
 }
-function restore(bone: Bone | undefined, rest: Rig["rest"]) {
-  if (!bone) return;
-  const target = rest.get(bone);
-  if (!target) return;
-  bone.rotation.x += (target.x - bone.rotation.x) * 0.2;
-  bone.rotation.y += (target.y - bone.rotation.y) * 0.2;
-  bone.rotation.z += (target.z - bone.rotation.z) * 0.2;
+
+function poseArm(
+  rig: Rig,
+  upperArm: Bone | undefined,
+  forearm: Bone | undefined,
+  hand: Bone | undefined,
+  anchor: Bone | undefined,
+  blend: number,
+) {
+  if (!upperArm || !forearm || !hand || !anchor || !rig.bones.head) return;
+
+  upperArm.updateWorldMatrix(true, true);
+  upperArm.getWorldPosition(IK.shoulder);
+  forearm.getWorldPosition(IK.elbow);
+  hand.getWorldPosition(IK.wrist);
+  anchor.getWorldPosition(IK.anchor);
+  rig.bones.head.getWorldPosition(IK.head);
+
+  const upperLength = IK.shoulder.distanceTo(IK.elbow);
+  const lowerLength = IK.elbow.distanceTo(IK.wrist);
+  if (upperLength < 1e-5 || lowerLength < 1e-5) return;
+
+  // Stop the wrist just outside the face instead of pulling the hand through
+  // it. The offset follows the real eye/ear/mouth position from this rig.
+  IK.radial.subVectors(IK.anchor, IK.head);
+  if (IK.radial.lengthSq() < 1e-8) IK.radial.set(0, 0, 1);
+  IK.radial.normalize();
+  IK.target
+    .copy(IK.anchor)
+    .addScaledVector(IK.radial, lowerLength * 0.12)
+    .lerp(IK.wrist, 1 - blend);
+
+  IK.direction.subVectors(IK.target, IK.shoulder);
+  const rawDistance = IK.direction.length();
+  if (rawDistance < 1e-6) return;
+  IK.direction.normalize();
+  const distance = Math.min(
+    upperLength + lowerLength - 1e-5,
+    Math.max(Math.abs(upperLength - lowerLength) + 1e-5, rawDistance),
+  );
+  IK.target.copy(IK.shoulder).addScaledVector(IK.direction, distance);
+
+  // Prefer an elbow below and outside the torso. Projecting that preference
+  // onto the bend plane gives a natural two-bone solution without changing
+  // either bone's length.
+  IK.outward.subVectors(IK.shoulder, IK.head);
+  IK.outward.y = 0;
+  if (IK.outward.lengthSq() < 1e-8) IK.outward.set(1, 0, 0);
+  IK.outward.normalize();
+  IK.bend
+    .copy(WORLD_DOWN)
+    .multiplyScalar(0.8)
+    .addScaledVector(IK.outward, 0.65)
+    .addScaledVector(IK.radial, 0.12)
+    .addScaledVector(IK.direction, -IK.bend.dot(IK.direction));
+  if (IK.bend.lengthSq() < 1e-8)
+    IK.bend.crossVectors(IK.direction, Y_AXIS);
+  IK.bend.normalize();
+
+  const along =
+    (upperLength * upperLength - lowerLength * lowerLength + distance * distance) /
+    (2 * distance);
+  const height = Math.sqrt(
+    Math.max(0, upperLength * upperLength - along * along),
+  );
+  IK.solvedElbow
+    .copy(IK.shoulder)
+    .addScaledVector(IK.direction, along)
+    .addScaledVector(IK.bend, height)
+    .lerp(IK.elbow, 1 - blend);
+
+  aimBoneAt(upperArm, IK.solvedElbow);
+  upperArm.updateWorldMatrix(true, true);
+  aimBoneAt(forearm, IK.target);
+  forearm.updateWorldMatrix(true, true);
+}
+
+function faceAnchor(
+  bones: Bones,
+  gesture: PowerPoseGesture,
+  hand: PowerPoseHand,
+) {
+  if (gesture === "eyes") return hand === "left" ? bones.eyeL : bones.eyeR;
+  if (gesture === "ears") return hand === "left" ? bones.earL : bones.earR;
+  return bones.mouth;
+}
+
+function applyPowerPose(rig: Rig, id: CharacterId, blend: number) {
+  const pose = MONKEY_POWER_POSES[id];
+  for (const side of pose.hands) {
+    poseArm(
+      rig,
+      side === "left" ? rig.bones.armL : rig.bones.armR,
+      side === "left" ? rig.bones.forearmL : rig.bones.forearmR,
+      side === "left" ? rig.bones.handL : rig.bones.handR,
+      faceAnchor(rig.bones, pose.gesture, side),
+      blend,
+    );
+  }
 }
 
 export default function Monkey({
@@ -230,7 +372,7 @@ export default function Monkey({
   const template = useLoader(MonkeyFBXLoader, MODEL_URL);
   const activeAction = useRef<"idle" | "run">("idle");
   const switchCooldown = useRef(0);
-  const phase = useRef(0);
+  const powerPoseBlend = useRef(0);
 
   useFrame((_, delta) => {
     const rig = getRig(template, id);
@@ -244,7 +386,6 @@ export default function Monkey({
       speed,
       activeAction.current === "run",
     );
-    const running = wantRun === "run";
     switchCooldown.current = Math.max(0, switchCooldown.current - dt);
     rig.mixer.update(dt);
     const { idle, run } = rig.actions;
@@ -263,33 +404,15 @@ export default function Monkey({
     }
     if (run) run.timeScale = grounded ? 0.85 + speed * 0.14 : 1.15;
 
-    phase.current += dt * (running ? 5.4 + speed * 1.3 : 1.1);
-    const b = rig.bones;
-    if (power && id === 0 && b.shoulderL && b.shoulderR && b.armL && b.armR) {
-      const flutter = Math.sin(phase.current * 3.2) * 0.05;
-      poseTo(b.shoulderL, -1.7, 0.3, 0.4 + flutter);
-      poseTo(b.armL, -0.6, 0, 0.2);
-      poseTo(b.shoulderR, -1.7, -0.3, -0.4 - flutter);
-      poseTo(b.armR, -0.6, 0, -0.2);
-    } else if (
-      power &&
-      id === 1 &&
-      b.shoulderL &&
-      b.shoulderR &&
-      b.armL &&
-      b.armR
-    ) {
-      const tremble = Math.sin(phase.current * 9) * 0.03;
-      poseTo(b.shoulderL, -1.5, 0.9, 0.3);
-      poseTo(b.armL, -0.4 + tremble, 0, 0.1);
-      poseTo(b.shoulderR, -1.5, -0.9, -0.3);
-      poseTo(b.armR, -0.4 - tremble, 0, -0.1);
-    } else {
-      restore(b.shoulderL, rig.rest);
-      restore(b.armL, rig.rest);
-      restore(b.shoulderR, rig.rest);
-      restore(b.armR, rig.rest);
-    }
+    const powerPoseActive =
+      power || (id === 2 && runtime.poseUntil[id] > performance.now());
+    powerPoseBlend.current = nextPowerPoseBlend(
+      powerPoseBlend.current,
+      powerPoseActive,
+      dt,
+    );
+    if (powerPoseBlend.current > 0.001)
+      applyPowerPose(rig, id, powerPoseBlend.current);
     // No jump clip exists in the source rig, and posing individual leg
     // bones on top of a still-playing walk/idle clip twisted the mesh badly
     // (the clip keeps driving the lower leg/foot chain relative to a parent

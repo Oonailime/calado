@@ -232,8 +232,23 @@ test("ponte tem piso nivelado com as ilhas e o vão não recebe solo invisível"
   }
 });
 
+test("ilhas ampliadas preservam as duas margens e o canal do rio", () => {
+  assert.ok(ISLANDS[0].halfWidth >= 9);
+  assert.ok(ISLANDS[1].halfWidth >= 10);
+  assert.equal(
+    safeGround(0, BRIDGE.z + BRIDGE.length / 2, false),
+    true,
+  );
+  assert.equal(
+    safeGround(0, BRIDGE.z - BRIDGE.length / 2, false),
+    true,
+  );
+  assert.equal(safeGround(0, BRIDGE.z, false), false);
+  assert.ok(waterDepth(0, BRIDGE.z, false) > 0.2);
+});
+
 test("navegação e âncoras usam a altura e o contorno real do terreno", () => {
-  for (const anchor of Object.values(anchors)) {
+  for (const anchor of Object.values(anchors).flat()) {
     assert.equal(anchor.y, ISLAND_SURFACE_Y);
     assert.equal(safeGround(anchor.x, anchor.z, false), true);
   }

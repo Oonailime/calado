@@ -151,6 +151,7 @@ export default function Character({
     previous.current = { x: p.x, z: p.z };
     locomotion.current.speed = Math.hypot(vx, vz);
     locomotion.current.grounded = grounded;
+    runtime.speeds[id] = locomotion.current.speed;
     rigid.setLinvel({ x: vx, y: vy, z: vz }, true);
     if (model.current && locomotion.current.speed > 0.1) {
       const target = Math.atan2(vx, vz);

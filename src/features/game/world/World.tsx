@@ -1,63 +1,43 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
-import { CuboidCollider, RigidBody } from "@react-three/rapier";
+import { CuboidCollider, CylinderCollider, RigidBody } from "@react-three/rapier";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   AdditiveBlending,
   Color,
   DodecahedronGeometry,
+  DoubleSide,
   Fog,
   Group,
   InstancedMesh,
+  LatheGeometry,
   MathUtils,
   Material,
   Mesh,
+  MeshBasicMaterial,
   MeshStandardMaterial,
   Object3D,
+  Vector2,
   type BufferGeometry,
 } from "three";
 import { runtime, useGame } from "../state/store";
-import { anchors } from "../state/rules";
+import { anchors, LOCK_CODE } from "../state/rules";
 import { Water } from "./Water";
 import { Bridge, BRIDGE_MODEL_URL } from "./Bridge";
-import { IslandVegetation } from "./Vegetation";
+import { IslandVegetation, useNatureMesh } from "./Vegetation";
 import {
   beachRampGeometry,
   islandGeometry,
   organicIslandShape,
 } from "./terrain";
 import { BRIDGE, ISLANDS, ISLAND_BASE_Y, ISLAND_SURFACE_Y } from "./layout";
+import {
+  buildDigitSequence,
+  PULSE_MARK,
+} from "./soundCode";
+import WisdomTotem from "./Totem";
 
-function Block({
-  position,
-  size,
-  color = "#73816a",
-  collider = true,
-}: {
-  position: [number, number, number];
-  size: [number, number, number];
-  color?: string;
-  collider?: boolean;
-}) {
-  const mesh = (
-    <mesh position={position} receiveShadow castShadow>
-      <boxGeometry args={size} />
-      <meshStandardMaterial color={color} roughness={0.94} />
-    </mesh>
-  );
-  return collider ? (
-    <RigidBody type="fixed" colliders={false}>
-      <CuboidCollider
-        args={[size[0] / 2, size[1] / 2, size[2] / 2]}
-        position={position}
-      />
-      {mesh}
-    </RigidBody>
-  ) : (
-    mesh
-  );
-}
 // The collider follows both the height and silhouette of the rendered ground.
 function Island({
   x,
@@ -167,55 +147,201 @@ function Anchor({
     </group>
   );
 }
-function Mechanism({
+const PALM_SCALE = 0.0075;
+// A palm Calado can harvest for the bridge — glows gold while Mizaru's
+// reveal marks it, then becomes a stump once collected.
+function LogSite({
+  x,
   z,
-  complete,
-  running,
+  collected,
+  highlight,
 }: {
+  x: number;
   z: number;
-  complete: boolean;
-  running: boolean;
+  collected: boolean;
+  highlight: boolean;
 }) {
-  const rotor = useRef<Group>(null);
-  useFrame((_, delta) => {
-    if (rotor.current && complete && running)
-      rotor.current.rotation.y += Math.min(delta, 0.04) * 0.55;
+  const source = useNatureMesh("PalmTree_1", [
+    "#6b4a30",
+    "#4c7a4a",
+    "#4c7a4a",
+    "#4c7a4a",
+  ]);
+  const glow = useRef<Mesh>(null);
+  useFrame(({ clock }) => {
+    if (!glow.current) return;
+    const material = glow.current.material as MeshBasicMaterial;
+    if (!highlight || collected) {
+      material.opacity = 0;
+      return;
+    }
+    material.opacity = 0.4 + Math.sin(clock.elapsedTime * 3) * 0.25;
   });
   return (
-    <group position={[0, 0, z]}>
-      <Block position={[0, 0.24, 0]} size={[1.8, 0.48, 1.8]} color="#6d7862" />
-      <group ref={rotor} position={[0, 1.25, 0]}>
-        {[0, 1, 2].map((i) => (
+    <group position={[x, 0, z]}>
+      {collected ? (
+        <mesh position={[0, 0.08, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[0.14, 0.16, 0.16, 10]} />
+          <meshStandardMaterial color="#6b4a30" roughness={0.95} />
+        </mesh>
+      ) : (
+        source && (
           <mesh
-            key={i}
-            position={
-              complete
-                ? [0, i * 0.32, 0]
-                : [(i - 1) * 0.65, 0.15 + (i % 2) * 0.45, 0]
-            }
-            rotation={
-              complete ? [0, (i * Math.PI) / 3, 0] : [0.3, i * 0.7, 0.4]
-            }
+            geometry={source.geometry}
+            material={source.material}
+            scale={PALM_SCALE}
             castShadow
-          >
-            <boxGeometry args={[0.5, 0.25, 0.5]} />
-            <meshStandardMaterial
-              color={["#c19b55", "#dddcc2", "#976945"][i]}
-              emissive={complete ? "#948457" : "#000000"}
-              emissiveIntensity={0.45}
-            />
-          </mesh>
-        ))}
-        {complete && (
-          <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[0.85, 0.025, 8, 48]} />
-            <meshStandardMaterial
-              color="#dbbc78"
-              emissive="#d8ba75"
-              emissiveIntensity={0.6}
-            />
-          </mesh>
-        )}
+            receiveShadow
+          />
+        )
+      )}
+      {!collected && (
+        <mesh ref={glow} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
+          <ringGeometry args={[0.5, 0.62, 32]} />
+          <meshBasicMaterial
+            color="#eac369"
+            transparent
+            opacity={0}
+            depthWrite={false}
+          />
+        </mesh>
+      )}
+    </group>
+  );
+}
+// A cone (not a straight-sided one — the profile rounds off toward the tip,
+// like a dome capping a spire) rather than a flat wall of bars.
+function noiseConeGeometry(radius: number, height: number) {
+  const profile = [
+    new Vector2(0, 0),
+    new Vector2(radius, 0),
+    new Vector2(radius * 0.88, height * 0.42),
+    new Vector2(radius * 0.55, height * 0.78),
+    new Vector2(radius * 0.22, height * 0.96),
+    new Vector2(0, height),
+  ];
+  return new LatheGeometry(profile, 24);
+}
+const WAVE_INTERVAL = 0.8;
+const WAVE_MAX_RADIUS = 7;
+// A single expanding ring, one pulse of the code at a time — not a
+// continuous ambient wash. `active` (both keepers in position) drives the
+// sequence clock regardless of who's watching; `visible` only gates whether
+// this frame's pulse is actually rendered, since only Mizaru can perceive it.
+function SoundWaves({
+  active,
+  visible,
+  digit,
+  step,
+}: {
+  active: boolean;
+  visible: boolean;
+  digit: number;
+  step: number;
+}) {
+  const mesh = useRef<Mesh>(null);
+  const start = useRef<number | null>(null);
+  const sequence = useMemo(() => buildDigitSequence(digit), [digit]);
+  useEffect(() => {
+    start.current = null;
+  }, [step]);
+  useFrame(({ clock }) => {
+    if (!active) {
+      start.current = null;
+      return;
+    }
+    if (start.current === null) start.current = clock.elapsedTime;
+    if (!mesh.current) return;
+    const elapsed = clock.elapsedTime - start.current;
+    const index = Math.floor(elapsed / WAVE_INTERVAL) % sequence.length;
+    const phase = (elapsed / WAVE_INTERVAL) % 1;
+    mesh.current.scale.setScalar(0.4 + phase * WAVE_MAX_RADIUS);
+    const material = mesh.current.material as MeshBasicMaterial;
+    material.color.set(sequence[index]);
+    material.opacity = Math.max(0, 0.65 * (1 - phase));
+  });
+  if (!visible) return null;
+  return (
+    <mesh ref={mesh}>
+      <sphereGeometry args={[1, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2]} />
+      <meshBasicMaterial
+        color={PULSE_MARK}
+        wireframe
+        transparent
+        opacity={0}
+        side={DoubleSide}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+}
+function NoiseBarrier({
+  active,
+  visible,
+  contrast,
+  digit,
+  step,
+}: {
+  active: boolean;
+  visible: boolean;
+  contrast: boolean;
+  digit: number;
+  step: number;
+}) {
+  const geometry = useMemo(() => noiseConeGeometry(1.7, 3.4), []);
+  const cone = useRef<Mesh>(null);
+  useFrame((_, delta) => {
+    if (cone.current) cone.current.rotation.y += delta * (active ? 0.45 : 0.15);
+  });
+  return (
+    <>
+      <mesh ref={cone} geometry={geometry} castShadow>
+        <meshStandardMaterial
+          color={contrast ? "#ffffff" : "#d8e6cb"}
+          transparent
+          opacity={active ? 0.65 : 0.4}
+          roughness={0.35}
+        />
+      </mesh>
+      <SoundWaves active={active} visible={visible} digit={digit} step={step} />
+    </>
+  );
+}
+function Padlock({ unlocked }: { unlocked: boolean }) {
+  const shackle = useRef<Group>(null);
+  useFrame((_, delta) => {
+    if (!shackle.current) return;
+    const t = Math.min(1, delta * 4);
+    const targetY = unlocked ? 0.22 : 0;
+    const targetRotation = unlocked ? -0.9 : 0;
+    shackle.current.position.y +=
+      (targetY - shackle.current.position.y) * t;
+    shackle.current.rotation.z +=
+      (targetRotation - shackle.current.rotation.z) * t;
+  });
+  return (
+    <group position={[anchors.padlock.x, 0, anchors.padlock.z]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[0.75, 0.82, 40]} />
+        <meshBasicMaterial
+          color={unlocked ? "#8f9a86" : "#eac369"}
+          transparent
+          opacity={unlocked ? 0.3 : 0.55}
+        />
+      </mesh>
+      <mesh position={[0, 0.32, 0]} castShadow receiveShadow>
+        <boxGeometry args={[0.5, 0.6, 0.24]} />
+        <meshStandardMaterial color="#8a7a52" metalness={0.5} roughness={0.5} />
+      </mesh>
+      <mesh position={[0, 0.34, 0.13]}>
+        <circleGeometry args={[0.09, 16]} />
+        <meshStandardMaterial color="#20201a" />
+      </mesh>
+      <group ref={shackle} position={[0, 0.62, 0]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
+          <torusGeometry args={[0.22, 0.045, 8, 20, Math.PI]} />
+          <meshStandardMaterial color="#c9c2a5" metalness={0.6} roughness={0.3} />
+        </mesh>
       </group>
     </group>
   );
@@ -547,18 +673,10 @@ export default function World({ running }: { running: boolean }) {
   const puzzle = useGame((s) => s.puzzle);
   const contrast = useGame((s) => s.contrast);
   const quality = useGame((s) => s.quality);
-  const gate = useRef<Group>(null);
   // Always mounted so the loader resolves during the initial loading screen —
   // mounting it lazily (only once the bridge is revealed) would suspend the
   // whole Physics/Character subtree mid-game and reset everyone to spawn.
   const bridgeModel = useLoader(GLTFLoader, BRIDGE_MODEL_URL);
-  useFrame(({ clock }) => {
-    if (gate.current && running)
-      gate.current.rotation.z =
-        puzzle.powers[1] || puzzle.built
-          ? 0
-          : Math.sin(clock.elapsedTime * 2) * 0.12;
-  });
   const bridge = puzzle.bridge || puzzle.powers[0];
   return (
     <>
@@ -591,6 +709,16 @@ export default function World({ running }: { running: boolean }) {
           active={puzzle.powers[0] && !puzzle.bridge}
           shape="reveal"
         />
+        {!puzzle.bridge &&
+          anchors.logs.map((log, i) => (
+            <LogSite
+              key={i}
+              x={log.x}
+              z={log.z}
+              collected={puzzle.logs[i]}
+              highlight={puzzle.powers[0]}
+            />
+          ))}
         {puzzle.bridge && (
           <>
             <Anchor
@@ -607,62 +735,33 @@ export default function World({ running }: { running: boolean }) {
             />
           </>
         )}
-        <Mechanism z={-15.5} complete={puzzle.bridge} running={running} />
-        <Mechanism z={-26} complete={puzzle.built} running={running} />
-        {!puzzle.built && (
+        <WisdomTotem z={-15.5} complete={puzzle.bridge} running={running} />
+        <WisdomTotem z={-26} complete={puzzle.built} running={running} />
+        {puzzle.bridge && !puzzle.built && (
           <>
-            {!puzzle.powers[1] && (
-              <RigidBody type="fixed" colliders={false}>
-                <CuboidCollider args={[7, 1.1, 0.15]} position={[0, 1, -24]} />
-              </RigidBody>
+            {!puzzle.unlocked && (
+              <group
+                position={[anchors.finalBuild.x, 0, anchors.finalBuild.z]}
+              >
+                <RigidBody type="fixed" colliders={false}>
+                  <CylinderCollider args={[1.7, 1.6]} position={[0, 1.7, 0]} />
+                </RigidBody>
+                <NoiseBarrier
+                  active={puzzle.powers[0] && puzzle.powers[1]}
+                  visible={
+                    puzzle.powers[0] &&
+                    puzzle.powers[1] &&
+                    puzzle.selected === 0
+                  }
+                  contrast={contrast}
+                  digit={LOCK_CODE[puzzle.codeProgress]}
+                  step={puzzle.codeProgress}
+                />
+              </group>
             )}
-            <group ref={gate} position={[0, 1.2, -24]}>
-              {[0, 1, 2, 3, 4].map((i) => (
-                <mesh key={i} position={[0, i * 0.28 - 0.55, 0]}>
-                  <boxGeometry args={[13, 0.045, 0.06]} />
-                  <meshBasicMaterial
-                    color={contrast ? "#ffffff" : "#d8e6cb"}
-                    transparent
-                    opacity={puzzle.powers[1] ? 0.05 : 0.5}
-                  />
-                </mesh>
-              ))}
-            </group>
+            <Padlock unlocked={puzzle.unlocked} />
           </>
         )}
-        {[-5.7, 5.7].map((x) => (
-          <group key={x}>
-            {[-3, 4].map((z) => (
-              <group key={z}>
-                <Block
-                  position={[x, 0.7, z]}
-                  size={[0.45, 1.4, 0.45]}
-                  color="#596950"
-                />
-                <mesh position={[x, 1.55, z]}>
-                  <octahedronGeometry args={[0.23]} />
-                  <meshStandardMaterial
-                    color="#d6b779"
-                    emissive="#d6b779"
-                    emissiveIntensity={0.8}
-                  />
-                </mesh>
-              </group>
-            ))}
-          </group>
-        ))}
-        {[-6.4, 6.4].map((x) => (
-          <group key={x}>
-            {[-14, -20, -28].map((z) => (
-              <Block
-                key={z}
-                position={[x, 1.35, z]}
-                size={[0.6, 2.7, 0.65]}
-                color="#52644e"
-              />
-            ))}
-          </group>
-        ))}
       </group>
       <CoastRocks />
       <mesh position={[0, -8, -10]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -685,10 +784,10 @@ export default function World({ running }: { running: boolean }) {
       </mesh>
       {/* Two pieces, deliberately leaving the -13..-6 bridge chasm uncovered. */}
       <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider args={[19, 0.5, 10]} position={[0, -0.8, 4]} />
+        <CuboidCollider args={[24, 0.5, 14.5]} position={[0, -0.8, 8.5]} />
       </RigidBody>
       <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider args={[19, 0.5, 12.5]} position={[0, -0.8, -25.5]} />
+        <CuboidCollider args={[24, 0.5, 15]} position={[0, -0.8, -28]} />
       </RigidBody>
       {/* Continuous sea surrounding both islands, including the strait under the
           bridge. Sized well past the fog's far distance (~65-72) so the edge

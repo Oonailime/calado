@@ -19,6 +19,7 @@ import FollowCamera from "./camera/FollowCamera";
 import World, { AtmosphereFog } from "./world/World";
 import Telemetry from "./world/Telemetry";
 import Controls from "./ui/Controls";
+import Lock from "./ui/Lock";
 import styles from "./ui/Game.module.css";
 
 class WorldBoundary extends Component<
@@ -58,6 +59,7 @@ export default function Game({ active, locale, onExit }: GameProps) {
   const quality = useGame((s) => s.quality);
   const contrast = useGame((s) => s.contrast);
   const puzzle = useGame((s) => s.puzzle);
+  const lockOpen = useGame((s) => s.lockOpen);
   const [ready, setReady] = useState(false);
   const [lost, setLost] = useState(false);
   const running = active && !paused && ready && !lost;
@@ -68,6 +70,9 @@ export default function Game({ active, locale, onExit }: GameProps) {
   useEffect(() => {
     if (active && ready) root.current?.focus();
   }, [active, ready]);
+  useEffect(() => {
+    if (puzzle.unlocked) useGame.getState().configure({ lockOpen: false });
+  }, [puzzle.unlocked]);
   useEffect(() => {
     const media = matchMedia("(prefers-reduced-motion: reduce)");
     const update = () =>
@@ -101,6 +106,11 @@ export default function Game({ active, locale, onExit }: GameProps) {
       data-bridge={puzzle.bridge}
       data-built={puzzle.built}
       data-sustained={puzzle.sustained.join(",")}
+      data-powers={puzzle.powers.join(",")}
+      data-logs={puzzle.logs.join(",")}
+      data-code-progress={puzzle.codeProgress}
+      data-unlocked={puzzle.unlocked}
+      data-lock-open={lockOpen}
       data-revision={puzzle.revision}
     >
       <WorldBoundary fallback={failure}>
@@ -167,6 +177,7 @@ export default function Game({ active, locale, onExit }: GameProps) {
           </div>
         )}
         {ready && !lost && <Controls locale={locale} onExit={onExit} />}
+        {ready && !lost && lockOpen && <Lock locale={locale} />}
         {lost && failure}
       </WorldBoundary>
     </section>

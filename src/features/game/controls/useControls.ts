@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { runtime, useGame } from "../state/store";
+import { anchors, distance, LOCK_RANGE } from "../state/rules";
 import type { CharacterId } from "../types";
 export function useControls(active: boolean, onExit: () => void) {
   useEffect(() => {
@@ -9,6 +10,8 @@ export function useControls(active: boolean, onExit: () => void) {
       !!target.closest("input,select,textarea");
     const down = (e: KeyboardEvent) => {
       const state = useGame.getState();
+      // The lock dial owns the keyboard entirely while open — see Lock.tsx.
+      if (state.lockOpen) return;
       if (e.code === "Escape") {
         e.preventDefault();
         runtime.clear();
@@ -59,11 +62,26 @@ export function useControls(active: boolean, onExit: () => void) {
       }
       if (e.code === state.abilityKey) {
         const id = state.puzzle.selected;
-        if (id === 2) state.build(runtime.positions[id]);
-        else state.power(id, runtime.positions[id]);
+        if (id === 2) {
+          runtime.triggerPose(id);
+          state.build(runtime.positions[id]);
+        } else state.power(id, runtime.positions[id]);
       }
-      if (e.code === "KeyE" || e.code === "Enter")
-        state.build(runtime.positions[state.puzzle.selected]);
+      if (e.code === "KeyE" || e.code === "Enter") {
+        const id = state.puzzle.selected;
+        const position = runtime.positions[id];
+        if (
+          id === 2 &&
+          !state.puzzle.unlocked &&
+          distance(position, anchors.padlock) < LOCK_RANGE
+        ) {
+          runtime.clear();
+          state.configure({ lockOpen: true });
+        } else {
+          if (id === 2) runtime.triggerPose(id);
+          state.build(position);
+        }
+      }
     };
     const up = (e: KeyboardEvent) => {
       runtime.keys.delete(e.code);

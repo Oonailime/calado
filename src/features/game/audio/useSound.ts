@@ -1,30 +1,22 @@
 import { useEffect, useRef } from "react";
-import { useGame } from "../state/store";
+import { runtime, useGame } from "../state/store";
 
-const AMBIENT_SCALE = 0.035;
+const MUSIC_TRACKS = [
+  "/assets/audio/music/we-trust.mp3",
+  "/assets/audio/music/eye-of-the-storm.mp3",
+  "/assets/audio/music/godsend.mp3",
+  "/assets/audio/music/making-a-wish.mp3",
+];
+const FOOTSTEPS_URL = "/assets/audio/footsteps/monkey-gravel.wav";
+
+const MUSIC_SCALE = 0.6;
 const EFFECTS_SCALE = 0.6;
+const FOOTSTEP_SCALE = 0.8;
 const VOLUME_TIME_CONSTANT = 0.3;
-const ZONE_TIME_CONSTANT = 2.5;
-const REACTIVE_TIME_CONSTANT = 0.4;
-const SHIMMER_TIME_CONSTANT = 1.2;
-
-const ZONE_TONES = [110, 130, 147, 165];
-const PAD_RATIOS = [1, 1.5, 2];
-const PAD_DETUNES = [0, 6, -6];
-const PAD_TYPES: OscillatorType[] = ["triangle", "sine", "sine"];
-const PAD_GAIN = 0.6;
-
-const NOISE_DURATION = 2;
-const NOISE_FILTER_BASE = 900;
-const NOISE_FILTER_OPEN = 2400;
-const NOISE_GAIN_BASE = 0.5;
-const NOISE_GAIN_DUCKED = 0.05;
-
-const LFO_FREQUENCY = 0.15;
-const LFO_DEPTH = 220;
-
-const SHIMMER_FREQUENCIES = [1760, 1780];
-const SHIMMER_GAIN_ACTIVE = 0.18;
+const FOOTSTEP_TIME_CONSTANT = 0.15;
+const FOOTSTEP_SPEED_THRESHOLD = 0.3;
+const MUSIC_DUCK_FACTOR = 0.45;
+const MUSIC_DUCK_TIME_CONSTANT = 0.6;
 
 const ARPEGGIO_NOTES = [880, 1108.73, 1318.51];
 const ARPEGGIO_PEAK = 0.12;
@@ -44,105 +36,73 @@ const CLUNK_DECAY = 0.18;
 const CLICK_PEAK = 0.25;
 const CLICK_DURATION = 0.07;
 
-type NoiseLayer = {
-  source: AudioBufferSourceNode;
-  filter: BiquadFilterNode;
-  gain: GainNode;
-};
-type PadLayer = { oscillators: OscillatorNode[]; gain: GainNode };
-type ShimmerLayer = { oscillators: OscillatorNode[]; gain: GainNode };
 type PersistentAudio = {
   context: AudioContext;
   masterGain: GainNode;
-  ambientGain: GainNode;
+  musicGain: GainNode;
   effectsGain: GainNode;
-  noise: NoiseLayer;
-  pad: PadLayer;
-  lfo: OscillatorNode;
-  shimmer: ShimmerLayer;
+  footstepGain: GainNode;
+  musicElement: HTMLAudioElement;
+  musicIndex: number;
+  footstepSource: AudioBufferSourceNode | null;
 };
 
-function zoneTone(zone: number): number {
-  const index = Math.min(ZONE_TONES.length - 1, Math.max(0, Math.trunc(zone)));
-  return ZONE_TONES[index];
+function nextTrack(state: PersistentAudio) {
+  state.musicIndex = (state.musicIndex + 1) % MUSIC_TRACKS.length;
+  state.musicElement.src = MUSIC_TRACKS[state.musicIndex];
+  void state.musicElement.play().catch(() => {});
 }
-function createNoiseBuffer(context: AudioContext): AudioBuffer {
-  const length = Math.floor(context.sampleRate * NOISE_DURATION);
-  const buffer = context.createBuffer(1, length, context.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < length; i += 1) data[i] = Math.random() * 2 - 1;
-  return buffer;
-}
-function buildAudio(context: AudioContext, zone: number): PersistentAudio {
+function buildAudio(context: AudioContext): PersistentAudio {
   const masterGain = context.createGain();
   masterGain.gain.value = 1;
   masterGain.connect(context.destination);
-  const ambientGain = context.createGain();
-  ambientGain.gain.value = 0;
-  ambientGain.connect(masterGain);
+
+  const musicGain = context.createGain();
+  musicGain.gain.value = 0;
+  musicGain.connect(masterGain);
+
   const effectsGain = context.createGain();
   effectsGain.gain.value = 0;
   effectsGain.connect(masterGain);
 
-  const noiseSource = context.createBufferSource();
-  noiseSource.buffer = createNoiseBuffer(context);
-  noiseSource.loop = true;
-  const noiseFilter = context.createBiquadFilter();
-  noiseFilter.type = "lowpass";
-  noiseFilter.frequency.value = NOISE_FILTER_BASE;
-  noiseFilter.Q.value = 0.4;
-  const noiseGain = context.createGain();
-  noiseGain.gain.value = NOISE_GAIN_BASE;
-  noiseSource.connect(noiseFilter);
-  noiseFilter.connect(noiseGain);
-  noiseGain.connect(ambientGain);
-  noiseSource.start();
+  const footstepGain = context.createGain();
+  footstepGain.gain.value = 0;
+  footstepGain.connect(effectsGain);
 
-  const padGain = context.createGain();
-  padGain.gain.value = PAD_GAIN;
-  padGain.connect(ambientGain);
-  const center = zoneTone(zone);
-  const padOscillators = PAD_RATIOS.map((ratio, i) => {
-    const osc = context.createOscillator();
-    osc.type = PAD_TYPES[i];
-    osc.detune.value = PAD_DETUNES[i];
-    osc.frequency.value = center * ratio;
-    osc.connect(padGain);
-    osc.start();
-    return osc;
-  });
+  const musicElement = new Audio();
+  musicElement.preload = "auto";
+  const musicSource = context.createMediaElementSource(musicElement);
+  musicSource.connect(musicGain);
 
-  const lfo = context.createOscillator();
-  lfo.type = "sine";
-  lfo.frequency.value = LFO_FREQUENCY;
-  const lfoDepth = context.createGain();
-  lfoDepth.gain.value = LFO_DEPTH;
-  lfo.connect(lfoDepth);
-  lfoDepth.connect(noiseFilter.frequency);
-  lfo.start();
-
-  const shimmerGain = context.createGain();
-  shimmerGain.gain.value = 0;
-  shimmerGain.connect(ambientGain);
-  const shimmerOscillators = SHIMMER_FREQUENCIES.map((frequency) => {
-    const osc = context.createOscillator();
-    osc.type = "sine";
-    osc.frequency.value = frequency;
-    osc.connect(shimmerGain);
-    osc.start();
-    return osc;
-  });
-
-  return {
+  const state: PersistentAudio = {
     context,
     masterGain,
-    ambientGain,
+    musicGain,
     effectsGain,
-    noise: { source: noiseSource, filter: noiseFilter, gain: noiseGain },
-    pad: { oscillators: padOscillators, gain: padGain },
-    lfo,
-    shimmer: { oscillators: shimmerOscillators, gain: shimmerGain },
+    footstepGain,
+    musicElement,
+    musicIndex: -1,
+    footstepSource: null,
   };
+  musicElement.addEventListener("ended", () => nextTrack(state));
+  nextTrack(state);
+
+  // Loops for the whole session; volume alone gates it on/off each frame,
+  // since an AudioBufferSourceNode can only be started/stopped once.
+  fetch(FOOTSTEPS_URL)
+    .then((response) => response.arrayBuffer())
+    .then((buffer) => context.decodeAudioData(buffer))
+    .then((decoded) => {
+      const source = context.createBufferSource();
+      source.buffer = decoded;
+      source.loop = true;
+      source.connect(footstepGain);
+      source.start();
+      state.footstepSource = source;
+    })
+    .catch(() => {});
+
+  return state;
 }
 function playMizaruArpeggio(context: AudioContext, destination: GainNode) {
   ARPEGGIO_NOTES.forEach((frequency, i) => {
@@ -218,53 +178,62 @@ export function useSound(running: boolean): void {
   const ambient = useGame((s) => s.ambientVolume);
   const effects = useGame((s) => s.effectsVolume);
   const puzzle = useGame((s) => s.puzzle);
-  const zone = useGame((s) => s.zone);
   const audio = useRef<PersistentAudio | null>(null);
-  const previous = useRef({ bridge: false, built: false, silence: false });
+  const previous = useRef({
+    bridge: false,
+    built: false,
+    silence: false,
+    unlocked: false,
+  });
+
   useEffect(() => {
     if (muted || !running) {
+      audio.current?.musicElement.pause();
       void audio.current?.context.suspend();
       return;
     }
-    if (!audio.current) audio.current = buildAudio(new AudioContext(), zone);
+    if (!audio.current) audio.current = buildAudio(new AudioContext());
     void audio.current.context.resume();
+    void audio.current.musicElement.play().catch(() => {});
     const state = audio.current;
     const now = state.context.currentTime;
-    state.ambientGain.gain.setTargetAtTime(
-      ambient * AMBIENT_SCALE,
+    const silenced = puzzle.powers[1];
+    state.musicGain.gain.setTargetAtTime(
+      ambient * MUSIC_SCALE * (silenced ? MUSIC_DUCK_FACTOR : 1),
       now,
-      VOLUME_TIME_CONSTANT,
+      silenced ? MUSIC_DUCK_TIME_CONSTANT : VOLUME_TIME_CONSTANT,
     );
     state.effectsGain.gain.setTargetAtTime(
       effects * EFFECTS_SCALE,
       now,
       VOLUME_TIME_CONSTANT,
     );
-    const center = zoneTone(zone);
-    state.pad.oscillators.forEach((osc, i) => {
-      osc.frequency.setTargetAtTime(
-        center * PAD_RATIOS[i],
-        now,
-        ZONE_TIME_CONSTANT,
-      );
-    });
-    const silenced = puzzle.powers[1];
-    state.noise.gain.gain.setTargetAtTime(
-      silenced ? NOISE_GAIN_DUCKED : NOISE_GAIN_BASE,
-      now,
-      REACTIVE_TIME_CONSTANT,
-    );
-    state.noise.filter.frequency.setTargetAtTime(
-      silenced ? NOISE_FILTER_OPEN : NOISE_FILTER_BASE,
-      now,
-      REACTIVE_TIME_CONSTANT,
-    );
-    state.shimmer.gain.gain.setTargetAtTime(
-      puzzle.powers[0] ? SHIMMER_GAIN_ACTIVE : 0,
-      now,
-      SHIMMER_TIME_CONSTANT,
-    );
-  }, [running, muted, ambient, effects, zone, puzzle.powers]);
+  }, [running, muted, ambient, effects, puzzle.powers]);
+
+  // Footstep volume is gated every animation frame, since movement updates
+  // on the physics loop rather than through React state.
+  useEffect(() => {
+    if (muted || !running) return;
+    let frame: number;
+    const tick = () => {
+      const state = audio.current;
+      if (state) {
+        const selected = useGame.getState().puzzle.selected;
+        const moving =
+          runtime.grounded[selected] &&
+          runtime.speeds[selected] > FOOTSTEP_SPEED_THRESHOLD;
+        state.footstepGain.gain.setTargetAtTime(
+          moving ? effects * FOOTSTEP_SCALE : 0,
+          state.context.currentTime,
+          FOOTSTEP_TIME_CONSTANT,
+        );
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [muted, running, effects]);
+
   useEffect(() => {
     const state = audio.current;
     if (!state || muted || !running) return;
@@ -275,20 +244,29 @@ export function useSound(running: boolean): void {
       playCaladoClunk(state.context, state.effectsGain);
     if (puzzle.powers[1] && !prev.silence)
       playKikazaruChime(state.context, state.effectsGain);
+    if (puzzle.unlocked && !prev.unlocked)
+      playCaladoClunk(state.context, state.effectsGain);
     previous.current = {
       bridge: puzzle.bridge,
       built: puzzle.built,
       silence: puzzle.powers[1],
+      unlocked: puzzle.unlocked,
     };
-  }, [puzzle.bridge, puzzle.built, puzzle.powers, muted, running]);
+  }, [
+    puzzle.bridge,
+    puzzle.built,
+    puzzle.powers,
+    puzzle.unlocked,
+    muted,
+    running,
+  ]);
   useEffect(
     () => () => {
       const state = audio.current;
       if (state) {
-        state.noise.source.stop();
-        state.pad.oscillators.forEach((osc) => osc.stop());
-        state.shimmer.oscillators.forEach((osc) => osc.stop());
-        state.lfo.stop();
+        state.musicElement.pause();
+        state.musicElement.removeAttribute("src");
+        state.footstepSource?.stop();
         void state.context.close();
       }
       audio.current = null;

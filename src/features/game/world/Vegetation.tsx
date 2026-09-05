@@ -26,8 +26,14 @@ function createSeededRandom(seed: number) {
 // edge-on to the camera. Baking matrixWorld into a cloned geometry first
 // makes the result usable standalone, the same way the source hierarchy
 // would have rendered it.
-function useNatureMesh(name: string, color: string) {
+//
+// `colors` may be a single flat color, or one color per original material
+// slot (e.g. the palm tree keeps its trunk/frond geometry groups even
+// though the atlas texture is gone, so index 0 can stay brown while the
+// rest stays green instead of tinting the whole tree one color).
+export function useNatureMesh(name: string, colors: string | string[]) {
   const template = useLoader(FBXLoader, `${NATURE_DIR}${name}.fbx`);
+  const key = Array.isArray(colors) ? colors.join(",") : colors;
   return useMemo(() => {
     template.updateMatrixWorld(true);
     let found: Mesh | undefined;
@@ -40,9 +46,12 @@ function useNatureMesh(name: string, color: string) {
     geometry.computeBoundingBox();
     // Imported mesh origins vary; place the bottom of every asset on the soil.
     geometry.translate(0, -(geometry.boundingBox?.min.y ?? 0), 0);
-    const material = new MeshStandardMaterial({ color, roughness: 0.92 });
+    const material = Array.isArray(colors)
+      ? colors.map((color) => new MeshStandardMaterial({ color, roughness: 0.92 }))
+      : new MeshStandardMaterial({ color: colors, roughness: 0.92 });
     return { geometry, material };
-  }, [template, color]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template, key]);
 }
 
 type Placement = { x: number; z: number; scale: number; rotationY: number };
@@ -89,7 +98,7 @@ function Instances({
   places,
 }: {
   name: string;
-  color: string;
+  color: string | string[];
   yOffset?: number;
   places: Placement[];
 }) {
@@ -178,7 +187,7 @@ export function IslandVegetation({
     <group position={[x, y, z]}>
       <Instances
         name="PalmTree_1"
-        color="#4c7a4a"
+        color={["#6b4a30", "#4c7a4a", "#4c7a4a", "#4c7a4a"]}
         places={palms.filter(
           (p) => islandEdgeDistance(x + p.x, z + p.z) < -0.2,
         )}

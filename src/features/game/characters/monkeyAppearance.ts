@@ -10,6 +10,27 @@ export const MONKEY_DETAIL_COLOR = "#303435";
 export const MONKEY_EYE_COLOR = "#111514";
 export const MONKEY_EYE_WHITE = "#f3efdc";
 
+export type PowerPoseHand = "left" | "right";
+export type PowerPoseGesture = "eyes" | "ears" | "mouth";
+export const MONKEY_POWER_POSES: readonly {
+  gesture: PowerPoseGesture;
+  hands: readonly PowerPoseHand[];
+}[] = [
+  { gesture: "eyes", hands: ["left", "right"] },
+  { gesture: "ears", hands: ["left", "right"] },
+  { gesture: "mouth", hands: ["right"] },
+];
+
+const POWER_POSE_RESPONSE = 7;
+export function nextPowerPoseBlend(
+  current: number,
+  active: boolean,
+  delta: number,
+) {
+  const target = active ? 1 : 0;
+  return target + (current - target) * Math.exp(-POWER_POSE_RESPONSE * delta);
+}
+
 function weightOf(
   influences: BoneInfluence[],
   match: (name: string) => boolean,

@@ -50,10 +50,14 @@ export default function Controls({
     hint = pt
       ? "3 · selecionar     E / Enter · construir"
       : "3 · select     E / Enter · build";
-  else if (p.bridge && !p.built && state.zone === 3)
+  else if (p.bridge && !p.unlocked && state.zone === 3)
     hint = pt
-      ? `1 / 2 / 3 · trocar     ${f} sobre um símbolo · ativa     Troque de personagem para sustentar     E · construir`
-      : `1 / 2 / 3 · switch     ${f} over a symbol · activates     Switch character to sustain     E · build`;
+      ? `1 / 2 · posicione Mizaru e Kikazaru nos símbolos     Somente o Mizaru (cego) consegue perceber ondas sonoras     3 · Calado digita no cadeado`
+      : `1 / 2 · position Mizaru and Kikazaru on the symbols     Only Mizaru (blind) can perceive the sound waves     3 · Calado types it on the padlock`;
+  else if (p.bridge && p.unlocked && !p.built && state.zone === 3)
+    hint = pt
+      ? "3 · Calado constrói no mecanismo final"
+      : "3 · Calado builds at the final mechanism";
   return (
     <>
       <div className={styles.bar}>

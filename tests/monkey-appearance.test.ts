@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   classifyMonkeySurface,
+  MONKEY_POWER_POSES,
   monkeyAnimation,
   monkeySurfaceColor,
   MONKEY_DETAIL_COLOR,
   MONKEY_EYE_COLOR,
   MONKEY_EYE_WHITE,
   MONKEY_FACE_COLORS,
+  nextPowerPoseBlend,
 } from "../src/features/game/characters/monkeyAppearance";
 import { CHARACTERS } from "../src/features/game/types";
 
@@ -48,4 +50,21 @@ test("a animação de caminhada também permanece ativa durante o pulo", () => {
   assert.equal(monkeyAnimation(true, 0, false), "idle");
   assert.equal(monkeyAnimation(true, 1, false), "run");
   assert.equal(monkeyAnimation(false, 0, false), "run");
+});
+
+test("cada poder usa as mãos corretas e a pose entra e sai suavemente", () => {
+  assert.deepEqual(MONKEY_POWER_POSES, [
+    { gesture: "eyes", hands: ["left", "right"] },
+    { gesture: "ears", hands: ["left", "right"] },
+    { gesture: "mouth", hands: ["right"] },
+  ]);
+  const entering = nextPowerPoseBlend(0, true, 1 / 60);
+  assert.ok(entering > 0 && entering < 0.2);
+  const active = Array.from({ length: 60 }).reduce<number>(
+    (blend) => nextPowerPoseBlend(blend, true, 1 / 60),
+    0,
+  );
+  assert.ok(active > 0.99);
+  const leaving = nextPowerPoseBlend(active, false, 1 / 60);
+  assert.ok(leaving > 0 && leaving < active);
 });
