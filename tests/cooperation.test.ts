@@ -14,26 +14,26 @@ import {
 } from "../src/features/game/state/rules";
 
 test("trocar de personagem com o poder ativo mantém a sustentação automaticamente", () => {
-  let s = selectCharacter(initialPuzzle(), 0);
-  s = startPower(s, 0, anchors.bridge);
+  let s = selectCharacter(initialPuzzle(), 1);
+  s = startPower(s, 1, anchors.bridge);
   s = selectCharacter(s, 2);
-  assert.equal(s.powers[0], true);
-  assert.equal(s.sustained[0], true);
+  assert.equal(s.powers[1], true);
+  assert.equal(s.sustained[1], true);
 });
 test("pressionar novamente enquanto selecionado desativa a habilidade imediatamente, sem precisar trocar", () => {
-  let s = startPower(selectCharacter(initialPuzzle(), 0), 0, anchors.bridge);
-  s = startPower(s, 0, anchors.bridge);
-  assert.equal(s.powers[0], false);
-  assert.equal(s.sustained[0], false);
+  let s = startPower(selectCharacter(initialPuzzle(), 1), 1, anchors.bridge);
+  s = startPower(s, 1, anchors.bridge);
+  assert.equal(s.powers[1], false);
+  assert.equal(s.sustained[1], false);
 });
 test("troca livre preserva sustentação ao reselecionar e exige ação para liberar", () => {
-  let s = startPower(selectCharacter(initialPuzzle(), 0), 0, anchors.bridge);
+  let s = startPower(selectCharacter(initialPuzzle(), 1), 1, anchors.bridge);
   s = selectCharacter(s, 2);
-  s = selectCharacter(s, 0);
-  assert.equal(s.powers[0], true);
-  assert.equal(s.sustained[0], true);
-  s = startPower(s, 0, anchors.bridge);
-  assert.equal(s.powers[0], false);
+  s = selectCharacter(s, 1);
+  assert.equal(s.powers[1], true);
+  assert.equal(s.sustained[1], true);
+  s = startPower(s, 1, anchors.bridge);
+  assert.equal(s.powers[1], false);
 });
 test("poderes dependem do ponto válido e da progressão", () => {
   assert.equal(
@@ -44,12 +44,22 @@ test("poderes dependem do ponto válido e da progressão", () => {
     startPower(initialPuzzle(), 1, anchors.silence).powers[1],
     false,
   );
+  assert.equal(
+    startPower(selectCharacter(initialPuzzle(), 0), 0, anchors.bridge)
+      .powers[0],
+    false,
+  );
+  assert.equal(
+    startPower(selectCharacter(initialPuzzle(), 1), 1, anchors.bridge)
+      .powers[1],
+    true,
+  );
 });
-test("Calado só coleta madeira perto das palmeiras marcadas enquanto Mizaru revela", () => {
+test("Iwazaru só coleta madeira perto das palmeiras marcadas enquanto Kikazaru revela", () => {
   let s = initialPuzzle();
   s = collectLog(s, anchors.logs[0]);
   assert.deepEqual(s.logs, [false, false, false]);
-  s = startPower(selectCharacter(s, 0), 0, anchors.bridge);
+  s = startPower(selectCharacter(s, 1), 1, anchors.bridge);
   s = collectLog(s, anchors.logs[0]);
   assert.deepEqual(s.logs, [false, false, false]);
   s = selectCharacter(s, 2);
@@ -63,10 +73,7 @@ test("Calado só coleta madeira perto das palmeiras marcadas enquanto Mizaru rev
 });
 test("qualquer macaco pode pegar uma banana próxima uma única vez", () => {
   let state = initialPuzzle();
-  assert.equal(
-    eatBanana(state, 2, { x: 50, y: 0, z: 50 }),
-    state,
-  );
+  assert.equal(eatBanana(state, 2, { x: 50, y: 0, z: 50 }), state);
   state = selectCharacter(state, 0);
   state = eatBanana(state, 0, anchors.bananas[0]);
   assert.deepEqual(state.bananas, [true, false, false, false]);
@@ -76,12 +83,12 @@ test("qualquer macaco pode pegar uma banana próxima uma única vez", () => {
   state = eatBanana(state, 1, anchors.bananas[1]);
   assert.deepEqual(state.bananas, [true, true, false, false]);
 });
-test("Calado constrói somente perto do mecanismo com ponte revelada e madeira coletada", () => {
+test("Iwazaru constrói somente perto do mecanismo com ponte revelada e madeira coletada", () => {
   assert.ok(anchors.bridgeBuild.x > 0);
   assert.ok(anchors.bridgeBuild.z > -6);
   let s = initialPuzzle();
   assert.equal(construct(s, anchors.bridgeBuild).bridge, false);
-  s = startPower(selectCharacter(s, 0), 0, anchors.bridge);
+  s = startPower(selectCharacter(s, 1), 1, anchors.bridge);
   assert.equal(construct(s, anchors.bridgeBuild).bridge, false);
   s = selectCharacter(s, 2);
   assert.equal(construct(s, { x: 50, y: 0, z: 0 }).bridge, false);
@@ -92,7 +99,7 @@ test("Calado constrói somente perto do mecanismo com ponte revelada e madeira c
   assert.equal(s.bridge, true);
   assert.deepEqual(s.sustained, [false, false, false]);
 });
-test("Calado destrava um algarismo por vez, perto do cadeado e na ordem exata", () => {
+test("Iwazaru destrava um algarismo por vez, perto do cadeado e na ordem exata", () => {
   let s = selectCharacter({ ...initialPuzzle(), bridge: true }, 0);
   assert.equal(submitCodeDigit(s, anchors.padlock, LOCK_CODE[0]), s);
   s = selectCharacter(s, 2);
@@ -118,8 +125,7 @@ test("construção final exige dois companheiros sustentando e o cadeado destrav
   s = selectCharacter(s, 2);
   assert.deepEqual(s.sustained, [true, true, false]);
   assert.equal(construct(s, anchors.finalBuild).built, false);
-  for (const digit of LOCK_CODE)
-    s = submitCodeDigit(s, anchors.padlock, digit);
+  for (const digit of LOCK_CODE) s = submitCodeDigit(s, anchors.padlock, digit);
   assert.equal(s.unlocked, true);
   s = construct(s, anchors.finalBuild);
   assert.equal(s.built, true);

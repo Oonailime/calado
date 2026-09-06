@@ -23,6 +23,7 @@ import {
 } from "three";
 import { runtime, useGame } from "../state/store";
 import { anchors, LOCK_CODE } from "../state/rules";
+import { CHARACTERS } from "../types";
 import { Water } from "./Water";
 import { Bridge, BRIDGE_MODEL_URL } from "./Bridge";
 import { IslandVegetation, useNatureMesh } from "./Vegetation";
@@ -39,8 +40,9 @@ import {
   ISLAND_SURFACE_Y,
 } from "./layout";
 import {
+  binarySequenceFrame,
   buildDigitSequence,
-  PULSE_MARK,
+  PULSE_ZERO,
 } from "./soundCode";
 import WisdomTotem from "./Totem";
 import BananaGroves from "./BananaGroves";
@@ -176,8 +178,8 @@ function BridgePlaceholder({ contrast }: { contrast: boolean }) {
   );
 }
 const PALM_SCALE = 0.0075;
-// A palm Calado can harvest for the bridge — glows gold while Mizaru's
-// reveal marks it, then becomes a stump once collected.
+// A palm Iwazaru can harvest for the bridge — glows gold while Kikazaru's
+// power marks it, then becomes a stump once collected.
 function LogSite({
   x,
   z,
@@ -227,7 +229,7 @@ function LogSite({
         <mesh ref={glow} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
           <ringGeometry args={[0.5, 0.62, 32]} />
           <meshBasicMaterial
-            color="#eac369"
+            color={CHARACTERS[1].light}
             transparent
             opacity={0}
             depthWrite={false}
@@ -250,12 +252,10 @@ function noiseConeGeometry(radius: number, height: number) {
   ];
   return new LatheGeometry(profile, 24);
 }
-const WAVE_INTERVAL = 0.8;
 const WAVE_MAX_RADIUS = 7;
 // A single expanding ring, one pulse of the code at a time — not a
-// continuous ambient wash. `active` (both keepers in position) drives the
-// sequence clock regardless of who's watching; `visible` only gates whether
-// this frame's pulse is actually rendered, since only Mizaru can perceive it.
+// continuous ambient wash. The sequence starts when both keepers are in
+// position and Mizaru is selected, since only he can perceive it.
 function SoundWaves({
   active,
   visible,
@@ -268,32 +268,34 @@ function SoundWaves({
   step: number;
 }) {
   const mesh = useRef<Mesh>(null);
-  const start = useRef<number | null>(null);
   const sequence = useMemo(() => buildDigitSequence(digit), [digit]);
   useEffect(() => {
-    start.current = null;
-  }, [step]);
-  useFrame(({ clock }) => {
-    if (!active) {
-      start.current = null;
+    runtime.stopBinarySequence();
+  }, [active, step, visible]);
+  useFrame(() => {
+    if (!active || !visible) {
+      runtime.stopBinarySequence();
+      if (mesh.current)
+        (mesh.current.material as MeshBasicMaterial).opacity = 0;
       return;
     }
-    if (start.current === null) start.current = clock.elapsedTime;
     if (!mesh.current) return;
-    const elapsed = clock.elapsedTime - start.current;
-    const index = Math.floor(elapsed / WAVE_INTERVAL) % sequence.length;
-    const phase = (elapsed / WAVE_INTERVAL) % 1;
-    mesh.current.scale.setScalar(0.4 + phase * WAVE_MAX_RADIUS);
+    const frame = binarySequenceFrame(runtime.binarySequenceElapsed(step));
     const material = mesh.current.material as MeshBasicMaterial;
-    material.color.set(sequence[index]);
-    material.opacity = Math.max(0, 0.65 * (1 - phase));
+    if (frame.bitIndex === null) {
+      material.opacity = 0;
+      return;
+    }
+    mesh.current.scale.setScalar(0.4 + frame.phase * WAVE_MAX_RADIUS);
+    material.color.set(sequence[frame.bitIndex]);
+    material.opacity = Math.max(0, 0.65 * (1 - frame.phase));
   });
   if (!visible) return null;
   return (
     <mesh ref={mesh}>
       <sphereGeometry args={[1, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2]} />
       <meshBasicMaterial
-        color={PULSE_MARK}
+        color={PULSE_ZERO}
         wireframe
         transparent
         opacity={0}
@@ -461,7 +463,7 @@ function Motes() {
   const lastUpdate = useRef(0);
   const seeds = useMemo(() => createMoteSeeds(MOTE_COUNT), []);
   const dummy = useMemo(() => new Object3D(), []);
-  const revealed = puzzle.powers[0];
+  const revealed = puzzle.powers[0] || (!puzzle.bridge && puzzle.powers[1]);
   useFrame(({ clock }) => {
     const instanced = mesh.current;
     if (!instanced) return;
@@ -694,8 +696,8 @@ export function AtmosphereFog() {
   useFrame((_, delta) => {
     const current = fog.current;
     if (!current) return;
-    const dense = puzzle.powers[1];
-    const revealed = puzzle.powers[0];
+    const dense = puzzle.bridge && puzzle.powers[1];
+    const revealed = puzzle.powers[0] || (!puzzle.bridge && puzzle.powers[1]);
     fogTarget.set(
       dense
         ? ATMOSPHERE.denseFog
@@ -723,9 +725,9 @@ export function AtmosphereFog() {
     );
     current.far = MathUtils.lerp(
       current.far,
-      puzzle.powers[1]
+      dense
         ? ATMOSPHERE.denseFar
-        : puzzle.powers[0]
+        : revealed
           ? ATMOSPHERE.revealedFar
           : ATMOSPHERE.defaultFar,
       amount,
@@ -762,18 +764,18 @@ export default function World({ running }: { running: boolean }) {
           z={BRIDGE.z}
           length={BRIDGE.length}
           built={puzzle.bridge}
-          revealed={puzzle.powers[0] || puzzle.bridge}
+          revealed={puzzle.powers[1] || puzzle.bridge}
           running={running}
           reduced={reduced}
           contrast={contrast}
         />
-        {!puzzle.powers[0] && !puzzle.bridge && (
+        {!puzzle.powers[1] && !puzzle.bridge && (
           <BridgePlaceholder contrast={contrast} />
         )}
         <Anchor
           {...anchors.bridge}
-          color="#eac369"
-          active={puzzle.powers[0] && !puzzle.bridge}
+          color={CHARACTERS[1].light}
+          active={puzzle.powers[1] && !puzzle.bridge}
           shape="reveal"
         />
         {!puzzle.bridge &&
@@ -783,20 +785,20 @@ export default function World({ running }: { running: boolean }) {
               x={log.x}
               z={log.z}
               collected={puzzle.logs[i]}
-              highlight={puzzle.powers[0]}
+              highlight={puzzle.powers[1]}
             />
           ))}
         {puzzle.bridge && (
           <>
             <Anchor
               {...anchors.reveal}
-              color="#eac369"
+              color={CHARACTERS[0].light}
               active={puzzle.powers[0]}
               shape="reveal"
             />
             <Anchor
               {...anchors.silence}
-              color="#e7edd9"
+              color={CHARACTERS[1].light}
               active={puzzle.powers[1]}
               shape="silence"
             />

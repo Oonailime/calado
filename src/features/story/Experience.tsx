@@ -159,43 +159,43 @@ export default function Experience() {
             )}
             {scene > 1 && scene < 6 && <p>{story[scene].title}</p>}
             {scene === 7 && (
-              <>
-                <p>{pt ? "Desenvolvedor de Software" : "Software Developer"}</p>
-                <button
-                  className={styles.start}
-                  disabled={!Game || phase < 0.5}
-                  onClick={() => {
-                    setStarted(true);
-                    setPlaying(true);
-                  }}
-                >
-                  {!Game
-                    ? pt
-                      ? "Preparando o mundo…"
-                      : "Preparing the world…"
-                    : started
-                      ? pt
-                        ? "Retomar ↗"
-                        : "Resume ↗"
-                      : pt
-                        ? "Jogar ↗"
-                        : "Play ↗"}
-                </button>
-                {loadError && (
-                  <p className={styles.error}>
-                    {pt
-                      ? "Falha ao carregar. Role um pouco para tentar novamente."
-                      : "Loading failed. Scroll a little to try again."}
-                  </p>
-                )}
-              </>
+              <p>{pt ? "Desenvolvedor de Software" : "Software Developer"}</p>
             )}
           </div>
           <div className={styles.preview}>
-            {pt
-              ? "Animatic · estudo de movimento 01"
-              : "Animatic · motion study 01"}
+            0{scene + 1} · {pt ? story[scene].title : story[scene].titleEn}
           </div>
+          {scene === 7 && (
+            <div className={styles.playZone}>
+              <button
+                className={styles.start}
+                disabled={!Game || phase < 0.5}
+                onClick={() => {
+                  setStarted(true);
+                  setPlaying(true);
+                }}
+              >
+                {!Game
+                  ? pt
+                    ? "Preparando o mundo…"
+                    : "Preparing the world…"
+                  : started
+                    ? pt
+                      ? "Retomar ↗"
+                      : "Resume ↗"
+                    : pt
+                      ? "Jogar ↗"
+                      : "Play ↗"}
+              </button>
+              {loadError && (
+                <p className={styles.error}>
+                  {pt
+                    ? "Falha ao carregar. Role um pouco para tentar novamente."
+                    : "Loading failed. Scroll a little to try again."}
+                </p>
+              )}
+            </div>
+          )}
           <footer className={styles.bottom}>
             <div className={styles.scroll}>
               <span>↓</span>

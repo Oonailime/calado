@@ -12,8 +12,10 @@ import {
   GROUND_Y,
   HILL_SEEDS,
 } from "./cameraRig";
-import { BUILDING_ORDER } from "./buildings";
+import { BUILDING_KIND, BUILDING_ORDER } from "./buildings";
 import Building from "./Building";
+import SchoolBuilding from "./SchoolBuilding";
+import BusinessBuilding from "./BusinessBuilding";
 import Grass from "./Grass";
 import RockPath from "./RockPath";
 import StoryMonkey from "./StoryMonkey";
@@ -59,7 +61,11 @@ function Hills() {
 function Ground() {
   return (
     <>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[4, GROUND_Y, -32]} receiveShadow>
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[4, GROUND_Y, -32]}
+        receiveShadow
+      >
         <planeGeometry args={[50, 100]} />
         <meshStandardMaterial color="#5b7a4a" roughness={1} />
       </mesh>
@@ -84,9 +90,30 @@ function Buildings({
 }) {
   return (
     <>
-      {BUILDING_ORDER.map((id) => (
-        <Building key={id} id={id} progress={progress} reduced={reduced} locale={locale} />
-      ))}
+      {BUILDING_ORDER.map((id) => {
+        const kind = BUILDING_KIND[id];
+        if (kind === "school")
+          return (
+            <SchoolBuilding
+              key={id}
+              id={id}
+              progress={progress}
+              reduced={reduced}
+              locale={locale}
+            />
+          );
+        if (kind === "business")
+          return <BusinessBuilding key={id} id={id} locale={locale} />;
+        return (
+          <Building
+            key={id}
+            id={id}
+            progress={progress}
+            reduced={reduced}
+            locale={locale}
+          />
+        );
+      })}
       <RockPath />
       <Grass />
     </>
@@ -94,13 +121,18 @@ function Buildings({
 }
 function Atmosphere({ progress }: { progress: number }) {
   const { sky, fog } = atmosphereColors(progress);
-  const { sunColor, sunIntensity, hemiIntensity } = atmosphereLighting(progress);
+  const { sunColor, sunIntensity, hemiIntensity } =
+    atmosphereLighting(progress);
   return (
     <>
       <color attach="background" args={[sky]} />
       <fog attach="fog" args={[`#${fog.getHexString()}`, 18, 70]} />
       <hemisphereLight args={["#f4e3ae", "#3a3420", hemiIntensity]} />
-      <directionalLight position={[10, 14, 8]} color={sunColor} intensity={sunIntensity} />
+      <directionalLight
+        position={[10, 14, 8]}
+        color={sunColor}
+        intensity={sunIntensity}
+      />
     </>
   );
 }
@@ -114,6 +146,7 @@ function Cast({ progress, reduced }: { progress: number; reduced: boolean }) {
         id={2}
         x={calado.position.x}
         z={calado.position.z}
+        distance={calado.distance}
         yaw={calado.yaw}
         walking={calado.walking}
         power={calado.settled}
@@ -123,6 +156,7 @@ function Cast({ progress, reduced }: { progress: number; reduced: boolean }) {
           id={0}
           x={mizaru.position.x}
           z={mizaru.position.z}
+          distance={mizaru.distance}
           yaw={mizaru.yaw}
           walking={mizaru.walking}
           power={mizaru.settled}
@@ -133,6 +167,7 @@ function Cast({ progress, reduced }: { progress: number; reduced: boolean }) {
           id={1}
           x={kikazaru.position.x}
           z={kikazaru.position.z}
+          distance={kikazaru.distance}
           yaw={kikazaru.yaw}
           walking={kikazaru.walking}
           power={kikazaru.settled}
@@ -141,7 +176,12 @@ function Cast({ progress, reduced }: { progress: number; reduced: boolean }) {
     </>
   );
 }
-export default function StoryScene({ progress, reduced, active, locale }: StorySceneProps) {
+export default function StoryScene({
+  progress,
+  reduced,
+  active,
+  locale,
+}: StorySceneProps) {
   const progressRef = useRef(progress);
   useLayoutEffect(() => {
     progressRef.current = progress;
@@ -152,10 +192,20 @@ export default function StoryScene({ progress, reduced, active, locale }: StoryS
       dpr={[1, 1.5]}
       camera={{ position: [0, 3.6, 9], fov: 48, near: 0.1, far: 160 }}
       frameloop={active ? "always" : "demand"}
-      gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
+      gl={{
+        antialias: true,
+        powerPreference: "high-performance",
+        stencil: false,
+      }}
     >
       <Atmosphere progress={progress} />
-      <pointLight position={[-9, 5, 6]} color="#8fb0a8" intensity={0.3} distance={30} decay={2} />
+      <pointLight
+        position={[-9, 5, 6]}
+        color="#8fb0a8"
+        intensity={0.3}
+        distance={30}
+        decay={2}
+      />
       <CameraRig progressRef={progressRef} reduced={reduced} />
       <Ground />
       <Hills />

@@ -116,6 +116,19 @@ export const runtime = {
   pitch: 0.38,
   jump: false,
   splashes: [] as Vec3[],
+  binarySequenceStep: null as number | null,
+  binarySequenceStartedAt: 0,
+  binarySequenceElapsed(step: number, now = performance.now()) {
+    if (this.binarySequenceStep !== step) {
+      this.binarySequenceStep = step;
+      this.binarySequenceStartedAt = now;
+    }
+    return Math.max(0, (now - this.binarySequenceStartedAt) / 1_000);
+  },
+  stopBinarySequence() {
+    this.binarySequenceStep = null;
+    this.binarySequenceStartedAt = 0;
+  },
   triggerPose(id: CharacterId, duration = 1_050) {
     this.poseUntil[id] = performance.now() + duration;
   },
@@ -130,5 +143,6 @@ export const runtime = {
     this.poseUntil.fill(0);
     this.eatingStarted.fill(0);
     this.eatingUntil.fill(0);
+    this.stopBinarySequence();
   },
 };

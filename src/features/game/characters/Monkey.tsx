@@ -12,6 +12,7 @@ import {
   Float32BufferAttribute,
   Group,
   LoadingManager,
+  MathUtils,
   Mesh,
   MeshStandardMaterial,
   Quaternion,
@@ -41,6 +42,9 @@ const TARGET_HEIGHT = 0.72;
 const IDLE_CLIP = "monkey_idleC";
 const RUN_CLIP = "monkey_run";
 const FAST_CLIP = "monkey_fastwalk";
+// Fallback for distance-driven callers. The story supplies its calibrated
+// value explicitly so every route segment contains four to five steps.
+const DEFAULT_METERS_PER_STRIDE = 1.6;
 const EMPTY_TEXTURE =
   "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
 
@@ -71,7 +75,11 @@ type Bones = {
 type Rig = {
   model: Group;
   mixer: AnimationMixer;
-  actions: { idle?: AnimationAction; run?: AnimationAction };
+  actions: {
+    idle?: AnimationAction;
+    run?: AnimationAction;
+    walk?: AnimationAction;
+  };
   bones: Bones;
   baseScale: number;
 };
@@ -197,15 +205,21 @@ function buildRig(template: Group, id: CharacterId): Rig {
   const clip = (name: string) =>
     template.animations.find((a) => a.name.endsWith(name));
   const idleClip = clip(IDLE_CLIP);
-  const runClip = clip(RUN_CLIP) ?? clip(FAST_CLIP);
+  const runClip = clip(RUN_CLIP);
+  const walkClip = clip(FAST_CLIP);
   const idle = idleClip ? mixer.clipAction(idleClip) : undefined;
-  const run = runClip ? mixer.clipAction(runClip) : undefined;
+  const run = runClip
+    ? mixer.clipAction(runClip)
+    : walkClip
+      ? mixer.clipAction(walkClip)
+      : undefined;
+  const walk = walkClip ? mixer.clipAction(walkClip) : run;
   idle?.play();
 
   return {
     model,
     mixer,
-    actions: { idle, run },
+    actions: { idle, run, walk },
     bones,
     baseScale: scale,
   };
@@ -321,12 +335,13 @@ function poseArm(
     .addScaledVector(IK.outward, 0.65)
     .addScaledVector(IK.radial, 0.12)
     .addScaledVector(IK.direction, -IK.bend.dot(IK.direction));
-  if (IK.bend.lengthSq() < 1e-8)
-    IK.bend.crossVectors(IK.direction, Y_AXIS);
+  if (IK.bend.lengthSq() < 1e-8) IK.bend.crossVectors(IK.direction, Y_AXIS);
   IK.bend.normalize();
 
   const along =
-    (upperLength * upperLength - lowerLength * lowerLength + distance * distance) /
+    (upperLength * upperLength -
+      lowerLength * lowerLength +
+      distance * distance) /
     (2 * distance);
   const height = Math.sqrt(
     Math.max(0, upperLength * upperLength - along * along),
@@ -381,9 +396,7 @@ function placeBananaInHand(rig: Rig, banana: Group, biteScale: number) {
   banana.quaternion.copy(IK.parentWorld).multiply(IK.bananaWorld);
   banana.rotateX(-0.35);
   banana.rotateZ(Math.PI / 2);
-  IK.bananaOffset
-    .set(-0.3, 0.12, -0.05)
-    .applyQuaternion(banana.quaternion);
+  IK.bananaOffset.set(-0.3, 0.12, -0.05).applyQuaternion(banana.quaternion);
   banana.position.copy(IK.bananaPosition).add(IK.bananaOffset);
   banana.scale.setScalar(HELD_BANANA_SCALE * biteScale);
 }
@@ -395,7 +408,16 @@ export default function Monkey({
 }: {
   id: CharacterId;
   power: boolean;
-  locomotion: React.RefObject<{ speed: number; grounded: boolean }>;
+  locomotion: React.RefObject<{
+    speed: number;
+    grounded: boolean;
+    // World-space distance from a fixed route origin. Only set by callers
+    // whose "movement" isn't itself paced in real time (the scroll-driven
+    // story intro) — when present, it pins the run clip's own time instead
+    // of letting it play at a real-time rate and can decrease on the return.
+    distance?: number;
+    metersPerStride?: number;
+  }>;
 }) {
   const template = useLoader(MonkeyFBXLoader, MODEL_URL);
   const bananaTemplate = useLoader(GLTFLoader, BANANA_MODEL_URL);
@@ -415,7 +437,7 @@ export default function Monkey({
   useFrame((_, delta) => {
     const rig = getRig(template, id);
     const dt = Math.min(delta, 0.05);
-    const { speed, grounded } = locomotion.current;
+    const { speed, grounded, distance, metersPerStride } = locomotion.current;
     // Hysteresis + cooldown: without this, a companion hovering near the
     // follow-distance threshold flickers between idle/run several times a
     // second as its speed nudges past a single cutoff.
@@ -425,22 +447,38 @@ export default function Monkey({
       activeAction.current === "run",
     );
     switchCooldown.current = Math.max(0, switchCooldown.current - dt);
-    rig.mixer.update(dt);
-    const { idle, run } = rig.actions;
+    const { idle, run, walk } = rig.actions;
+    // The scroll-led intro uses the grounded fast-walk clip; the interactive
+    // game keeps the run. This removes the airborne beats that read as jumps
+    // when several route meters are scrubbed in a short scroll gesture.
+    const movement = distance !== undefined ? (walk ?? run) : (run ?? walk);
     if (
-      run &&
+      movement &&
       idle &&
       activeAction.current !== wantRun &&
       switchCooldown.current <= 0
     ) {
       activeAction.current = wantRun;
       switchCooldown.current = 0.35;
-      const next = wantRun === "run" ? run : idle;
-      const prev = wantRun === "run" ? idle : run;
+      const next = wantRun === "run" ? movement : idle;
+      const prev = wantRun === "run" ? idle : movement;
       next.reset().fadeIn(0.25).play();
       prev.fadeOut(0.25);
     }
-    if (run) run.timeScale = grounded ? 0.85 + speed * 0.14 : 1.15;
+    // Distance-driven override: freeze the action clock and evaluate its pose
+    // directly from route meters. Crossfades still advance on mixer time, but
+    // scroll never queues cycles or adds an extra real-time animation step.
+    if (movement && distance !== undefined) {
+      const clipDuration = movement.getClip().duration;
+      movement.timeScale = 0;
+      movement.time =
+        MathUtils.euclideanModulo(
+          distance / (metersPerStride ?? DEFAULT_METERS_PER_STRIDE),
+          1,
+        ) * clipDuration;
+    } else if (movement)
+      movement.timeScale = grounded ? 0.85 + speed * 0.14 : 1.15;
+    rig.mixer.update(dt);
 
     const now = performance.now();
     const powerPoseActive = power || runtime.poseUntil[id] > now;

@@ -11,7 +11,7 @@ import {
   type BuildingId,
 } from "./buildings";
 import { PATH_POINTS, houseYaw, houseDoorOpenness } from "./cameraRig";
-import { labelTexture } from "./signage";
+import { letteringTexture } from "./signage";
 import type { Locale } from "@/content/story";
 
 const DOOR_OPEN_ANGLE = -Math.PI * 0.38;
@@ -138,20 +138,15 @@ export default function Building({
     <group position={[point.x, 0, point.z]} rotation={[0, houseYaw(index), 0]}>
       <primitive object={fixed} />
       <primitive ref={doorRef} object={doorPivot} />
-      {/* A small 3D board on the side wall the character never enters
-          through (the door is on local +Z) — delicate rather than a big
-          flat plaque, and it carries actual thickness, not just a texture
-          floating in space. */}
-      <group position={[1.02, 1.32, -0.35]} rotation={[0, Math.PI / 2, 0]}>
-        <mesh castShadow>
-          <boxGeometry args={[0.46, 0.24, 0.035]} />
-          <meshStandardMaterial color="#8a6f45" roughness={0.9} />
-        </mesh>
-        <mesh position={[0, 0, 0.019]}>
-          <planeGeometry args={[0.42, 0.2]} />
-          <meshBasicMaterial map={labelTexture(BUILDING_LABELS[id][locale])} transparent />
-        </mesh>
-      </group>
+      {/* Transparent lettering integrated into the +Z entrance facade. */}
+      <mesh position={[0, 1.5, 1.19]}>
+        <planeGeometry args={[0.82, 0.24]} />
+        <meshBasicMaterial
+          map={letteringTexture(BUILDING_LABELS[id][locale])}
+          transparent
+          alphaTest={0.02}
+        />
+      </mesh>
     </group>
   );
 }

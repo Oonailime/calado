@@ -5,10 +5,17 @@
 // far past the last house, then the camera alone pulls back into the exact
 // shot Game.tsx's own <Canvas camera> opens on.
 export type Point = { x: number; z: number };
-export type Pose = { position: [number, number, number]; lookAt: [number, number, number] };
+export type Pose = {
+  position: [number, number, number];
+  lookAt: [number, number, number];
+};
 
 const STEP_X = 8;
 const STEP_Z = 10;
+export const STORY_STEPS_PER_BUILDING = 4.5;
+export const STORY_METERS_PER_STEP =
+  Math.hypot(STEP_X, STEP_Z) / STORY_STEPS_PER_BUILDING;
+export const STORY_METERS_PER_STRIDE = STORY_METERS_PER_STEP * 2;
 
 // birth, school, science (UFBA), engineering (UFBA), work, mobility (UFMG)
 export const PATH_POINTS: Point[] = [
@@ -47,7 +54,8 @@ export function pathSegments(): [Point, Point][] {
     const length = Math.hypot(b.x - a.x, b.z - a.z);
     const startT = HOUSE_CLEARANCE / length;
     const endT = 1 - HOUSE_CLEARANCE / length;
-    if (endT > startT) segments.push([lerpPoint(a, b, startT), lerpPoint(a, b, endT)]);
+    if (endT > startT)
+      segments.push([lerpPoint(a, b, startT), lerpPoint(a, b, endT)]);
   }
   const last = PATH_POINTS[PATH_POINTS.length - 1];
   const toClearing = Math.hypot(
@@ -121,9 +129,51 @@ export function houseYaw(index: number) {
 // — the camera, the walk — never has to reset/jump at a scene boundary.
 export function walkPoint(progress: number, reduced = false): Point {
   const { scene, t } = sceneAndPhase(progress, reduced);
-  if (scene <= 4) return lerpPoint(PATH_POINTS[scene], PATH_POINTS[scene + 1], t);
+  if (scene <= 4)
+    return lerpPoint(PATH_POINTS[scene], PATH_POINTS[scene + 1], t);
   if (scene === 5) return lerpPoint(PATH_POINTS[5], CONVERGENCE_POINT, t);
   return CONVERGENCE_POINT;
+}
+
+const WALK_POINTS = [...PATH_POINTS, CONVERGENCE_POINT];
+const WALK_SEGMENT_LENGTHS = WALK_POINTS.slice(0, -1).map((point, index) => {
+  const next = WALK_POINTS[index + 1];
+  return Math.hypot(next.x - point.x, next.z - point.z);
+});
+export const WALK_PATH_LENGTH = WALK_SEGMENT_LENGTHS.reduce(
+  (total, length) => total + length,
+  0,
+);
+
+// Absolute meters covered from the beginning of the route. Unlike a
+// frame-by-frame accumulator, this always returns the same value for the
+// same scroll position and decreases naturally when the visitor scrolls up.
+export function walkDistance(progress: number, reduced = false): number {
+  const { scene, t } = sceneAndPhase(progress, reduced);
+  if (scene >= WALK_SEGMENT_LENGTHS.length) return WALK_PATH_LENGTH;
+  let completed = 0;
+  for (let index = 0; index < scene; index += 1)
+    completed += WALK_SEGMENT_LENGTHS[index];
+  return completed + WALK_SEGMENT_LENGTHS[scene] * t;
+}
+
+export type TravelDirection = -1 | 1;
+export function travelDirection(
+  previousDistance: number,
+  distance: number,
+  fallback: TravelDirection,
+): TravelDirection {
+  const difference = distance - previousDistance;
+  if (Math.abs(difference) < 1e-4) return fallback;
+  return difference < 0 ? -1 : 1;
+}
+
+export function travelYaw(
+  forwardYaw: number,
+  direction: TravelDirection,
+  walking: boolean,
+): number {
+  return walking && direction < 0 ? forwardYaw + Math.PI : forwardYaw;
 }
 
 // The camera trails the character by a fixed progress lag instead of resetting
@@ -141,7 +191,11 @@ export function cameraForProgress(progress: number, reduced = false): Pose {
       ? Math.min(1, scene / (WALK_HEIGHT_SPAN * 8))
       : Math.max(0, Math.min(1, clamped / WALK_HEIGHT_SPAN));
     return {
-      position: [camPoint.x, lerp(CAM_UP, CAM_UP + 1, heightT), camPoint.z + CAM_BACK],
+      position: [
+        camPoint.x,
+        lerp(CAM_UP, CAM_UP + 1, heightT),
+        camPoint.z + CAM_BACK,
+      ],
       lookAt: [lookPoint.x, LOOK_UP, lookPoint.z],
     };
   }
@@ -157,7 +211,11 @@ export function cameraForProgress(progress: number, reduced = false): Pose {
     };
   }
   const start: Pose = {
-    position: [CONVERGENCE_POINT.x, CAM_UP + 2.4, CONVERGENCE_POINT.z + CAM_BACK + 3],
+    position: [
+      CONVERGENCE_POINT.x,
+      CAM_UP + 2.4,
+      CONVERGENCE_POINT.z + CAM_BACK + 3,
+    ],
     lookAt: [CONVERGENCE_POINT.x, LOOK_UP, CONVERGENCE_POINT.z],
   };
   return {
@@ -196,13 +254,14 @@ export function houseDoorOpenness(
 export function calladoState(progress: number, reduced = false) {
   const { scene, t } = sceneAndPhase(progress, reduced);
   const position = walkPoint(progress, reduced);
+  const distance = walkDistance(progress, reduced);
   const settled = scene > 6 || (scene === 6 && t > 0.6);
   let yaw: number;
   if (scene <= 4) yaw = angleTo(PATH_POINTS[scene], PATH_POINTS[scene + 1]);
   else if (scene === 5) yaw = angleTo(PATH_POINTS[5], CONVERGENCE_POINT);
   else yaw = settled ? 0 : angleTo(PATH_POINTS[5], CONVERGENCE_POINT);
   const walking = scene <= 5;
-  return { position, yaw, walking, settled };
+  return { position, distance, yaw, walking, settled };
 }
 
 // Mizaru/Kikazaru are absent until the clearing, then walk in from well
@@ -213,7 +272,15 @@ export function companionState(
   reduced = false,
 ) {
   const { scene, rawPhase } = sceneAndPhase(progress, reduced);
-  if (scene < 6) return { visible: false, position: CONVERGENCE_POINT, yaw: 0, walking: false, settled: false };
+  if (scene < 6)
+    return {
+      visible: false,
+      position: CONVERGENCE_POINT,
+      distance: 0,
+      yaw: 0,
+      walking: false,
+      settled: false,
+    };
   const far: Point = {
     x: CONVERGENCE_POINT.x + side * FAR_OFFSET,
     z: CONVERGENCE_POINT.z,
@@ -222,16 +289,29 @@ export function companionState(
     x: CONVERGENCE_POINT.x + side * STAND_OFFSET,
     z: CONVERGENCE_POINT.z,
   };
+  const distanceToStand = Math.abs(stand.x - far.x);
   if (scene === 6) {
-    const enterT = reduced ? (rawPhase > 0.3 ? 1 : 0) : smoothstep(Math.min(1, rawPhase / 0.6));
+    const enterT = reduced
+      ? rawPhase > 0.3
+        ? 1
+        : 0
+      : smoothstep(Math.min(1, rawPhase / 0.6));
     const settled = enterT >= 1;
     return {
       visible: true,
       position: lerpPoint(far, stand, enterT),
+      distance: distanceToStand * enterT,
       yaw: settled ? 0 : angleTo(far, stand),
       walking: !settled,
       settled,
     };
   }
-  return { visible: true, position: stand, yaw: 0, walking: false, settled: true };
+  return {
+    visible: true,
+    position: stand,
+    distance: distanceToStand,
+    yaw: 0,
+    walking: false,
+    settled: true,
+  };
 }

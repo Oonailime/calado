@@ -5,7 +5,7 @@ export type MonkeySurface =
 
 export type BoneInfluence = { name: string; weight: number };
 
-export const MONKEY_FACE_COLORS = ["#e9c98d", "#9da39d", "#d5a06e"] as const;
+export const MONKEY_FACE_COLORS = ["#eef1ed", "#e5bc63", "#d5a06e"] as const;
 export const MONKEY_DETAIL_COLOR = "#303435";
 export const MONKEY_EYE_COLOR = "#111514";
 export const MONKEY_EYE_WHITE = "#f3efdc";

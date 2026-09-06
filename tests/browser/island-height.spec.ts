@@ -18,6 +18,8 @@ test("macacos ficam acima da superfície das ilhas ao nascer e reposicionar", as
   await play.click();
   const game = page.getByRole("region", { name: "Ambiente jogável" });
   await expect(game).toHaveAttribute("data-ready", "true", { timeout: 90_000 });
+  await expect(game.locator('[data-item="banana"]')).toContainText("0/4");
+  await expect(game.locator('[data-item="wood"]')).toContainText("0/3");
   await expect
     .poll(async () => {
       const calls = await game.getAttribute("data-draw-calls");
@@ -46,8 +48,13 @@ test("macacos ficam acima da superfície das ilhas ao nascer e reposicionar", as
       .toBe(true);
   };
   await page.screenshot({ path: "test-results/ilha-nascimento.png" });
-  for (const key of ["Digit1", "Digit2", "Digit3"]) {
+  for (const [key, selected] of [
+    ["Digit1", "1"],
+    ["Digit2", "0"],
+    ["Digit3", "2"],
+  ] as const) {
     await page.keyboard.press(key);
+    await expect(game).toHaveAttribute("data-selected", selected);
     await stableAboveGround();
   }
   await page.keyboard.press("KeyR");

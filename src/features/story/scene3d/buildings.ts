@@ -8,6 +8,8 @@ export type BuildingId =
 
 export const BUILDING_DIR = "/assets/models/buildings/";
 export const PLANTER_URL = `${BUILDING_DIR}PlanterBox_Pink01.glb`;
+export const SCHOOL_URL = "/assets/models/school/schoolhouse.glb";
+export const BUSINESS_URL = "/assets/models/business/business-building.glb";
 
 export const BUILDING_ORDER: readonly BuildingId[] = [
   "birth",
@@ -22,11 +24,25 @@ export function buildingIndex(id: BuildingId): number {
   return BUILDING_ORDER.indexOf(id);
 }
 
+// Which asset/component renders each beat: the original snap-together house
+// kit only remains for "birth" — school/science/engineering/mobility reuse
+// the one schoolhouse model (with its bell + door animations) re-labeled per
+// beat, and "work" uses the business-building model instead.
+export type BuildingKind = "kit" | "school" | "business";
+export const BUILDING_KIND: Record<BuildingId, BuildingKind> = {
+  birth: "kit",
+  school: "school",
+  science: "school",
+  engineering: "school",
+  work: "business",
+  mobility: "school",
+};
+
 export const BUILDING_LABELS: Record<BuildingId, { pt: string; en: string }> = {
   birth: { pt: "Início", en: "Home" },
   school: { pt: "Escola", en: "School" },
-  science: { pt: "UFBA", en: "UFBA" },
-  engineering: { pt: "UFBA", en: "UFBA" },
+  science: { pt: "UFBA - C&T", en: "UFBA - C&T" },
+  engineering: { pt: "UFBA - Computação", en: "UFBA - Computer" },
   work: { pt: "Trabalho", en: "Work" },
   mobility: { pt: "UFMG", en: "UFMG" },
 };

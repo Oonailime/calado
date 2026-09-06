@@ -57,7 +57,9 @@ async function approach(
           ? "KeyS"
           : "KeyW";
     await page.keyboard.down(key);
-    await page.waitForTimeout(Math.min(180, Math.max(55, Math.abs(difference) * 35)));
+    await page.waitForTimeout(
+      Math.min(180, Math.max(55, Math.abs(difference) * 35)),
+    );
     await page.keyboard.up(key);
     await page.waitForTimeout(90);
   }
@@ -90,9 +92,9 @@ test("animatic avança, retorna e traduz sem carregar o mundo no início", async
   // The homepage now opens on a lightweight 3D intro scene, so @react-three/fiber
   // itself is expected on first paint — only the physics engine and the full
   // game bundle stay deferred until the visitor is near the end of the scroll.
-  expect(
-    requests.some((url) => /rapier|features_game_Game/.test(url)),
-  ).toBe(false);
+  expect(requests.some((url) => /rapier|features_game_Game/.test(url))).toBe(
+    false,
+  );
   await page.screenshot({ path: "test-results/animatic-inicio.png" });
   await scrollTo(page, 0.45);
   await expect(
@@ -165,9 +167,9 @@ test("jogo coopera na ponte, recupera checkpoint e libera scroll com Esc", async
   await game.focus();
   await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
   await page.screenshot({ path: "test-results/prototipo-inicio.png" });
-  // Mizaru alcança o símbolo da primeira ponte por movimento real.
+  // Kikazaru alcança o símbolo dourado da primeira ponte por movimento real.
   await page.keyboard.press("Digit1");
-  await expect(game).toHaveAttribute("data-selected", "0");
+  await expect(game).toHaveAttribute("data-selected", "1");
   await page.keyboard.press("Space");
   await expect(game).toHaveAttribute("data-grounded", "false");
   await page.screenshot({ path: "test-results/macaco-pulo.png" });
@@ -188,12 +190,17 @@ test("jogo coopera na ponte, recupera checkpoint e libera scroll com Esc", async
   await page.keyboard.down("KeyF");
   await page.keyboard.press("Digit3");
   await page.keyboard.up("KeyF");
-  await expect(game).toHaveAttribute("data-sustained", "true,false,false");
-  // Calado recolhe as três madeiras reveladas ainda na primeira ilha.
+  await expect(game).toHaveAttribute("data-sustained", "false,true,false");
+  // Iwazaru recolhe as três madeiras reveladas ainda na primeira ilha.
   await approach(page, game, 0, -2.4);
   await approach(page, game, 2, -0.2);
   await page.keyboard.press("KeyE");
   await expect(game).toHaveAttribute("data-logs", "true,false,false");
+  await expect(game.locator('[data-item="wood"]')).toContainText("1/3");
+  await expect(game.locator('[data-pickup="wood"]')).toBeVisible();
+  await expect(game.locator('[data-pickup="wood"]')).toHaveCount(0, {
+    timeout: 6_500,
+  });
   await approach(page, game, 0, 2.4);
   await approach(page, game, 2, -0.2);
   await page.keyboard.press("KeyE");
@@ -202,18 +209,23 @@ test("jogo coopera na ponte, recupera checkpoint e libera scroll com Esc", async
   await approach(page, game, 2, -3.6);
   await page.keyboard.press("KeyE");
   await expect(game).toHaveAttribute("data-logs", "true,true,true");
+  await expect(game.locator('[data-item="wood"]')).toContainText("3/3");
   // O primeiro totem fica à direita da entrada da ponte. Contorna sua base
   // pela lateral sul antes de alinhar no eixo X.
   await approach(page, game, 2, -3.35);
   await approach(page, game, 0, 3.4);
   await page.keyboard.press("KeyE");
   await expect(game).toHaveAttribute("data-bridge", "true");
+  await expect(game.locator('[data-item="wood"]')).toHaveCount(0);
+  await expect(game.locator('[data-pickup="wood"]')).toHaveCount(0);
   await page.waitForTimeout(1_000);
-  await page.screenshot({ path: "test-results/prototipo-ponte-construcao.png" });
+  await page.screenshot({
+    path: "test-results/prototipo-ponte-construcao.png",
+  });
   // Espera as doze seções de madeira pousarem antes de atravessar.
   await page.waitForTimeout(2_500);
   await page.screenshot({ path: "test-results/prototipo-ponte.png" });
-  // Centralizar Calado antes de cruzar o vão já construído.
+  // Centralizar Iwazaru antes de cruzar o vão já construído.
   const p = await position(game);
   if (p[0] > 0.3) await walk(page, game, "KeyA", 0, 0.1);
   else if (p[0] < -0.3) await walk(page, game, "KeyD", 0, -0.1, false);

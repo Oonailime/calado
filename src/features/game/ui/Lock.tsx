@@ -2,11 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import { runtime, useGame } from "../state/store";
 import { LOCK_CODE } from "../state/rules";
 import type { Locale } from "@/content/story";
+import { LOCK_HINTS, lockHintsForLocale } from "./lockHints";
 import styles from "./Game.module.css";
 
-export default function Lock({ locale }: { locale: Locale }) {
+export default function Lock({
+  locale,
+  hintCount,
+  onRequestHint,
+}: {
+  locale: Locale;
+  hintCount: number;
+  onRequestHint: () => void;
+}) {
   const pt = locale === "pt";
   const codeProgress = useGame((state) => state.puzzle.codeProgress);
+  const revealedHints = lockHintsForLocale(locale, hintCount);
   const [digits, setDigits] = useState<number[]>(() =>
     Array.from({ length: LOCK_CODE.length }, () => 0),
   );
@@ -29,6 +39,7 @@ export default function Lock({ locale }: { locale: Locale }) {
         useGame.getState().configure({ lockOpen: false });
         return;
       }
+      if (e.target instanceof HTMLElement && e.target.closest("button")) return;
       if (e.code === "ArrowUp" || e.code === "KeyW") {
         e.preventDefault();
         setDigits((current) =>
@@ -64,12 +75,13 @@ export default function Lock({ locale }: { locale: Locale }) {
         role="dialog"
         aria-modal="true"
         aria-label={pt ? "Cadeado do totem" : "Totem padlock"}
+        data-hints={hintCount}
       >
         <h2>{pt ? "Cadeado" : "Padlock"}</h2>
         <p className={styles.lockHint}>
           {pt
-            ? "↑/↓ muda o algarismo atual · Enter confirma · Esc cancela"
-            : "↑/↓ changes the current digit · Enter confirms · Esc cancels"}
+            ? `Você está resolvendo o algarismo ${codeProgress + 1} de ${LOCK_CODE.length}. Use ↑ ou ↓ para escolher um número, Enter para confirmar e Esc para fechar.`
+            : `You are solving digit ${codeProgress + 1} of ${LOCK_CODE.length}. Use ↑ or ↓ to choose a number, Enter to confirm, and Esc to close.`}
         </p>
         <div className={styles.lockDigits}>
           {digits.map((digit, i) => (
@@ -103,15 +115,49 @@ export default function Lock({ locale }: { locale: Locale }) {
                     : styles.lockDigitLocked
               }`}
             >
-              {i < codeProgress ? LOCK_CODE[i] : i === codeProgress ? digit : "–"}
+              {i < codeProgress
+                ? LOCK_CODE[i]
+                : i === codeProgress
+                  ? digit
+                  : "–"}
             </span>
           ))}
         </div>
         <p className={styles.lockHint}>
           {pt
-            ? "Somente o Mizaru (cego) consegue perceber ondas sonoras."
-            : "Only Mizaru (blind) can perceive the sound waves."}
+            ? "O algarismo foi transmitido por uma sequência de quatro ondas. Se estiver em dúvida, peça as pistas abaixo."
+            : "The digit was transmitted as a sequence of four waves. If you are unsure, ask for the clues below."}
         </p>
+        <div className={styles.lockHelp}>
+          <button
+            type="button"
+            className={styles.hintButton}
+            disabled={hintCount >= LOCK_HINTS.length}
+            onClick={onRequestHint}
+          >
+            {hintCount === 0
+              ? pt
+                ? "Pedir uma dica"
+                : "Ask for a hint"
+              : hintCount < LOCK_HINTS.length
+                ? pt
+                  ? "Pedir a próxima dica"
+                  : "Ask for the next hint"
+                : pt
+                  ? "Todas as dicas foram reveladas"
+                  : "All hints have been revealed"}
+          </button>
+          <ol className={styles.lockHintList} aria-live="polite">
+            {revealedHints.map((hint, index) => (
+              <li key={hint}>
+                <strong>
+                  {pt ? "Dica" : "Hint"} {index + 1}/{LOCK_HINTS.length}
+                </strong>
+                <span>{hint}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
       </div>
     </div>
   );

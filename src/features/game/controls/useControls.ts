@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { runtime, useGame } from "../state/store";
 import { anchors, distance, LOCK_RANGE } from "../state/rules";
-import type { CharacterId } from "../types";
+import { CHARACTER_KEY_BINDINGS } from "../types";
 export function useControls(active: boolean, onExit: () => void) {
   useEffect(() => {
     if (!active) return;
@@ -52,10 +52,19 @@ export function useControls(active: boolean, onExit: () => void) {
         runtime.jump = true;
         state.learn("jump");
       }
-      if (["Digit1", "Digit2", "Digit3"].includes(e.code))
-        state.select((Number(e.code.at(-1)) - 1) as CharacterId);
-      if (e.code === "KeyQ")
-        state.select(((state.puzzle.selected + 1) % 3) as CharacterId);
+      const binding = CHARACTER_KEY_BINDINGS.find(
+        ({ digit }) => e.code === `Digit${digit}`,
+      );
+      if (binding) state.select(binding.id);
+      if (e.code === "KeyQ") {
+        const current = CHARACTER_KEY_BINDINGS.findIndex(
+          ({ id }) => id === state.puzzle.selected,
+        );
+        state.select(
+          CHARACTER_KEY_BINDINGS[(current + 1) % CHARACTER_KEY_BINDINGS.length]
+            .id,
+        );
+      }
       if (e.code === "KeyR") {
         runtime.clear();
         state.reset();

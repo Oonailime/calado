@@ -47,8 +47,8 @@ export const anchors = {
 };
 const LOG_RANGE = 2.4;
 const BANANA_RANGE = 2;
-// Calado reads this on the totem's padlock as four sound pulses per digit;
-// only Mizaru can see them (see World.tsx's SoundWaves).
+// Iwazaru reads this on the totem's padlock as four sound pulses per digit;
+// only Mizaru can perceive them (see World.tsx's SoundWaves).
 export const LOCK_CODE = [1, 9, 9, 8] as const;
 export const LOCK_RANGE = 2.3;
 export function selectCharacter(
@@ -73,18 +73,23 @@ export function startPower(
     sustained[id] = false;
     return { ...state, powers, sustained };
   }
-  const target =
-    id === 1 ? anchors.silence : state.bridge ? anchors.reveal : anchors.bridge;
-  if (distance(position, target) > 2.4 || (id === 1 && !state.bridge))
+  const target = !state.bridge
+    ? anchors.bridge
+    : id === 0
+      ? anchors.reveal
+      : anchors.silence;
+  // Kikazaru reveals the bridge timber on the first island. Mizaru's power
+  // only becomes available at his silver symbol after the bridge is built.
+  if (distance(position, target) > 2.4 || (!state.bridge && id !== 1))
     return state;
   const powers = [...state.powers] as PuzzleState["powers"];
   powers[id] = true;
   return { ...state, powers };
 }
-// Calado only gathers wood while Mizaru's reveal keeps the palms marked,
+// Iwazaru only gathers wood while Kikazaru keeps the palms marked,
 // and before the bridge exists — collecting is the precondition to build it.
 export function collectLog(state: PuzzleState, position: Vec3): PuzzleState {
-  if (state.selected !== 2 || state.bridge || !state.powers[0]) return state;
+  if (state.selected !== 2 || state.bridge || !state.powers[1]) return state;
   const index = anchors.logs.findIndex(
     (anchor, i) => !state.logs[i] && distance(position, anchor) < LOG_RANGE,
   );
@@ -109,7 +114,7 @@ export function eatBanana(
   bananas[index] = true;
   return { ...state, bananas };
 }
-// Calado enters one digit at a time. A correct digit advances the broadcast;
+// Iwazaru enters one digit at a time. A correct digit advances the broadcast;
 // a wrong digit leaves the current step unchanged so it can be tried again.
 export function submitCodeDigit(
   state: PuzzleState,
@@ -131,7 +136,7 @@ export function construct(state: PuzzleState, position: Vec3): PuzzleState {
   if (state.selected !== 2) return state;
   if (
     !state.bridge &&
-    state.powers[0] &&
+    state.powers[1] &&
     state.logs.every(Boolean) &&
     distance(position, anchors.bridgeBuild) < 2.3
   ) {

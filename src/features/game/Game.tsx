@@ -20,6 +20,7 @@ import World, { AtmosphereFog } from "./world/World";
 import Telemetry from "./world/Telemetry";
 import Controls from "./ui/Controls";
 import Lock from "./ui/Lock";
+import { nextLockHintCount } from "./ui/lockHints";
 import styles from "./ui/Game.module.css";
 
 class WorldBoundary extends Component<
@@ -62,6 +63,7 @@ export default function Game({ active, locale, onExit }: GameProps) {
   const lockOpen = useGame((s) => s.lockOpen);
   const [ready, setReady] = useState(false);
   const [lost, setLost] = useState(false);
+  const [lockHintCount, setLockHintCount] = useState(0);
   const running = active && !paused && ready && !lost;
   const onReady = useCallback(() => setReady(true), []);
   const onLost = useCallback(() => setLost(true), []);
@@ -178,7 +180,15 @@ export default function Game({ active, locale, onExit }: GameProps) {
           </div>
         )}
         {ready && !lost && <Controls locale={locale} onExit={onExit} />}
-        {ready && !lost && lockOpen && <Lock locale={locale} />}
+        {ready && !lost && lockOpen && (
+          <Lock
+            locale={locale}
+            hintCount={lockHintCount}
+            onRequestHint={() =>
+              setLockHintCount((count) => nextLockHintCount(count))
+            }
+          />
+        )}
         {lost && failure}
       </WorldBoundary>
     </section>

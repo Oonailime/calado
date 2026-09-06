@@ -5,35 +5,35 @@ import { CanvasTexture, LinearFilter } from "three";
 // it works fine even though it's called from inside a render body.
 const cache = new Map<string, CanvasTexture>();
 
-export function labelTexture(text: string): CanvasTexture {
+export function letteringTexture(text: string): CanvasTexture {
   const cached = cache.get(text);
   if (cached) return cached;
   const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 128;
+  canvas.width = 1024;
+  canvas.height = 256;
   const ctx = canvas.getContext("2d");
   if (ctx) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const w = canvas.width;
     const h = canvas.height;
-    const r = 14;
-    ctx.beginPath();
-    ctx.moveTo(r, 4);
-    ctx.arcTo(w - 4, 4, w - 4, h - 4, r);
-    ctx.arcTo(w - 4, h - 4, 4, h - 4, r);
-    ctx.arcTo(4, h - 4, 4, 4, r);
-    ctx.arcTo(4, 4, w - 4, 4, r);
-    ctx.closePath();
-    ctx.fillStyle = "#e9dcb8";
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "#8a6f45";
-    ctx.stroke();
-    ctx.fillStyle = "#4a3a22";
-    ctx.font = "600 40px Georgia, serif";
+    ctx.fillStyle = "#11100d";
+    ctx.strokeStyle = "#e9dcb8";
+    ctx.lineWidth = 10;
+    ctx.lineJoin = "round";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(text, w / 2, h / 2 + 2);
+    const label = text.toUpperCase();
+    const maxWidth = w - 56;
+    let fontSize = 176;
+    ctx.font = `900 ${fontSize}px Arial, sans-serif`;
+    while (fontSize > 54 && ctx.measureText(label).width > maxWidth) {
+      fontSize -= 4;
+      ctx.font = `900 ${fontSize}px Arial, sans-serif`;
+    }
+    // Transparent everywhere except the lettering: this replaces the text on
+    // each facade instead of creating another rectangular plaque.
+    ctx.strokeText(label, w / 2, h / 2 + 5);
+    ctx.fillText(label, w / 2, h / 2 + 5);
   }
   const texture = new CanvasTexture(canvas);
   texture.minFilter = LinearFilter;

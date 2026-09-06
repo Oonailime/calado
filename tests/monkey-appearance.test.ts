@@ -13,7 +13,7 @@ import {
   MONKEY_FACE_COLORS,
   nextPowerPoseBlend,
 } from "../src/features/game/characters/monkeyAppearance";
-import { CHARACTERS } from "../src/features/game/types";
+import { CHARACTERS, CHARACTER_KEY_BINDINGS } from "../src/features/game/types";
 
 const surface = (
   name: string,
@@ -46,6 +46,17 @@ test("paleta mantém rosto diferente da pelagem e detalhes cinza-escuros", () =>
     assert.equal(monkeySurfaceColor("eye", id), MONKEY_EYE_COLOR);
     assert.equal(monkeySurfaceColor("eyeWhite", id), MONKEY_EYE_WHITE);
   }
+});
+
+test("personagens e atalhos seguem ouro, prata e bronze", () => {
+  assert.equal(CHARACTERS[0].name, "Mizaru");
+  assert.equal(CHARACTERS[1].name, "Kikazaru");
+  assert.equal(CHARACTERS[2].name, "Iwazaru");
+  assert.deepEqual(CHARACTER_KEY_BINDINGS, [
+    { digit: "1", id: 1 },
+    { digit: "2", id: 0 },
+    { digit: "3", id: 2 },
+  ]);
 });
 
 test("a animação de caminhada também permanece ativa durante o pulo", () => {

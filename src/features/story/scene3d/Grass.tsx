@@ -9,7 +9,7 @@ import {
   Object3D,
   Vector3,
 } from "three";
-import { CLEARING_RADIUS, CONVERGENCE_POINT, pathSegments } from "./cameraRig";
+import { CLEARING_RADIUS, CONVERGENCE_POINT, GROUND_Y, pathSegments } from "./cameraRig";
 
 const GRASS_URL = "/assets/models/grass/grass.glb";
 const TARGET_HEIGHT = 0;
@@ -64,7 +64,10 @@ function useGrassMesh(template: Object3D) {
 function buildSeeds() {
   const random = createSeededRandom(7823);
   const seeds: { x: number; z: number; scale: number; rotationY: number }[] = [];
-  for (const [from, to] of pathSegments()) {
+  // Skip the final "toward the clearing" segment — no grass past the last
+  // house, so the sand clearing stays clean right up to its edge.
+  const segments = pathSegments().slice(0, -1);
+  for (const [from, to] of segments) {
     const length = Math.hypot(to.x - from.x, to.z - from.z);
     const dirX = (to.x - from.x) / length;
     const dirZ = (to.z - from.z) / length;
@@ -100,7 +103,7 @@ export default function Grass() {
   useLayoutEffect(() => {
     if (!mesh.current) return;
     seeds.forEach((seed, index) => {
-      dummy.position.set(seed.x, 0, seed.z);
+      dummy.position.set(seed.x, GROUND_Y, seed.z);
       dummy.rotation.set(0, seed.rotationY, 0);
       dummy.scale.setScalar(seed.scale);
       dummy.updateMatrix();

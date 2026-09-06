@@ -1,5 +1,11 @@
 import { useEffect, useRef } from "react";
 import { runtime, useGame } from "../state/store";
+import { LOCK_CODE } from "../state/rules";
+import {
+  binarySequenceFrame,
+  buildDigitBits,
+  type BinaryDigit,
+} from "../world/soundCode";
 
 const MUSIC_TRACKS = [
   "/assets/audio/music/we-trust.mp3",
@@ -8,6 +14,10 @@ const MUSIC_TRACKS = [
   "/assets/audio/music/making-a-wish.mp3",
 ];
 const FOOTSTEPS_URL = "/assets/audio/footsteps/monkey-gravel.wav";
+const BINARY_AUDIO_URLS = {
+  0: "/assets/audio/pulses/um-aum.mp3",
+  1: "/assets/audio/pulses/a-aum.wav",
+} as const satisfies Record<BinaryDigit, string>;
 
 const MUSIC_SCALE = 0.6;
 const EFFECTS_SCALE = 0.6;
@@ -15,8 +25,10 @@ const FOOTSTEP_SCALE = 0.8;
 const VOLUME_TIME_CONSTANT = 0.3;
 const FOOTSTEP_TIME_CONSTANT = 0.15;
 const FOOTSTEP_SPEED_THRESHOLD = 0.3;
-const MUSIC_DUCK_FACTOR = 0.45;
-const MUSIC_DUCK_TIME_CONSTANT = 0.6;
+const MUSIC_MUTE_TIME_CONSTANT = 0.12;
+const BINARY_SOUND_MAX_SECONDS = 2.75;
+const BINARY_SOUND_FADE_IN_SECONDS = 0.03;
+const BINARY_SOUND_FADE_OUT_SECONDS = 0.25;
 
 const ARPEGGIO_NOTES = [880, 1108.73, 1318.51];
 const ARPEGGIO_PEAK = 0.12;
@@ -45,6 +57,7 @@ type PersistentAudio = {
   musicElement: HTMLAudioElement;
   musicIndex: number;
   footstepSource: AudioBufferSourceNode | null;
+  binaryBuffers: Partial<Record<BinaryDigit, AudioBuffer>>;
 };
 
 function nextTrack(state: PersistentAudio) {
@@ -74,6 +87,19 @@ function buildAudio(context: AudioContext): PersistentAudio {
   const musicSource = context.createMediaElementSource(musicElement);
   musicSource.connect(musicGain);
 
+  const binaryBuffers: Partial<Record<BinaryDigit, AudioBuffer>> = {};
+  void Promise.all(
+    (Object.entries(BINARY_AUDIO_URLS) as [string, string][]).map(
+      async ([rawBit, url]) => {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Could not load ${url}`);
+        const buffer = await response.arrayBuffer();
+        binaryBuffers[Number(rawBit) as BinaryDigit] =
+          await context.decodeAudioData(buffer);
+      },
+    ),
+  ).catch(() => undefined);
+
   const state: PersistentAudio = {
     context,
     masterGain,
@@ -83,6 +109,7 @@ function buildAudio(context: AudioContext): PersistentAudio {
     musicElement,
     musicIndex: -1,
     footstepSource: null,
+    binaryBuffers,
   };
   musicElement.addEventListener("ended", () => nextTrack(state));
   nextTrack(state);
@@ -104,7 +131,7 @@ function buildAudio(context: AudioContext): PersistentAudio {
 
   return state;
 }
-function playMizaruArpeggio(context: AudioContext, destination: GainNode) {
+function playBridgeArpeggio(context: AudioContext, destination: GainNode) {
   ARPEGGIO_NOTES.forEach((frequency, i) => {
     const start = context.currentTime + i * ARPEGGIO_STEP;
     const stop = start + ARPEGGIO_DECAY;
@@ -139,7 +166,7 @@ function playKikazaruChime(context: AudioContext, destination: GainNode) {
   osc.start(start);
   osc.stop(stop + 0.05);
 }
-function playCaladoClunk(context: AudioContext, destination: GainNode) {
+function playIwazaruClunk(context: AudioContext, destination: GainNode) {
   const start = context.currentTime;
   const oscStop = start + CLUNK_DECAY;
   const osc = context.createOscillator();
@@ -173,6 +200,52 @@ function playCaladoClunk(context: AudioContext, destination: GainNode) {
   click.start(start);
   click.stop(clickStop + 0.02);
 }
+
+function playBinaryPulse(
+  state: PersistentAudio,
+  bit: BinaryDigit,
+  expectedProgress: number,
+) {
+  const current = useGame.getState();
+  const puzzle = current.puzzle;
+  const buffer = state.binaryBuffers[bit];
+  if (
+    !buffer ||
+    state.context.state === "closed" ||
+    current.muted ||
+    current.paused ||
+    puzzle.selected !== 0 ||
+    !puzzle.powers[0] ||
+    !puzzle.powers[1] ||
+    puzzle.codeProgress !== expectedProgress ||
+    puzzle.unlocked
+  )
+    return;
+
+  const context = state.context;
+  const start = context.currentTime;
+  const source = context.createBufferSource();
+  source.buffer = buffer;
+  const duration = Math.min(buffer.duration, BINARY_SOUND_MAX_SECONDS);
+  const stop = start + duration;
+  const fadeOut = Math.min(BINARY_SOUND_FADE_OUT_SECONDS, duration / 3);
+  const gain = context.createGain();
+
+  // Preserve the new Aum recordings' timbre, but cap every utterance inside
+  // its three-second bit window and soften the crop on the long “A” sample.
+  source.connect(gain);
+  gain.connect(state.effectsGain);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.linearRampToValueAtTime(
+    1,
+    start + Math.min(BINARY_SOUND_FADE_IN_SECONDS, duration / 4),
+  );
+  gain.gain.setValueAtTime(1, stop - fadeOut);
+  gain.gain.exponentialRampToValueAtTime(0.0001, stop);
+  source.start(start, 0, duration);
+  source.stop(stop + 0.04);
+}
+
 export function useSound(running: boolean): void {
   const muted = useGame((s) => s.muted);
   const ambient = useGame((s) => s.ambientVolume);
@@ -197,18 +270,18 @@ export function useSound(running: boolean): void {
     void audio.current.musicElement.play().catch(() => {});
     const state = audio.current;
     const now = state.context.currentTime;
-    const silenced = puzzle.powers[1];
+    const mizaruSelected = puzzle.selected === 0;
     state.musicGain.gain.setTargetAtTime(
-      ambient * MUSIC_SCALE * (silenced ? MUSIC_DUCK_FACTOR : 1),
+      mizaruSelected ? 0 : ambient * MUSIC_SCALE,
       now,
-      silenced ? MUSIC_DUCK_TIME_CONSTANT : VOLUME_TIME_CONSTANT,
+      mizaruSelected ? MUSIC_MUTE_TIME_CONSTANT : VOLUME_TIME_CONSTANT,
     );
     state.effectsGain.gain.setTargetAtTime(
       effects * EFFECTS_SCALE,
       now,
       VOLUME_TIME_CONSTANT,
     );
-  }, [running, muted, ambient, effects, puzzle.powers]);
+  }, [running, muted, ambient, effects, puzzle.powers, puzzle.selected]);
 
   // Footstep volume is gated every animation frame, since movement updates
   // on the physics loop rather than through React state.
@@ -239,13 +312,13 @@ export function useSound(running: boolean): void {
     if (!state || muted || !running) return;
     const prev = previous.current;
     if (puzzle.bridge && !prev.bridge)
-      playMizaruArpeggio(state.context, state.effectsGain);
+      playBridgeArpeggio(state.context, state.effectsGain);
     if (puzzle.built && !prev.built)
-      playCaladoClunk(state.context, state.effectsGain);
+      playIwazaruClunk(state.context, state.effectsGain);
     if (puzzle.powers[1] && !prev.silence)
       playKikazaruChime(state.context, state.effectsGain);
     if (puzzle.unlocked && !prev.unlocked)
-      playCaladoClunk(state.context, state.effectsGain);
+      playIwazaruClunk(state.context, state.effectsGain);
     previous.current = {
       bridge: puzzle.bridge,
       built: puzzle.built,
@@ -258,6 +331,53 @@ export function useSound(running: boolean): void {
     puzzle.powers,
     puzzle.unlocked,
     muted,
+    running,
+  ]);
+
+  // The binary voice follows the same four-bit loop as the visible waves.
+  // It is heard only while Mizaru is selected; his music channel is muted so
+  // the supplied Aum recordings for A (1) and Um (0) remain intelligible.
+  useEffect(() => {
+    const state = audio.current;
+    const binaryActive =
+      puzzle.powers[0] &&
+      puzzle.powers[1] &&
+      puzzle.selected === 0 &&
+      !puzzle.unlocked;
+    if (!state || muted || !running || !binaryActive) return;
+    const digit = LOCK_CODE[puzzle.codeProgress];
+    if (digit === undefined) return;
+    const bits = buildDigitBits(digit);
+    let animationFrame = 0;
+    let previousFrame = "";
+    let initialized = false;
+    const tick = () => {
+      const frame = binarySequenceFrame(
+        runtime.binarySequenceElapsed(puzzle.codeProgress),
+      );
+      const frameKey = `${frame.cycle}:${frame.bitIndex ?? "pause"}`;
+      if (!initialized) {
+        initialized = true;
+        previousFrame = frameKey;
+        // Joining in the middle of a wave must not produce a late, misleading
+        // sound. A fresh sequence starts near phase zero and may play at once.
+        if (frame.bitIndex !== null && frame.phase < 0.08)
+          playBinaryPulse(state, bits[frame.bitIndex], puzzle.codeProgress);
+      } else if (frameKey !== previousFrame) {
+        previousFrame = frameKey;
+        if (frame.bitIndex !== null && frame.phase < 0.08)
+          playBinaryPulse(state, bits[frame.bitIndex], puzzle.codeProgress);
+      }
+      animationFrame = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => cancelAnimationFrame(animationFrame);
+  }, [
+    muted,
+    puzzle.codeProgress,
+    puzzle.powers,
+    puzzle.selected,
+    puzzle.unlocked,
     running,
   ]);
   useEffect(

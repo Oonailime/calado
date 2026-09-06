@@ -18,21 +18,23 @@ O jogo bloqueia o scroll. **Esc** sai do modo jogo; **Retomar** preserva a progr
 
 ## Controles do protótipo
 
-| Ação | Controle |
-| --- | --- |
-| Movimento | WASD / setas |
-| Câmera | Arrastar o mouse |
-| Pular | Espaço |
-| Mizaru / Kikazaru / Calado | 1 / 2 / 3 |
-| Alternar personagem | Q |
-| Poder no símbolo correspondente | Manter F; remapeável para G/H |
-| Sustentar poder | Manter F e trocar de personagem, depois soltar |
-| Liberar sustentação manualmente | Reselecionar o personagem e pressionar F |
-| Construir com Calado | E / Enter ou F perto do mecanismo |
-| Reposicionar grupo | R |
-| Sair do modo jogo | Esc |
+| Ação                                                | Controle                                       |
+| --------------------------------------------------- | ---------------------------------------------- |
+| Movimento                                           | WASD / setas                                   |
+| Câmera                                              | Arrastar o mouse                               |
+| Pular                                               | Espaço                                         |
+| Kikazaru dourado / Mizaru prateado / Iwazaru bronze | 1 / 2 / 3                                      |
+| Alternar personagem                                 | Q                                              |
+| Poder no símbolo correspondente                     | Manter F; remapeável para G/H                  |
+| Sustentar poder                                     | Manter F e trocar de personagem, depois soltar |
+| Liberar sustentação manualmente                     | Reselecionar o personagem e pressionar F       |
+| Construir com Iwazaru                               | E / Enter ou F perto do mecanismo              |
+| Reposicionar grupo                                  | R                                              |
+| Sair do modo jogo                                   | Esc                                            |
 
 Os comandos também aparecem de forma contextual dentro do jogo. Áudio começa desligado; pausa oferece qualidade, contraste, movimento reduzido, volumes e remapeamento inicial da habilidade.
+
+O inventário mostra bananas e, até a construção da ponte, madeiras coletadas em relação ao total, com um aviso visual de cinco segundos para cada coleta. No desafio sonoro, Mizaru não ouve a música: ondas pretas com o som “A” representam `1` e ondas brancas com “Um” representam `0`. Cada bit dura três segundos; depois dos quatro bits há seis segundos de silêncio antes de a sequência recomeçar. O cadeado oferece três dicas progressivas, reveladas somente quando o jogador as solicita.
 
 ## Verificação
 

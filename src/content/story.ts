@@ -3,6 +3,7 @@ export const story = [
   {
     id: "birth",
     title: "Nascimento",
+    titleEn: "Birth",
     pt: "Meu nome é Emiliano Calado.",
     en: "My name is Emiliano Calado.",
     note: "Escuro → palavra → silhueta. A mão encontra a boca pela primeira vez.",
@@ -11,6 +12,7 @@ export const story = [
   {
     id: "school",
     title: "Escola",
+    titleEn: "School",
     pt: "Tudo começou com curiosidade.",
     en: "It all began with curiosity.",
     note: "Lápis e cadernos formam caminhos. O bebê explora, erra e se torna criança.",
@@ -19,6 +21,7 @@ export const story = [
   {
     id: "science",
     title: "Ciência e Tecnologia · UFBA",
+    titleEn: "Science & Technology · UFBA",
     pt: "Na UFBA, descobri como os conhecimentos se conectam.",
     en: "At UFBA, I discovered how knowledge connects.",
     note: "Formas escolares viram órbitas e estruturas. Bacharelado Interdisciplinar, 2020–2024.",
@@ -27,6 +30,7 @@ export const story = [
   {
     id: "engineering",
     title: "Engenharia da Computação · UFBA",
+    titleEn: "Computer Engineering · UFBA",
     pt: "E comecei a construir minhas próprias respostas.",
     en: "And I began building my own answers.",
     note: "Órbitas se tornam circuitos. Graduação em andamento; não representar diploma concluído.",
@@ -35,6 +39,7 @@ export const story = [
   {
     id: "work",
     title: "O mercado de trabalho",
+    titleEn: "The workplace",
     pt: "As ideias encontraram problemas reais.",
     en: "Ideas met real-world problems.",
     note: "Mão acolhedora transporta Calado entre automações, sistemas e colaboração. Não atribuir datas não fornecidas.",
@@ -43,6 +48,7 @@ export const story = [
   {
     id: "mobility",
     title: "Ciência da Computação · UFMG",
+    titleEn: "Computer Science · UFMG",
     pt: "Novos horizontes. Mais caminhos para aprender.",
     en: "New horizons. More paths to learn.",
     note: "Mobilidade acadêmica em 2026.2. Montanhas e circuitos partilham o horizonte.",
@@ -51,6 +57,7 @@ export const story = [
   {
     id: "trio",
     title: "O encontro",
+    titleEn: "The meeting",
     pt: "Observar. Escutar. Construir.",
     en: "Observe. Listen. Build.",
     note: "Trio ocupa a composição clássica. Não apresentar seus poderes na biografia.",
@@ -59,6 +66,7 @@ export const story = [
   {
     id: "rupture",
     title: "A ruptura",
+    titleEn: "The rupture",
     pt: "Emiliano Calado",
     en: "Emiliano Calado",
     note: "Composição ganha profundidade, perde cor e se fragmenta. Câmera desce; o visitante assume o trio.",

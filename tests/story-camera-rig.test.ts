@@ -9,6 +9,12 @@ import {
   GAME_HANDOFF,
   houseYaw,
   PATH_POINTS,
+  STORY_METERS_PER_STEP,
+  STORY_STEPS_PER_BUILDING,
+  travelDirection,
+  travelYaw,
+  walkDistance,
+  WALK_PATH_LENGTH,
 } from "../src/features/story/scene3d/cameraRig";
 
 test("o caminho é um zigue-zague diagonal que sempre avança (z cada vez mais negativo)", () => {
@@ -44,6 +50,30 @@ test("Calado percorre o caminho e para na clareira, sem voltar a atravessar as c
   }
   assert.equal(calladoState(7.5 / 8).settled, true);
   assert.equal(calladoState(7.5 / 8).yaw, 0);
+});
+
+test("a caminhada mantém 4 a 5 passos por prédio e vira de frente ao voltar", () => {
+  const beginning = walkDistance(0);
+  const firstPosition = walkDistance(2.35 / 8);
+  const fartherPosition = walkDistance(3.1 / 8);
+  assert.equal(beginning, 0);
+  assert.ok(firstPosition < fartherPosition);
+  assert.equal(walkDistance(2.35 / 8), firstPosition);
+  assert.equal(walkDistance(1), WALK_PATH_LENGTH);
+
+  for (let building = 0; building < PATH_POINTS.length - 1; building += 1) {
+    const segmentMeters =
+      walkDistance((building + 1) / 8) - walkDistance(building / 8);
+    const steps = segmentMeters / STORY_METERS_PER_STEP;
+    assert.equal(steps, STORY_STEPS_PER_BUILDING);
+    assert.ok(steps >= 4 && steps <= 5);
+  }
+
+  const forward = travelDirection(firstPosition, fartherPosition, 1);
+  const returning = travelDirection(fartherPosition, firstPosition, forward);
+  assert.equal(returning, -1);
+  assert.equal(travelYaw(0.4, returning, true), 0.4 + Math.PI);
+  assert.equal(travelYaw(0.4, returning, false), 0.4);
 });
 
 test("Mizaru e Kikazaru só aparecem na cena do encontro, entrando de fora da câmera", () => {
