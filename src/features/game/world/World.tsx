@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { useFrame, useLoader } from "@react-three/fiber";
+import { useFrame, useLoader, useThree } from "@react-three/fiber";
 import { CuboidCollider, CylinderCollider, RigidBody } from "@react-three/rapier";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -31,12 +31,19 @@ import {
   islandGeometry,
   organicIslandShape,
 } from "./terrain";
-import { BRIDGE, ISLANDS, ISLAND_BASE_Y, ISLAND_SURFACE_Y } from "./layout";
+import {
+  BEACH_SAND_COLOR,
+  BRIDGE,
+  ISLANDS,
+  ISLAND_BASE_Y,
+  ISLAND_SURFACE_Y,
+} from "./layout";
 import {
   buildDigitSequence,
   PULSE_MARK,
 } from "./soundCode";
 import WisdomTotem from "./Totem";
+import BananaGroves from "./BananaGroves";
 
 // The collider follows both the height and silhouette of the rendered ground.
 function Island({
@@ -75,7 +82,7 @@ function Island({
   const beachMaterials = useMemo(
     () => [
       new MeshStandardMaterial({ color: earth, roughness: 1 }),
-      new MeshStandardMaterial({ color: "#d2b777", roughness: 1 }),
+      new MeshStandardMaterial({ color: BEACH_SAND_COLOR, roughness: 1 }),
     ],
     [earth],
   );
@@ -144,6 +151,27 @@ function Anchor({
           <meshBasicMaterial color={color} transparent opacity={0.25} />
         </mesh>
       )}
+    </group>
+  );
+}
+
+function BridgePlaceholder({ contrast }: { contrast: boolean }) {
+  const color = contrast ? "#ffffff" : "#aaa99d";
+  return (
+    <group position={[0, -0.12, BRIDGE.z]}>
+      <mesh>
+        <boxGeometry args={[3.2, 0.08, BRIDGE.length]} />
+        <meshBasicMaterial
+          wireframe
+          color={color}
+          transparent
+          opacity={0.24}
+        />
+      </mesh>
+      <mesh position={[0, 0.06, 0]}>
+        <boxGeometry args={[0.07, 0.025, BRIDGE.length * 0.76]} />
+        <meshBasicMaterial color={color} transparent opacity={0.42} />
+      </mesh>
     </group>
   );
 }
@@ -291,7 +319,8 @@ function NoiseBarrier({
   const geometry = useMemo(() => noiseConeGeometry(1.7, 3.4), []);
   const cone = useRef<Mesh>(null);
   useFrame((_, delta) => {
-    if (cone.current) cone.current.rotation.y += delta * (active ? 0.45 : 0.15);
+    if (cone.current)
+      cone.current.rotation.y += Math.min(delta, 0.04) * (active ? 0.45 : 0.15);
   });
   return (
     <>
@@ -642,66 +671,104 @@ function CoastRocks() {
     />
   );
 }
-const FOG_DEFAULT = "#243e32";
-const FOG_REVEALED = "#3a4a52";
-const FOG_SILENCED = "#dfe6da";
+export const ATMOSPHERE = {
+  sky: "#a9d9e8",
+  fog: "#c2dde2",
+  revealedSky: "#b9dbe3",
+  revealedFog: "#c9dfe2",
+  denseSky: "#e1ebeb",
+  denseFog: "#e1e9e7",
+  defaultNear: 26,
+  defaultFar: 78,
+  revealedNear: 17,
+  revealedFar: 68,
+  denseNear: 1.5,
+  denseFar: 30,
+} as const;
 export function AtmosphereFog() {
   const puzzle = useGame((s) => s.puzzle);
+  const scene = useThree((state) => state.scene);
   const fog = useRef<Fog>(null);
-  const target = useMemo(() => new Color(), []);
+  const fogTarget = useMemo(() => new Color(), []);
+  const skyTarget = useMemo(() => new Color(), []);
   useFrame((_, delta) => {
     const current = fog.current;
     if (!current) return;
-    target.set(
-      puzzle.powers[1]
-        ? FOG_SILENCED
-        : puzzle.powers[0]
-          ? FOG_REVEALED
-          : FOG_DEFAULT,
+    const dense = puzzle.powers[1];
+    const revealed = puzzle.powers[0];
+    fogTarget.set(
+      dense
+        ? ATMOSPHERE.denseFog
+        : revealed
+          ? ATMOSPHERE.revealedFog
+          : ATMOSPHERE.fog,
     );
-    const amount = Math.min(delta * 1.6, 1);
-    current.color.lerp(target, amount);
-    current.far = MathUtils.lerp(
-      current.far,
-      puzzle.powers[1] ? 72 : 65,
+    skyTarget.set(
+      dense
+        ? ATMOSPHERE.denseSky
+        : revealed
+          ? ATMOSPHERE.revealedSky
+          : ATMOSPHERE.sky,
+    );
+    const amount = 1 - Math.exp(-delta * 1.8);
+    current.color.lerp(fogTarget, amount);
+    current.near = MathUtils.lerp(
+      current.near,
+      dense
+        ? ATMOSPHERE.denseNear
+        : revealed
+          ? ATMOSPHERE.revealedNear
+          : ATMOSPHERE.defaultNear,
       amount,
     );
+    current.far = MathUtils.lerp(
+      current.far,
+      puzzle.powers[1]
+        ? ATMOSPHERE.denseFar
+        : puzzle.powers[0]
+          ? ATMOSPHERE.revealedFar
+          : ATMOSPHERE.defaultFar,
+      amount,
+    );
+    if (scene.background instanceof Color)
+      scene.background.lerp(skyTarget, amount);
   });
-  return <fog ref={fog} attach="fog" args={[FOG_DEFAULT, 22, 65]} />;
+  return (
+    <fog
+      ref={fog}
+      attach="fog"
+      args={[ATMOSPHERE.fog, ATMOSPHERE.defaultNear, ATMOSPHERE.defaultFar]}
+    />
+  );
 }
 export default function World({ running }: { running: boolean }) {
   const puzzle = useGame((s) => s.puzzle);
   const contrast = useGame((s) => s.contrast);
   const quality = useGame((s) => s.quality);
+  const reduced = useGame((s) => s.reduced);
   // Always mounted so the loader resolves during the initial loading screen —
   // mounting it lazily (only once the bridge is revealed) would suspend the
   // whole Physics/Character subtree mid-game and reset everyone to spawn.
   const bridgeModel = useLoader(GLTFLoader, BRIDGE_MODEL_URL);
-  const bridge = puzzle.bridge || puzzle.powers[0];
   return (
     <>
       {ISLANDS.map((island) => (
         <Island key={island.seed} {...island} />
       ))}
+      <BananaGroves />
       <group position={[0, ISLAND_SURFACE_Y, 0]}>
-        {bridge ? (
-          <Bridge
-            gltf={bridgeModel}
-            z={BRIDGE.z}
-            length={BRIDGE.length}
-            built={puzzle.bridge}
-            revealed={puzzle.powers[0]}
-          />
-        ) : (
-          <mesh position={[0, -0.12, -9.5]}>
-            <boxGeometry args={[3.2, 0.28, 7]} />
-            <meshBasicMaterial
-              wireframe
-              color={contrast ? "#fff48f" : "#edc16c"}
-              transparent
-              opacity={0.07}
-            />
-          </mesh>
+        <Bridge
+          gltf={bridgeModel}
+          z={BRIDGE.z}
+          length={BRIDGE.length}
+          built={puzzle.bridge}
+          revealed={puzzle.powers[0] || puzzle.bridge}
+          running={running}
+          reduced={reduced}
+          contrast={contrast}
+        />
+        {!puzzle.powers[0] && !puzzle.bridge && (
+          <BridgePlaceholder contrast={contrast} />
         )}
         <Anchor
           {...anchors.bridge}
@@ -735,8 +802,17 @@ export default function World({ running }: { running: boolean }) {
             />
           </>
         )}
-        <WisdomTotem z={-15.5} complete={puzzle.bridge} running={running} />
-        <WisdomTotem z={-26} complete={puzzle.built} running={running} />
+        <WisdomTotem
+          x={anchors.bridgeBuild.x}
+          z={anchors.bridgeBuild.z}
+          complete={puzzle.bridge}
+          running={running}
+        />
+        <WisdomTotem
+          z={anchors.finalBuild.z}
+          complete={puzzle.built}
+          running={running}
+        />
         {puzzle.bridge && !puzzle.built && (
           <>
             {!puzzle.unlocked && (
@@ -782,12 +858,12 @@ export default function World({ running }: { running: boolean }) {
           blending={AdditiveBlending}
         />
       </mesh>
-      {/* Two pieces, deliberately leaving the -13..-6 bridge chasm uncovered. */}
+      {/* Two pieces leave the longer -15..-4 bridge chasm uncovered. */}
       <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider args={[24, 0.5, 14.5]} position={[0, -0.8, 8.5]} />
+        <CuboidCollider args={[24, 0.5, 14.5]} position={[0, -0.8, 10.5]} />
       </RigidBody>
       <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider args={[24, 0.5, 15]} position={[0, -0.8, -28]} />
+        <CuboidCollider args={[24, 0.5, 15]} position={[0, -0.8, -30]} />
       </RigidBody>
       {/* Continuous sea surrounding both islands, including the strait under the
           bridge. Sized well past the fog's far distance (~65-72) so the edge

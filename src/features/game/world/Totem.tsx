@@ -31,6 +31,11 @@ export const TOTEM_BOOK_COLORS = [
   CHARACTERS[2].color,
 ] as const;
 export const WISE_MONKEY_GESTURES = ["eyes", "ears", "mouth"] as const;
+export const TOTEM_BOOK_GEOMETRY = {
+  cover: [0.6, 0.024, 0.42],
+  spinePosition: [0, 0, -0.205],
+  spine: [0.6, 0.158, 0.025],
+} as const;
 
 const MONKEY_X = [-0.56, 0, 0.56] as const;
 const HANDS: readonly [Tuple3, Tuple3][] = [
@@ -235,9 +240,12 @@ function bookInstances(complete: boolean): BookInstances {
     pages.push(part.matrixWorld.clone());
 
     const coverParts: { position: Tuple3; scale: Tuple3 }[] = [
-      { position: [0, 0.067, 0], scale: [0.6, 0.024, 0.42] },
-      { position: [0, -0.067, 0], scale: [0.6, 0.024, 0.42] },
-      { position: [-0.294, 0, 0], scale: [0.025, 0.158, 0.42] },
+      { position: [0, 0.067, 0], scale: [...TOTEM_BOOK_GEOMETRY.cover] },
+      { position: [0, -0.067, 0], scale: [...TOTEM_BOOK_GEOMETRY.cover] },
+      {
+        position: [...TOTEM_BOOK_GEOMETRY.spinePosition],
+        scale: [...TOTEM_BOOK_GEOMETRY.spine],
+      },
     ];
     for (const cover of coverParts) {
       part.position.set(...cover.position);
@@ -302,10 +310,12 @@ function Books({ complete }: { complete: boolean }) {
 }
 
 export default function WisdomTotem({
+  x = 0,
   z,
   complete,
   running,
 }: {
+  x?: number;
   z: number;
   complete: boolean;
   running: boolean;
@@ -316,7 +326,7 @@ export default function WisdomTotem({
       books.current.rotation.y += Math.min(delta, 0.04) * 0.55;
   });
   return (
-    <group position={[0, 0, z]}>
+    <group position={[x, 0, z]}>
       <RigidBody type="fixed" colliders={false}>
         <CylinderCollider args={[0.12, 1.08]} position={[0, 0.12, 0]} />
       </RigidBody>

@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   AnimationMixer,
@@ -23,6 +24,8 @@ import { CHARACTERS, type CharacterId } from "../types";
 import { runtime } from "../state/store";
 import {
   classifyMonkeySurface,
+  eatingBananaScale,
+  eatingPoseBlend,
   MONKEY_POWER_POSES,
   monkeyAnimation,
   monkeySurfaceColor,
@@ -31,6 +34,7 @@ import {
   type PowerPoseHand,
   type BoneInfluence,
 } from "./monkeyAppearance";
+import { BANANA_MODEL_URL } from "../world/BananaGroves";
 
 const MODEL_URL = "/assets/models/monkey.fbx";
 const TARGET_HEIGHT = 0.72;
@@ -239,6 +243,9 @@ const IK = {
   boneWorld: new Quaternion(),
   rotationDelta: new Quaternion(),
   desiredWorld: new Quaternion(),
+  bananaPosition: new Vector3(),
+  bananaOffset: new Vector3(),
+  bananaWorld: new Quaternion(),
 };
 
 // Rotate only enough to point the bone's natural +Y chain axis at a target.
@@ -360,6 +367,27 @@ function applyPowerPose(rig: Rig, id: CharacterId, blend: number) {
   }
 }
 
+const HELD_BANANA_SCALE = 4;
+function placeBananaInHand(rig: Rig, banana: Group, biteScale: number) {
+  const hand = rig.bones.handR;
+  const parent = banana.parent;
+  if (!hand || !parent) return;
+  rig.model.updateWorldMatrix(true, true);
+  parent.updateWorldMatrix(true, false);
+  hand.getWorldPosition(IK.bananaPosition);
+  hand.getWorldQuaternion(IK.bananaWorld);
+  parent.worldToLocal(IK.bananaPosition);
+  parent.getWorldQuaternion(IK.parentWorld).invert();
+  banana.quaternion.copy(IK.parentWorld).multiply(IK.bananaWorld);
+  banana.rotateX(-0.35);
+  banana.rotateZ(Math.PI / 2);
+  IK.bananaOffset
+    .set(-0.3, 0.12, -0.05)
+    .applyQuaternion(banana.quaternion);
+  banana.position.copy(IK.bananaPosition).add(IK.bananaOffset);
+  banana.scale.setScalar(HELD_BANANA_SCALE * biteScale);
+}
+
 export default function Monkey({
   id,
   power,
@@ -370,6 +398,16 @@ export default function Monkey({
   locomotion: React.RefObject<{ speed: number; grounded: boolean }>;
 }) {
   const template = useLoader(MonkeyFBXLoader, MODEL_URL);
+  const bananaTemplate = useLoader(GLTFLoader, BANANA_MODEL_URL);
+  const eatingBanana = useMemo(() => {
+    const banana = bananaTemplate.scene.clone(true) as Group;
+    banana.visible = false;
+    banana.traverse((child) => {
+      if ((child as Mesh).isMesh) child.castShadow = true;
+    });
+    return banana;
+  }, [bananaTemplate]);
+  const eatingBananaRef = useRef<Group>(null);
   const activeAction = useRef<"idle" | "run">("idle");
   const switchCooldown = useRef(0);
   const powerPoseBlend = useRef(0);
@@ -404,8 +442,8 @@ export default function Monkey({
     }
     if (run) run.timeScale = grounded ? 0.85 + speed * 0.14 : 1.15;
 
-    const powerPoseActive =
-      power || (id === 2 && runtime.poseUntil[id] > performance.now());
+    const now = performance.now();
+    const powerPoseActive = power || runtime.poseUntil[id] > now;
     powerPoseBlend.current = nextPowerPoseBlend(
       powerPoseBlend.current,
       powerPoseActive,
@@ -413,6 +451,30 @@ export default function Monkey({
     );
     if (powerPoseBlend.current > 0.001)
       applyPowerPose(rig, id, powerPoseBlend.current);
+    const eatBlend = eatingPoseBlend(
+      runtime.eatingStarted[id],
+      runtime.eatingUntil[id],
+      now,
+    );
+    if (eatBlend > 0.001)
+      poseArm(
+        rig,
+        rig.bones.armR,
+        rig.bones.forearmR,
+        rig.bones.handR,
+        rig.bones.mouth,
+        eatBlend,
+      );
+    const biteScale = eatingBananaScale(
+      runtime.eatingStarted[id],
+      runtime.eatingUntil[id],
+      now,
+    );
+    const banana = eatingBananaRef.current;
+    if (banana) {
+      banana.visible = biteScale > 0;
+      if (banana.visible) placeBananaInHand(rig, banana, biteScale);
+    }
     // No jump clip exists in the source rig, and posing individual leg
     // bones on top of a still-playing walk/idle clip twisted the mesh badly
     // (the clip keeps driving the lower leg/foot chain relative to a parent
@@ -429,5 +491,10 @@ export default function Monkey({
       (rig.baseScale * targetScaleXZ - rig.model.scale.z) * 0.25;
   });
 
-  return <primitive object={getRig(template, id).model} />;
+  return (
+    <>
+      <primitive object={getRig(template, id).model} />
+      <primitive ref={eatingBananaRef} object={eatingBanana} />
+    </>
+  );
 }

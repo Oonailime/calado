@@ -10,9 +10,9 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { story, type Locale } from "@/content/story";
 import { MonkeyGlyph } from "./SceneArt";
-import SequenceArt from "./SequenceArt";
 import styles from "./Experience.module.css";
 import type { GameProps } from "@/features/game/types";
+import type { StorySceneProps } from "./scene3d/StoryScene";
 
 function subscribeMotion(callback: () => void) {
   const media = matchMedia("(prefers-reduced-motion: reduce)");
@@ -25,6 +25,9 @@ export default function Experience() {
   const [progress, setProgress] = useState(0);
   const [locale, setLocale] = useState<Locale>("pt");
   const [Game, setGame] = useState<ComponentType<GameProps> | null>(null);
+  const [StoryScene, setStoryScene] = useState<ComponentType<StorySceneProps> | null>(
+    null,
+  );
   const [started, setStarted] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -64,6 +67,11 @@ export default function Experience() {
     document.documentElement.lang = locale === "pt" ? "pt-BR" : "en";
   }, [locale]);
   useEffect(() => {
+    import("./scene3d/StoryScene").then((module) =>
+      setStoryScene(() => module.default),
+    );
+  }, []);
+  useEffect(() => {
     if (!playing) return;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -91,8 +99,15 @@ export default function Experience() {
         inert={playing || undefined}
       >
         <div className={styles.stage}>
-          <div className={styles.art}>
-            <SequenceArt progress={progress} reduced={reduced} />
+          <div className={styles.art} aria-hidden="true">
+            {StoryScene && (
+              <StoryScene
+                progress={progress}
+                reduced={reduced}
+                active={!playing}
+                locale={locale}
+              />
+            )}
           </div>
           <div className={styles.vignette} />
           <header className={styles.header}>

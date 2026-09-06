@@ -1,0 +1,11 @@
+Polyfork license
+
+Use these files in personal and commercial projects: games, apps, websites, client work. Modify freely. No attribution required.
+Do not resell or redistribute the files themselves as assets, or use them to build or train
+a COMMERCIAL asset generator: a model, service or pipeline that
+produces 3D assets and that you sell or offer to others.
+Personal experiments, research and learning are fine.
+Breaking these terms can end your license and your access,
+without a refund.
+
+Full terms: https://polyfork.dev/licensing

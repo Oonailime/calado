@@ -108,6 +108,7 @@ export default function Game({ active, locale, onExit }: GameProps) {
       data-sustained={puzzle.sustained.join(",")}
       data-powers={puzzle.powers.join(",")}
       data-logs={puzzle.logs.join(",")}
+      data-bananas={puzzle.bananas.join(",")}
       data-code-progress={puzzle.codeProgress}
       data-unlocked={puzzle.unlocked}
       data-lock-open={lockOpen}
@@ -127,7 +128,7 @@ export default function Game({ active, locale, onExit }: GameProps) {
               stencil: false,
             }}
           >
-            <color attach="background" args={["#243e32"]} />
+            <color attach="background" args={["#a9d9e8"]} />
             <AtmosphereFog />
             <hemisphereLight args={["#f4e3ae", "#3a3420", 2.1]} />
             <directionalLight

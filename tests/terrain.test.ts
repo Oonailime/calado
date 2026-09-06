@@ -245,6 +245,24 @@ test("ilhas ampliadas preservam as duas margens e o canal do rio", () => {
   );
   assert.equal(safeGround(0, BRIDGE.z, false), false);
   assert.ok(waterDepth(0, BRIDGE.z, false) > 0.2);
+
+  const step = 0.05;
+  let currentWater = 0;
+  let widestWater = 0;
+  for (
+    let z = BRIDGE.z + BRIDGE.length / 2;
+    z >= BRIDGE.z - BRIDGE.length / 2;
+    z -= step
+  ) {
+    if (safeGround(0, z, false)) currentWater = 0;
+    else {
+      currentWater += step;
+      widestWater = Math.max(widestWater, currentWater);
+    }
+  }
+  // At speed 4, jump impulse 6 and gravity 1.5x, the same-height reach is
+  // roughly 3.3 units. Keep over a full unit of safety beyond that reach.
+  assert.ok(widestWater > 4.3, `canal atravessável em ${widestWater} unidades`);
 });
 
 test("navegação e âncoras usam a altura e o contorno real do terreno", () => {

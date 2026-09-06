@@ -31,6 +31,27 @@ export function nextPowerPoseBlend(
   return target + (current - target) * Math.exp(-POWER_POSE_RESPONSE * delta);
 }
 
+function smoothstep(value: number) {
+  const t = Math.max(0, Math.min(1, value));
+  return t * t * (3 - 2 * t);
+}
+
+export function eatingPoseBlend(start: number, end: number, now: number) {
+  if (start <= 0 || end <= start || now < start || now > end) return 0;
+  const phase = (now - start) / (end - start);
+  if (phase < 0.22) return smoothstep(phase / 0.22);
+  if (phase < 0.68) return 1;
+  return 1 - smoothstep((phase - 0.68) / 0.32);
+}
+
+export function eatingBananaScale(start: number, end: number, now: number) {
+  if (start <= 0 || end <= start || now < start || now > end) return 0;
+  const phase = (now - start) / (end - start);
+  if (phase < 0.58) return 1;
+  if (phase > 0.84) return 0;
+  return 1 - smoothstep((phase - 0.58) / 0.26);
+}
+
 function weightOf(
   influences: BoneInfluence[],
   match: (name: string) => boolean,

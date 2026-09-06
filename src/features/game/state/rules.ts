@@ -5,6 +5,7 @@ export type PuzzleState = {
   powers: [boolean, boolean, boolean];
   sustained: [boolean, boolean, boolean];
   logs: [boolean, boolean, boolean];
+  bananas: [boolean, boolean, boolean, boolean];
   bridge: boolean;
   codeProgress: number;
   unlocked: boolean;
@@ -16,6 +17,7 @@ export const initialPuzzle = (): PuzzleState => ({
   powers: [false, false, false],
   sustained: [false, false, false],
   logs: [false, false, false],
+  bananas: [false, false, false, false],
   bridge: false,
   codeProgress: 0,
   unlocked: false,
@@ -24,19 +26,27 @@ export const initialPuzzle = (): PuzzleState => ({
 });
 export const distance = (a: Vec3, b: Vec3) => Math.hypot(a.x - b.x, a.z - b.z);
 export const anchors = {
-  bridge: { x: 0, y: ISLAND_SURFACE_Y, z: -4 },
-  reveal: { x: 3, y: ISLAND_SURFACE_Y, z: -21 },
-  silence: { x: -3, y: ISLAND_SURFACE_Y, z: -21 },
-  bridgeBuild: { x: 0, y: ISLAND_SURFACE_Y, z: -15.5 },
-  padlock: { x: 0, y: ISLAND_SURFACE_Y, z: -21.8 },
-  finalBuild: { x: 0, y: ISLAND_SURFACE_Y, z: -26 },
+  bridge: { x: 0, y: ISLAND_SURFACE_Y, z: -2 },
+  reveal: { x: 3, y: ISLAND_SURFACE_Y, z: -23 },
+  silence: { x: -3, y: ISLAND_SURFACE_Y, z: -23 },
+  // First totem: on the first island, to the right of the bridge approach.
+  bridgeBuild: { x: 3.4, y: ISLAND_SURFACE_Y, z: -1.7 },
+  padlock: { x: 0, y: ISLAND_SURFACE_Y, z: -23.8 },
+  finalBuild: { x: 0, y: ISLAND_SURFACE_Y, z: -28 },
   logs: [
-    { x: -2.4, y: ISLAND_SURFACE_Y, z: -2.2 },
-    { x: 2.4, y: ISLAND_SURFACE_Y, z: -2.2 },
-    { x: 0, y: ISLAND_SURFACE_Y, z: -5.6 },
+    { x: -2.4, y: ISLAND_SURFACE_Y, z: -0.2 },
+    { x: 2.4, y: ISLAND_SURFACE_Y, z: -0.2 },
+    { x: 0, y: ISLAND_SURFACE_Y, z: -3.6 },
+  ],
+  bananas: [
+    { x: -5.4, y: ISLAND_SURFACE_Y, z: 7.8 },
+    { x: 5.8, y: ISLAND_SURFACE_Y, z: 10.2 },
+    { x: -5.8, y: ISLAND_SURFACE_Y, z: -27.2 },
+    { x: 6.1, y: ISLAND_SURFACE_Y, z: -30.2 },
   ],
 };
 const LOG_RANGE = 2.4;
+const BANANA_RANGE = 2;
 // Calado reads this on the totem's padlock as four sound pulses per digit;
 // only Mizaru can see them (see World.tsx's SoundWaves).
 export const LOCK_CODE = [1, 9, 9, 8] as const;
@@ -82,6 +92,22 @@ export function collectLog(state: PuzzleState, position: Vec3): PuzzleState {
   const logs = [...state.logs] as PuzzleState["logs"];
   logs[index] = true;
   return { ...state, logs };
+}
+
+export function eatBanana(
+  state: PuzzleState,
+  id: CharacterId,
+  position: Vec3,
+): PuzzleState {
+  if (state.selected !== id) return state;
+  const index = anchors.bananas.findIndex(
+    (anchor, banana) =>
+      !state.bananas[banana] && distance(position, anchor) < BANANA_RANGE,
+  );
+  if (index === -1) return state;
+  const bananas = [...state.bananas] as PuzzleState["bananas"];
+  bananas[index] = true;
+  return { ...state, bananas };
 }
 // Calado enters one digit at a time. A correct digit advances the broadcast;
 // a wrong digit leaves the current step unchanged so it can be tried again.

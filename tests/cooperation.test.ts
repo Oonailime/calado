@@ -4,6 +4,7 @@ import {
   anchors,
   collectLog,
   construct,
+  eatBanana,
   initialPuzzle,
   LOCK_CODE,
   recover,
@@ -60,7 +61,24 @@ test("Calado só coleta madeira perto das palmeiras marcadas enquanto Mizaru rev
   s = collectLog(s, anchors.logs[2]);
   assert.deepEqual(s.logs, [true, true, true]);
 });
+test("qualquer macaco pode pegar uma banana próxima uma única vez", () => {
+  let state = initialPuzzle();
+  assert.equal(
+    eatBanana(state, 2, { x: 50, y: 0, z: 50 }),
+    state,
+  );
+  state = selectCharacter(state, 0);
+  state = eatBanana(state, 0, anchors.bananas[0]);
+  assert.deepEqual(state.bananas, [true, false, false, false]);
+  const repeated = eatBanana(state, 0, anchors.bananas[0]);
+  assert.equal(repeated, state);
+  state = selectCharacter(state, 1);
+  state = eatBanana(state, 1, anchors.bananas[1]);
+  assert.deepEqual(state.bananas, [true, true, false, false]);
+});
 test("Calado constrói somente perto do mecanismo com ponte revelada e madeira coletada", () => {
+  assert.ok(anchors.bridgeBuild.x > 0);
+  assert.ok(anchors.bridgeBuild.z > -6);
   let s = initialPuzzle();
   assert.equal(construct(s, anchors.bridgeBuild).bridge, false);
   s = startPower(selectCharacter(s, 0), 0, anchors.bridge);

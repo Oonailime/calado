@@ -10,12 +10,20 @@ export default function Lock({ locale }: { locale: Locale }) {
   const [digits, setDigits] = useState<number[]>(() =>
     Array.from({ length: LOCK_CODE.length }, () => 0),
   );
+  const digitsRef = useRef(digits);
+  useEffect(() => {
+    digitsRef.current = digits;
+  }, [digits]);
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     panel.current?.focus();
   }, []);
+  // Registered once and reads live state on every keypress (getState() for
+  // the store, digitsRef for local state) — a fast keystroke sequence would
+  // otherwise be handled by a stale closure from before React re-subscribes.
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      const progress = useGame.getState().puzzle.codeProgress;
       if (e.code === "Escape") {
         e.preventDefault();
         useGame.getState().configure({ lockOpen: false });
@@ -25,7 +33,7 @@ export default function Lock({ locale }: { locale: Locale }) {
         e.preventDefault();
         setDigits((current) =>
           current.map((value, index) =>
-            index === codeProgress ? (value + 1) % 10 : value,
+            index === progress ? (value + 1) % 10 : value,
           ),
         );
       }
@@ -33,7 +41,7 @@ export default function Lock({ locale }: { locale: Locale }) {
         e.preventDefault();
         setDigits((current) =>
           current.map((value, index) =>
-            index === codeProgress ? (value + 9) % 10 : value,
+            index === progress ? (value + 9) % 10 : value,
           ),
         );
       }
@@ -41,12 +49,12 @@ export default function Lock({ locale }: { locale: Locale }) {
         e.preventDefault();
         useGame
           .getState()
-          .submitLockDigit(runtime.positions[2], digits[codeProgress]);
+          .submitLockDigit(runtime.positions[2], digitsRef.current[progress]);
       }
     };
     window.addEventListener("keydown", down);
     return () => window.removeEventListener("keydown", down);
-  }, [codeProgress, digits]);
+  }, []);
   return (
     <div className={styles.overlay}>
       <div

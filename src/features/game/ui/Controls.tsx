@@ -33,23 +33,35 @@ export default function Controls({
       : "WASD / arrows · move     Drag the mouse · camera";
   else if (!state.learned.jump && state.zone === 0)
     hint = pt ? "Espaço · pular" : "Space · jump";
-  else if (!p.bridge && state.zone === 1)
-    hint =
-      p.selected !== 0
-        ? pt
-          ? "1 · trocar de personagem"
-          : "1 · switch character"
-        : p.powers[0]
+  else if (!p.bridge) {
+    if (!p.powers[0])
+      hint =
+        p.selected !== 0
           ? pt
-            ? "Troque de personagem · a habilidade continua ativa"
-            : "Switch character · the ability stays active"
+            ? "1 · selecionar Mizaru"
+            : "1 · select Mizaru"
           : pt
-            ? `${f} sobre o símbolo dourado · ativa a habilidade`
-            : `${f} over the golden symbol · activates the ability`;
-  else if (!p.bridge && state.zone === 2)
-    hint = pt
-      ? "3 · selecionar     E / Enter · construir"
-      : "3 · select     E / Enter · build";
+            ? `${f} sobre o símbolo dourado · revelar as madeiras`
+            : `${f} over the golden symbol · reveal the timber`;
+    else if (!p.logs.every(Boolean))
+      hint =
+        p.selected !== 2
+          ? pt
+            ? "3 · selecionar Calado     E / Enter · recolher as madeiras marcadas"
+            : "3 · select Calado     E / Enter · collect the marked timber"
+          : pt
+            ? "E / Enter próximo às palmeiras marcadas · recolher madeira"
+            : "E / Enter near the marked palms · collect timber";
+    else
+      hint =
+        p.selected !== 2
+          ? pt
+            ? "3 · selecionar Calado"
+            : "3 · select Calado"
+          : pt
+            ? "E / Enter no totem à direita da ponte · construir"
+            : "E / Enter at the totem right of the bridge · build";
+  }
   else if (p.bridge && !p.unlocked && state.zone === 3)
     hint = pt
       ? `1 / 2 · posicione Mizaru e Kikazaru nos símbolos     Somente o Mizaru (cego) consegue perceber ondas sonoras     3 · Calado digita no cadeado`

@@ -7,12 +7,13 @@ export const ISLAND_BASE_Y = ISLAND_SURFACE_Y - ISLAND_THICKNESS;
 export const BEACH_RAMP_SCALE = 1.32;
 export const BEACH_BRIDGE_SCALE = 1.06;
 export const BEACH_SHORE_Y = 0.05;
+export const BEACH_SAND_COLOR = "#d2b777";
 // Wider islands leave room for denser forests. Their centers move away from
 // the river as depth grows, preserving the original bridge-facing shoreline.
 export const ISLANDS = [
   {
     x: 0,
-    z: 5.25,
+    z: 7.25,
     halfWidth: 9,
     halfDepth: 10,
     seed: 4471,
@@ -21,7 +22,7 @@ export const ISLANDS = [
   },
   {
     x: 0,
-    z: -25.25,
+    z: -27.25,
     halfWidth: 10,
     halfDepth: 11,
     seed: 9142,
@@ -30,7 +31,9 @@ export const ISLANDS = [
   },
 ] as const;
 
-export const BRIDGE = { z: -9.5, length: 7.2, halfWidth: 1.5 } as const;
+// Four extra units of water make a normal running jump fall well short while
+// the longer bridge continues to land safely on both beach ramps.
+export const BRIDGE = { z: -9.5, length: 11.2, halfWidth: 1.5 } as const;
 export const BRIDGE_COLLIDER_HALF_HEIGHT = 0.16;
 export const BRIDGE_COLLIDER_CENTER_Y = 0.38;
 export const BRIDGE_ORIGIN_Y =
@@ -48,6 +51,6 @@ export function characterSpawn(id: CharacterId, checkpoint = false): Vec3 {
   return {
     x: (id - 1) * 1.45,
     y: CHARACTER_SPAWN_Y,
-    z: checkpoint ? -17 : 4 + (id === 2 ? -1 : 1),
+    z: checkpoint ? -19 : 4 + (id === 2 ? -1 : 1),
   };
 }

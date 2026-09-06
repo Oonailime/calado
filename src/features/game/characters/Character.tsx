@@ -11,6 +11,7 @@ import { runtime, useGame } from "../state/store";
 import { CHARACTERS, type CharacterId } from "../types";
 import Monkey from "./Monkey";
 import {
+  BRIDGE,
   CHARACTER_CAPSULE_HALF_HEIGHT,
   CHARACTER_CAPSULE_RADIUS,
   CHARACTER_SPAWN_Y,
@@ -50,8 +51,9 @@ export default function Character({
     const p = rigid.translation();
     const state = useGame.getState();
     const puzzle = state.puzzle;
+    const eating = runtime.eatingUntil[id] > performance.now();
     runtime.positions[id] = { ...p };
-    const depth = waterDepth(p.x, p.z, puzzle.bridge || puzzle.powers[0]);
+    const depth = waterDepth(p.x, p.z, puzzle.bridge);
     if (p.y < -7 || depth > EDGE_DEEP) {
       runtime.splashes.push({ x: p.x, y: -0.2, z: p.z });
       state.reset();
@@ -72,7 +74,7 @@ export default function Character({
     const grounded = !!ground;
     runtime.grounded[id] = grounded;
     let vy = rigid.linvel().y;
-    if (selected && !power) {
+    if (selected && !power && !eating) {
       const keys = runtime.keys;
       const forward =
         Number(keys.has("KeyW") || keys.has("ArrowUp")) -
@@ -98,13 +100,17 @@ export default function Character({
         vx *= slow;
         vz *= slow;
       }
-      const zone = p.z > -2 ? 0 : p.z > -13 ? 1 : p.z > -19 ? 2 : 3;
+      const zone = p.z > 0 ? 0 : p.z > -15 ? 1 : p.z > -21 ? 2 : 3;
       if (zone !== state.zone) state.configure({ zone });
     } else if (!selected && !power) {
       const leader = runtime.positions[puzzle.selected];
-      const gap = p.z < -5.3 && p.z > -13.8;
+      const northEnd = BRIDGE.z + BRIDGE.length / 2;
+      const southEnd = BRIDGE.z - BRIDGE.length / 2;
+      const gap = p.z < northEnd + 0.6 && p.z > southEnd - 0.6;
       const crossing =
-        (p.z > -6 && leader.z < -6) || (p.z < -13 && leader.z > -13) || gap;
+        (p.z > northEnd && leader.z < northEnd) ||
+        (p.z < southEnd && leader.z > southEnd) ||
+        gap;
       const targetX = crossing
         ? 0
         : Math.max(-5, Math.min(5, leader.x + [-1.3, 1.3, 0][id]));
@@ -120,7 +126,7 @@ export default function Character({
         !safeGround(
           p.x + vx * 0.18,
           p.z + vz * 0.18,
-          puzzle.bridge || puzzle.powers[0],
+          puzzle.bridge,
         )
       ) {
         vx = 0;
@@ -135,7 +141,7 @@ export default function Character({
         length > 3 && displacement < dt * 0.2 ? trapped.current + dt : 0;
       if (
         (length > 22 || trapped.current > 6) &&
-        safeGround(targetX, targetZ, puzzle.bridge || puzzle.powers[0])
+        safeGround(targetX, targetZ, puzzle.bridge)
       ) {
         rigid.setTranslation(
           {

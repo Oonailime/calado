@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   classifyMonkeySurface,
+  eatingBananaScale,
+  eatingPoseBlend,
   MONKEY_POWER_POSES,
   monkeyAnimation,
   monkeySurfaceColor,
@@ -67,4 +69,18 @@ test("cada poder usa as mãos corretas e a pose entra e sai suavemente", () => {
   assert.ok(active > 0.99);
   const leaving = nextPowerPoseBlend(active, false, 1 / 60);
   assert.ok(leaving > 0 && leaving < active);
+});
+
+test("comer leva a mão à boca, morde a banana e retorna suavemente", () => {
+  const start = 1_000;
+  const end = 2_600;
+  assert.equal(eatingPoseBlend(start, end, start - 1), 0);
+  assert.equal(eatingPoseBlend(start, end, start), 0);
+  assert.ok(eatingPoseBlend(start, end, 1_180) > 0);
+  assert.equal(eatingPoseBlend(start, end, 1_600), 1);
+  assert.ok(eatingPoseBlend(start, end, 2_400) < 1);
+  assert.equal(eatingPoseBlend(start, end, end), 0);
+  assert.equal(eatingBananaScale(start, end, 1_500), 1);
+  assert.ok(eatingBananaScale(start, end, 2_100) < 1);
+  assert.equal(eatingBananaScale(start, end, 2_500), 0);
 });

@@ -62,14 +62,20 @@ export function useControls(active: boolean, onExit: () => void) {
       }
       if (e.code === state.abilityKey) {
         const id = state.puzzle.selected;
+        // The gesture communicates who was invoked even when the character is
+        // away from the checkpoint and the gameplay effect cannot activate.
+        runtime.triggerPose(id);
         if (id === 2) {
-          runtime.triggerPose(id);
           state.build(runtime.positions[id]);
         } else state.power(id, runtime.positions[id]);
       }
       if (e.code === "KeyE" || e.code === "Enter") {
         const id = state.puzzle.selected;
         const position = runtime.positions[id];
+        if (state.eat(id, position)) {
+          runtime.triggerEating(id);
+          return;
+        }
         if (
           id === 2 &&
           !state.puzzle.unlocked &&

@@ -38,6 +38,33 @@ async function walk(
     await page.keyboard.up(key);
   }
 }
+async function approach(
+  page: Page,
+  game: Locator,
+  axis: 0 | 2,
+  target: number,
+) {
+  for (let attempt = 0; attempt < 18; attempt += 1) {
+    const current = (await position(game))[axis];
+    const difference = target - current;
+    if (Math.abs(difference) < 0.45) return;
+    const key =
+      axis === 0
+        ? difference > 0
+          ? "KeyD"
+          : "KeyA"
+        : difference > 0
+          ? "KeyS"
+          : "KeyW";
+    await page.keyboard.down(key);
+    await page.waitForTimeout(Math.min(180, Math.max(55, Math.abs(difference) * 35)));
+    await page.keyboard.up(key);
+    await page.waitForTimeout(90);
+  }
+  await expect
+    .poll(async () => Math.abs((await position(game))[axis] - target))
+    .toBeLessThan(0.55);
+}
 async function enter(page: Page) {
   await page.goto("/");
   await scrollTo(page, 1);
@@ -60,8 +87,11 @@ test("animatic avança, retorna e traduz sem carregar o mundo no início", async
   await expect(
     page.getByRole("heading", { name: "Meu nome é Emiliano Calado." }),
   ).toBeVisible();
+  // The homepage now opens on a lightweight 3D intro scene, so @react-three/fiber
+  // itself is expected on first paint — only the physics engine and the full
+  // game bundle stay deferred until the visitor is near the end of the scroll.
   expect(
-    requests.some((url) => /rapier|three_fiber|features_game_Game/.test(url)),
+    requests.some((url) => /rapier|features_game_Game/.test(url)),
   ).toBe(false);
   await page.screenshot({ path: "test-results/animatic-inicio.png" });
   await scrollTo(page, 0.45);
@@ -153,25 +183,54 @@ test("jogo coopera na ponte, recupera checkpoint e libera scroll com Esc", async
     .toBeLessThan(-1.3);
   await page.keyboard.up("KeyW");
   await walk(page, game, "KeyW", 2, -3.7);
+  await approach(page, game, 0, 0);
+  await approach(page, game, 2, -2);
   await page.keyboard.down("KeyF");
   await page.keyboard.press("Digit3");
   await page.keyboard.up("KeyF");
   await expect(game).toHaveAttribute("data-sustained", "true,false,false");
-  // Centralizar Calado antes de cruzar o vão.
+  // Calado recolhe as três madeiras reveladas ainda na primeira ilha.
+  await approach(page, game, 0, -2.4);
+  await approach(page, game, 2, -0.2);
+  await page.keyboard.press("KeyE");
+  await expect(game).toHaveAttribute("data-logs", "true,false,false");
+  await approach(page, game, 0, 2.4);
+  await approach(page, game, 2, -0.2);
+  await page.keyboard.press("KeyE");
+  await expect(game).toHaveAttribute("data-logs", "true,true,false");
+  await approach(page, game, 0, 0);
+  await approach(page, game, 2, -3.6);
+  await page.keyboard.press("KeyE");
+  await expect(game).toHaveAttribute("data-logs", "true,true,true");
+  // O primeiro totem fica à direita da entrada da ponte. Contorna sua base
+  // pela lateral sul antes de alinhar no eixo X.
+  await approach(page, game, 2, -3.35);
+  await approach(page, game, 0, 3.4);
+  await page.keyboard.press("KeyE");
+  await expect(game).toHaveAttribute("data-bridge", "true");
+  await page.waitForTimeout(1_000);
+  await page.screenshot({ path: "test-results/prototipo-ponte-construcao.png" });
+  // Espera as doze seções de madeira pousarem antes de atravessar.
+  await page.waitForTimeout(2_500);
+  await page.screenshot({ path: "test-results/prototipo-ponte.png" });
+  // Centralizar Calado antes de cruzar o vão já construído.
   const p = await position(game);
   if (p[0] > 0.3) await walk(page, game, "KeyA", 0, 0.1);
   else if (p[0] < -0.3) await walk(page, game, "KeyD", 0, -0.1, false);
   await walk(page, game, "KeyW", 2, -9.5);
   // Capsule center = soil/bridge surface (1.2) + capsule half-height (0.55).
   await expect.poll(async () => (await position(game))[1]).toBeCloseTo(1.75, 1);
-  await walk(page, game, "KeyW", 2, -14);
+  await walk(page, game, "KeyW", 2, -16);
   await expect.poll(async () => (await position(game))[1]).toBeCloseTo(1.75, 1);
-  await page.keyboard.press("KeyE");
-  await expect(game).toHaveAttribute("data-bridge", "true");
-  await page.screenshot({ path: "test-results/prototipo-ponte.png" });
+  const revisionBeforeRecovery = Number(
+    await game.getAttribute("data-revision"),
+  );
   await page.keyboard.press("KeyR");
   await expect(game).toHaveAttribute("data-bridge", "true");
-  await expect(game).toHaveAttribute("data-revision", "1");
+  await expect(game).toHaveAttribute(
+    "data-revision",
+    String(revisionBeforeRecovery + 1),
+  );
   await expect.poll(async () => (await position(game))[1]).toBeCloseTo(1.75, 1);
   await page.keyboard.press("Escape");
   await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");

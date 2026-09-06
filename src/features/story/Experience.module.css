@@ -11,6 +11,7 @@
 .art {
   position: absolute;
   inset: 0;
+  background: #121f1e;
 }
 .art svg {
   width: 100%;
