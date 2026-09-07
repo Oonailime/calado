@@ -46,6 +46,7 @@ export const PORTAL = {
   z: -34,
   halfWidth: 2.55,
   halfDepth: 1.36,
+  groundInset: 0.04,
 } as const;
 
 export const CHARACTER_CAPSULE_HALF_HEIGHT = 0.28;
