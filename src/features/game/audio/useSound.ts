@@ -26,6 +26,16 @@ const VOLUME_TIME_CONSTANT = 0.3;
 const FOOTSTEP_TIME_CONSTANT = 0.15;
 const FOOTSTEP_SPEED_THRESHOLD = 0.3;
 const MUSIC_MUTE_TIME_CONSTANT = 0.12;
+// Mizaru still hears the score outside the code-reading mission — it only
+// dips this low, relative to the normal music volume, while he's actively
+// reading the wave sequence, so the binary "voice" reads clearly over it.
+const MIZARU_MISSION_MUSIC_FACTOR = 0.18;
+// Kikazaru's hearing is permanently dulled while he's the one selected, not
+// just during a mission — quieter and low-pass filtered the whole time.
+const KIKAZARU_MUSIC_FACTOR = 0.32;
+const MUSIC_FILTER_NORMAL_HZ = 18000;
+const MUSIC_FILTER_MUFFLED_HZ = 700;
+const MUSIC_FILTER_TIME_CONSTANT = 0.25;
 const BINARY_SOUND_MAX_SECONDS = 2.75;
 const BINARY_SOUND_FADE_IN_SECONDS = 0.03;
 const BINARY_SOUND_FADE_OUT_SECONDS = 0.25;
@@ -52,6 +62,7 @@ type PersistentAudio = {
   context: AudioContext;
   masterGain: GainNode;
   musicGain: GainNode;
+  musicFilter: BiquadFilterNode;
   effectsGain: GainNode;
   footstepGain: GainNode;
   musicElement: HTMLAudioElement;
@@ -74,6 +85,13 @@ function buildAudio(context: AudioContext): PersistentAudio {
   musicGain.gain.value = 0;
   musicGain.connect(masterGain);
 
+  // Kikazaru's dulled hearing runs the score through a lowpass filter
+  // instead of just turning it down, so it reads as muffled, not merely quiet.
+  const musicFilter = context.createBiquadFilter();
+  musicFilter.type = "lowpass";
+  musicFilter.frequency.value = MUSIC_FILTER_NORMAL_HZ;
+  musicFilter.connect(musicGain);
+
   const effectsGain = context.createGain();
   effectsGain.gain.value = 0;
   effectsGain.connect(masterGain);
@@ -85,7 +103,7 @@ function buildAudio(context: AudioContext): PersistentAudio {
   const musicElement = new Audio();
   musicElement.preload = "auto";
   const musicSource = context.createMediaElementSource(musicElement);
-  musicSource.connect(musicGain);
+  musicSource.connect(musicFilter);
 
   const binaryBuffers: Partial<Record<BinaryDigit, AudioBuffer>> = {};
   void Promise.all(
@@ -104,6 +122,7 @@ function buildAudio(context: AudioContext): PersistentAudio {
     context,
     masterGain,
     musicGain,
+    musicFilter,
     effectsGain,
     footstepGain,
     musicElement,
@@ -271,17 +290,50 @@ export function useSound(running: boolean): void {
     const state = audio.current;
     const now = state.context.currentTime;
     const mizaruSelected = puzzle.selected === 0;
+    const kikazaruSelected = puzzle.selected === 1;
+    // Only while Mizaru is actively reading the wave sequence — outside that
+    // mission he hears the score like anyone else.
+    const mizaruMissionActive =
+      mizaruSelected &&
+      puzzle.powers[0] &&
+      puzzle.powers[1] &&
+      !puzzle.unlocked;
+    // Activating his own power is him covering his ears further: it silences
+    // everything, not just the score.
+    const kikazaruPowerActive = kikazaruSelected && puzzle.powers[1];
+
+    const musicScale = mizaruMissionActive
+      ? MUSIC_SCALE * MIZARU_MISSION_MUSIC_FACTOR
+      : kikazaruSelected
+        ? MUSIC_SCALE * KIKAZARU_MUSIC_FACTOR
+        : MUSIC_SCALE;
+    const attenuated = mizaruMissionActive || kikazaruSelected;
     state.musicGain.gain.setTargetAtTime(
-      mizaruSelected ? 0 : ambient * MUSIC_SCALE,
+      kikazaruPowerActive ? 0 : ambient * musicScale,
       now,
-      mizaruSelected ? MUSIC_MUTE_TIME_CONSTANT : VOLUME_TIME_CONSTANT,
+      attenuated || kikazaruPowerActive
+        ? MUSIC_MUTE_TIME_CONSTANT
+        : VOLUME_TIME_CONSTANT,
+    );
+    state.musicFilter.frequency.setTargetAtTime(
+      kikazaruSelected ? MUSIC_FILTER_MUFFLED_HZ : MUSIC_FILTER_NORMAL_HZ,
+      now,
+      MUSIC_FILTER_TIME_CONSTANT,
     );
     state.effectsGain.gain.setTargetAtTime(
-      effects * EFFECTS_SCALE,
+      kikazaruPowerActive ? 0 : effects * EFFECTS_SCALE,
       now,
-      VOLUME_TIME_CONSTANT,
+      kikazaruPowerActive ? MUSIC_MUTE_TIME_CONSTANT : VOLUME_TIME_CONSTANT,
     );
-  }, [running, muted, ambient, effects, puzzle.powers, puzzle.selected]);
+  }, [
+    running,
+    muted,
+    ambient,
+    effects,
+    puzzle.powers,
+    puzzle.selected,
+    puzzle.unlocked,
+  ]);
 
   // Footstep volume is gated every animation frame, since movement updates
   // on the physics loop rather than through React state.
@@ -335,8 +387,9 @@ export function useSound(running: boolean): void {
   ]);
 
   // The binary voice follows the same four-bit loop as the visible waves.
-  // It is heard only while Mizaru is selected; his music channel is muted so
-  // the supplied Aum recordings for A (1) and Um (0) remain intelligible.
+  // It only plays during Mizaru's own mission, once his music has already
+  // been ducked way down (see the volume effect above) so the Aum recordings
+  // for A (1) and Um (0) remain intelligible over it.
   useEffect(() => {
     const state = audio.current;
     const binaryActive =

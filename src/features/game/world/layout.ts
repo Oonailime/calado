@@ -39,6 +39,15 @@ export const BRIDGE_COLLIDER_CENTER_Y = 0.38;
 export const BRIDGE_ORIGIN_Y =
   -BRIDGE_COLLIDER_CENTER_Y - BRIDGE_COLLIDER_HALF_HEIGHT;
 
+// The portal appears beyond the final mechanism on island 2. Its footprint
+// stays clear of the final totem, banana groves and the island's shoreline.
+export const PORTAL = {
+  x: 0,
+  z: -34,
+  halfWidth: 2.55,
+  halfDepth: 1.36,
+} as const;
+
 export const CHARACTER_CAPSULE_HALF_HEIGHT = 0.28;
 export const CHARACTER_CAPSULE_RADIUS = 0.27;
 export const CHARACTER_SPAWN_Y =

@@ -15,7 +15,7 @@ const LIGHT_TARGET = new Vector3(0, 0, 0);
 // never got a shadow at all.
 const WORLD_BOUNDS = new Box3(
   new Vector3(-16, -1, -45),
-  new Vector3(16, 6, 24),
+  new Vector3(16, 7.5, 24),
 );
 
 function computeShadowFrustum() {

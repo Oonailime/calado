@@ -124,7 +124,13 @@ export default function Game({ active, locale, onExit }: GameProps) {
       <WorldBoundary fallback={failure}>
         <div className={styles.canvas}>
           <Canvas
-            shadows={quality !== "low"}
+            shadows={
+              quality === "high"
+                ? "soft"
+                : quality === "medium"
+                  ? "percentage"
+                  : false
+            }
             dpr={quality === "low" ? 0.75 : quality === "medium" ? 1 : [1, 1.5]}
             camera={{ position: [0, 6, 12], fov: 48, near: 0.1, far: 160 }}
             frameloop={active && !paused ? "always" : "demand"}
@@ -144,7 +150,7 @@ export default function Game({ active, locale, onExit }: GameProps) {
               color="#ffd8a0"
               intensity={3.1}
               castShadow={quality !== "low"}
-              shadow-mapSize={quality === "high" ? [2048, 2048] : [512, 512]}
+              shadow-mapSize={quality === "high" ? [4096, 4096] : [512, 512]}
               shadow-camera-left={SHADOW_FRUSTUM.left}
               shadow-camera-right={SHADOW_FRUSTUM.right}
               shadow-camera-top={SHADOW_FRUSTUM.top}

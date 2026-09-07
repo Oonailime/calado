@@ -54,8 +54,8 @@ type Store = {
 export const useGame = create<Store>((set) => ({
   puzzle: initialPuzzle(),
   paused: false,
-  muted: true,
-  quality: "medium",
+  muted: false,
+  quality: "high",
   contrast: false,
   reduced: false,
   ambientVolume: 0.3,

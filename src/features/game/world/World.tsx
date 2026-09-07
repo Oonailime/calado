@@ -1,6 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame, useLoader, useThree } from "@react-three/fiber";
-import { CuboidCollider, CylinderCollider, RigidBody } from "@react-three/rapier";
+import {
+  CuboidCollider,
+  CylinderCollider,
+  RigidBody,
+} from "@react-three/rapier";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
@@ -46,6 +50,7 @@ import {
 } from "./soundCode";
 import WisdomTotem from "./Totem";
 import BananaGroves from "./BananaGroves";
+import Portal, { PORTAL_MODEL_URL } from "./Portal";
 
 // The collider follows both the height and silhouette of the rendered ground.
 function Island({
@@ -163,12 +168,7 @@ function BridgePlaceholder({ contrast }: { contrast: boolean }) {
     <group position={[0, -0.12, BRIDGE.z]}>
       <mesh>
         <boxGeometry args={[3.2, 0.08, BRIDGE.length]} />
-        <meshBasicMaterial
-          wireframe
-          color={color}
-          transparent
-          opacity={0.24}
-        />
+        <meshBasicMaterial wireframe color={color} transparent opacity={0.24} />
       </mesh>
       <mesh position={[0, 0.06, 0]}>
         <boxGeometry args={[0.07, 0.025, BRIDGE.length * 0.76]} />
@@ -226,7 +226,11 @@ function LogSite({
         )
       )}
       {!collected && (
-        <mesh ref={glow} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.04, 0]}>
+        <mesh
+          ref={glow}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, 0.04, 0]}
+        >
           <ringGeometry args={[0.5, 0.62, 32]} />
           <meshBasicMaterial
             color={CHARACTERS[1].light}
@@ -348,8 +352,7 @@ function Padlock({ unlocked }: { unlocked: boolean }) {
     const t = Math.min(1, delta * 4);
     const targetY = unlocked ? 0.22 : 0;
     const targetRotation = unlocked ? -0.9 : 0;
-    shackle.current.position.y +=
-      (targetY - shackle.current.position.y) * t;
+    shackle.current.position.y += (targetY - shackle.current.position.y) * t;
     shackle.current.rotation.z +=
       (targetRotation - shackle.current.rotation.z) * t;
   });
@@ -374,7 +377,11 @@ function Padlock({ unlocked }: { unlocked: boolean }) {
       <group ref={shackle} position={[0, 0.62, 0]}>
         <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
           <torusGeometry args={[0.22, 0.045, 8, 20, Math.PI]} />
-          <meshStandardMaterial color="#c9c2a5" metalness={0.6} roughness={0.3} />
+          <meshStandardMaterial
+            color="#c9c2a5"
+            metalness={0.6}
+            roughness={0.3}
+          />
         </mesh>
       </group>
     </group>
@@ -755,6 +762,7 @@ export default function World({ running }: { running: boolean }) {
   // mounting it lazily (only once the bridge is revealed) would suspend the
   // whole Physics/Character subtree mid-game and reset everyone to spawn.
   const bridgeModel = useLoader(GLTFLoader, BRIDGE_MODEL_URL);
+  const portalModel = useLoader(GLTFLoader, PORTAL_MODEL_URL);
   return (
     <>
       {ISLANDS.map((island) => (
@@ -771,6 +779,12 @@ export default function World({ running }: { running: boolean }) {
           running={running}
           reduced={reduced}
           contrast={contrast}
+        />
+        <Portal
+          gltf={portalModel}
+          built={puzzle.built}
+          running={running}
+          reduced={reduced}
         />
         {!puzzle.powers[1] && !puzzle.bridge && (
           <BridgePlaceholder contrast={contrast} />
@@ -821,9 +835,7 @@ export default function World({ running }: { running: boolean }) {
         {puzzle.bridge && !puzzle.built && (
           <>
             {!puzzle.unlocked && (
-              <group
-                position={[anchors.finalBuild.x, 0, anchors.finalBuild.z]}
-              >
+              <group position={[anchors.finalBuild.x, 0, anchors.finalBuild.z]}>
                 <RigidBody type="fixed" colliders={false}>
                   <CylinderCollider args={[1.7, 1.6]} position={[0, 1.7, 0]} />
                 </RigidBody>

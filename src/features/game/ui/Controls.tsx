@@ -171,6 +171,13 @@ export default function Controls({
             "Activate the final mechanism",
             `Take Iwazaru to the mechanism behind the padlock and press E, Enter, or ${f} to finish.`,
           );
+  else if (p.built)
+    hint = instruction(
+      "O portal foi construído",
+      "O ritual ergueu um portal no extremo da segunda ilha. Siga além do mecanismo final para encontrá-lo.",
+      "The portal has been built",
+      "The ritual raised a portal at the far end of the second island. Continue beyond the final mechanism to find it.",
+    );
   return (
     <>
       <Inventory locale={locale} />
