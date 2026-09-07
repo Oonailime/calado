@@ -11,6 +11,9 @@ export type PuzzleState = {
   unlocked: boolean;
   built: boolean;
   revision: number;
+  // Counts wrong padlock guesses so the UI can flash feedback once per miss
+  // (see Lock.tsx) — never decremented, only ever compared for a change.
+  wrongAttempts: number;
 };
 export const initialPuzzle = (): PuzzleState => ({
   selected: 2,
@@ -23,6 +26,7 @@ export const initialPuzzle = (): PuzzleState => ({
   unlocked: false,
   built: false,
   revision: 0,
+  wrongAttempts: 0,
 });
 export const distance = (a: Vec3, b: Vec3) => Math.hypot(a.x - b.x, a.z - b.z);
 export const anchors = {
@@ -123,7 +127,8 @@ export function submitCodeDigit(
 ): PuzzleState {
   if (state.selected !== 2 || state.unlocked) return state;
   if (distance(position, anchors.padlock) > LOCK_RANGE) return state;
-  if (digit !== LOCK_CODE[state.codeProgress]) return state;
+  if (digit !== LOCK_CODE[state.codeProgress])
+    return { ...state, wrongAttempts: state.wrongAttempts + 1 };
 
   const codeProgress = state.codeProgress + 1;
   return {

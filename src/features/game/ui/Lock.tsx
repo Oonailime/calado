@@ -16,6 +16,7 @@ export default function Lock({
 }) {
   const pt = locale === "pt";
   const codeProgress = useGame((state) => state.puzzle.codeProgress);
+  const wrongAttempts = useGame((state) => state.puzzle.wrongAttempts);
   const revealedHints = lockHintsForLocale(locale, hintCount);
   const [digits, setDigits] = useState<number[]>(() =>
     Array.from({ length: LOCK_CODE.length }, () => 0),
@@ -28,6 +29,19 @@ export default function Lock({
   useEffect(() => {
     panel.current?.focus();
   }, []);
+  // wrongAttempts persists across opening/closing the dial, so a fresh
+  // mount must not treat an already-nonzero count as a brand-new miss.
+  const [shake, setShake] = useState(false);
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    setShake(true);
+    const timeout = setTimeout(() => setShake(false), 900);
+    return () => clearTimeout(timeout);
+  }, [wrongAttempts]);
   // Registered once and reads live state on every keypress (getState() for
   // the store, digitsRef for local state) — a fast keystroke sequence would
   // otherwise be handled by a stale closure from before React re-subscribes.
@@ -83,7 +97,9 @@ export default function Lock({
             ? `Você está resolvendo o algarismo ${codeProgress + 1} de ${LOCK_CODE.length}. Use ↑ ou ↓ para escolher um número, Enter para confirmar e Esc para fechar.`
             : `You are solving digit ${codeProgress + 1} of ${LOCK_CODE.length}. Use ↑ or ↓ to choose a number, Enter to confirm, and Esc to close.`}
         </p>
-        <div className={styles.lockDigits}>
+        <div
+          className={`${styles.lockDigits} ${shake ? styles.lockDigitsShake : ""}`}
+        >
           {digits.map((digit, i) => (
             <span
               key={i}
@@ -123,6 +139,13 @@ export default function Lock({
             </span>
           ))}
         </div>
+        <p className={styles.lockError} role="alert">
+          {shake
+            ? pt
+              ? "Algarismo incorreto. Tente novamente."
+              : "Incorrect digit. Try again."
+            : " "}
+        </p>
         <p className={styles.lockHint}>
           {pt
             ? "O algarismo foi transmitido por uma sequência de quatro ondas. Se estiver em dúvida, peça as pistas abaixo."

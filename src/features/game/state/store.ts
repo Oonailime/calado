@@ -115,6 +115,9 @@ export const runtime = {
   yaw: 0,
   pitch: 0.38,
   jump: false,
+  // Set once the canvas mounts (see Game.tsx's Ready) so useControls can
+  // request pointer lock on it without threading a ref through props.
+  canvasElement: null as HTMLElement | null,
   splashes: [] as Vec3[],
   binarySequenceStep: null as number | null,
   binarySequenceStartedAt: 0,

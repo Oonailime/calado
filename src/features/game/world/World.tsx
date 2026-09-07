@@ -326,7 +326,10 @@ function NoiseBarrier({
   });
   return (
     <>
-      <mesh ref={cone} geometry={geometry} castShadow>
+      {/* Transparent by design (a hazy barrier, not a solid object) — it must
+          not cast a shadow, or its full opaque cone silhouette shows up as a
+          large dark patch on the ground despite looking see-through. */}
+      <mesh ref={cone} geometry={geometry}>
         <meshStandardMaterial
           color={contrast ? "#ffffff" : "#d8e6cb"}
           transparent

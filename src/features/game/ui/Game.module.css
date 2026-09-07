@@ -271,6 +271,14 @@
   color: #18271b;
   border: 0;
 }
+.exitPanel {
+  width: 100%;
+  padding: 11px;
+  margin-top: 10px;
+  background: transparent;
+  border: 1px solid #a5b19155;
+  color: #d9dcc9;
+}
 .loading {
   color: #d8d9c4;
   text-align: center;
@@ -309,6 +317,9 @@
 @media (prefers-reduced-motion: reduce) {
   .pickup {
     animation-name: pickup-life-reduced;
+  }
+  .lockDigitsShake {
+    animation: none;
   }
 }
 @keyframes pickup-life-reduced {
@@ -354,6 +365,34 @@
   border-color: #68736a55;
   color: #707972;
   opacity: 0.68;
+}
+.lockDigitsShake {
+  animation: lockShake 0.4s ease;
+}
+@keyframes lockShake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+.lockError {
+  color: #e0937a;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  margin: -8px 0 4px;
 }
 .lockHint {
   font-size: 12px;

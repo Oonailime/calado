@@ -104,7 +104,11 @@ test("Iwazaru destrava um algarismo por vez, perto do cadeado e na ordem exata",
   assert.equal(submitCodeDigit(s, anchors.padlock, LOCK_CODE[0]), s);
   s = selectCharacter(s, 2);
   assert.equal(submitCodeDigit(s, { x: 50, y: 0, z: 0 }, LOCK_CODE[0]), s);
-  assert.equal(submitCodeDigit(s, anchors.padlock, 0), s);
+  // A digit that doesn't match still doesn't advance progress, but it does
+  // bump wrongAttempts so the UI can flash feedback (see Lock.tsx).
+  const wrong = submitCodeDigit(s, anchors.padlock, 0);
+  assert.equal(wrong.codeProgress, 0);
+  assert.equal(wrong.wrongAttempts, s.wrongAttempts + 1);
 
   for (let index = 0; index < LOCK_CODE.length; index += 1) {
     s = submitCodeDigit(s, anchors.padlock, LOCK_CODE[index]);

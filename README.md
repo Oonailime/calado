@@ -14,14 +14,14 @@ npm run dev
 - `http://localhost:3000`: animatic de oito cenas ligado ao scroll. Ao final, clique em **Jogar** para entrar no protótipo.
 - `http://localhost:3000/estudo`: caderno interno com conceito do trio, pelagens, storyboards, animatic com controle manual e mapa.
 
-O jogo bloqueia o scroll. **Esc** sai do modo jogo; **Retomar** preserva a progressão. Celulares recebem orientação para usar PC.
+O jogo bloqueia o scroll. **Esc** abre pausa/configurações, de onde também dá para sair do modo jogo; **Retomar** preserva a progressão. Celulares recebem orientação para usar PC.
 
 ## Controles do protótipo
 
 | Ação                                                | Controle                                       |
-| --------------------------------------------------- | ---------------------------------------------- |
+| --------------------------------------------------- | ----------------------------------------------- |
 | Movimento                                           | WASD / setas                                   |
-| Câmera                                              | Arrastar o mouse                               |
+| Câmera                                              | Clique na tela; o mouse passa a olhar ao redor continuamente até Esc |
 | Pular                                               | Espaço                                         |
 | Kikazaru dourado / Mizaru prateado / Iwazaru bronze | 1 / 2 / 3                                      |
 | Alternar personagem                                 | Q                                              |
@@ -30,11 +30,11 @@ O jogo bloqueia o scroll. **Esc** sai do modo jogo; **Retomar** preserva a progr
 | Liberar sustentação manualmente                     | Reselecionar o personagem e pressionar F       |
 | Construir com Iwazaru                               | E / Enter ou F perto do mecanismo              |
 | Reposicionar grupo                                  | R                                              |
-| Sair do modo jogo                                   | Esc                                            |
+| Pausa/configurações (e sair do modo jogo a partir dali) | Esc                                        |
 
 Os comandos também aparecem de forma contextual dentro do jogo. Áudio começa desligado; pausa oferece qualidade, contraste, movimento reduzido, volumes e remapeamento inicial da habilidade.
 
-O inventário mostra bananas e, até a construção da ponte, madeiras coletadas em relação ao total, com um aviso visual de cinco segundos para cada coleta. No desafio sonoro, Mizaru não ouve a música: ondas pretas com o som “A” representam `1` e ondas brancas com “Um” representam `0`. Cada bit dura três segundos; depois dos quatro bits há seis segundos de silêncio antes de a sequência recomeçar. O cadeado oferece três dicas progressivas, reveladas somente quando o jogador as solicita.
+O inventário mostra bananas e, até a construção da ponte, madeiras coletadas em relação ao total, com um aviso visual de cinco segundos para cada coleta. No desafio sonoro, Mizaru não ouve a música: ondas pretas com o som “A” representam `1` e ondas brancas com “Um” representam `0`. Cada bit dura três segundos; depois dos quatro bits há seis segundos de silêncio antes de a sequência recomeçar. O cadeado oferece três dicas progressivas, reveladas somente quando o jogador as solicita, e avisa visualmente quando um algarismo é digitado errado. Como a câmera trava o cursor durante o jogo, o painel de dicas do cadeado e a pausa liberam o mouse automaticamente para poderem ser clicados.
 
 ## Verificação
 

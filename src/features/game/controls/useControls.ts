@@ -3,6 +3,15 @@ import { runtime, useGame } from "../state/store";
 import { anchors, distance, LOCK_RANGE } from "../state/rules";
 import { CHARACTER_KEY_BINDINGS } from "../types";
 export function useControls(active: boolean, onExit: () => void) {
+  const paused = useGame((s) => s.paused);
+  const lockOpen = useGame((s) => s.lockOpen);
+  // The pointer stays locked only while actually playing — any dialog that
+  // needs a visible, clickable cursor (settings, the padlock's hint button)
+  // must force it to release, since a locked pointer can't reliably hit UI.
+  useEffect(() => {
+    if ((!active || paused || lockOpen) && document.pointerLockElement)
+      document.exitPointerLock();
+  }, [active, paused, lockOpen]);
   useEffect(() => {
     if (!active) return;
     const isField = (target: EventTarget | null) =>
@@ -14,8 +23,14 @@ export function useControls(active: boolean, onExit: () => void) {
       if (state.lockOpen) return;
       if (e.code === "Escape") {
         e.preventDefault();
-        runtime.clear();
-        onExit();
+        // The browser itself already force-releases pointer lock on Escape;
+        // this just brings up the settings panel, which is where exiting the
+        // game now lives (see Controls.tsx) instead of leaving immediately.
+        if (state.paused) state.configure({ paused: false });
+        else {
+          runtime.clear();
+          state.configure({ paused: true });
+        }
         return;
       }
       if (isField(e.target) || state.paused) return;
@@ -125,11 +140,23 @@ export function useControls(active: boolean, onExit: () => void) {
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
     };
+    // A click directly on the canvas engages pointer lock, after which
+    // mousemove above drives the camera continuously — no more holding the
+    // button down. Clicks on any UI chrome (portraits, icons, dialogs) must
+    // not trigger this, so it's scoped to the canvas itself as the target.
+    const click = (e: MouseEvent) => {
+      const state = useGame.getState();
+      if (state.paused || state.lockOpen) return;
+      if (document.pointerLockElement) return;
+      if (e.target !== runtime.canvasElement) return;
+      runtime.canvasElement?.requestPointerLock();
+    };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     window.addEventListener("blur", blur);
     document.addEventListener("visibilitychange", visibility);
     window.addEventListener("mousemove", mouse);
+    window.addEventListener("click", click);
     window.addEventListener("wheel", wheel, { passive: false });
     return () => {
       runtime.clear();
@@ -138,6 +165,7 @@ export function useControls(active: boolean, onExit: () => void) {
       window.removeEventListener("blur", blur);
       document.removeEventListener("visibilitychange", visibility);
       window.removeEventListener("mousemove", mouse);
+      window.removeEventListener("click", click);
       window.removeEventListener("wheel", wheel);
     };
   }, [active, onExit]);

@@ -10,7 +10,7 @@ import {
 } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Physics } from "@react-three/rapier";
-import { useGame } from "./state/store";
+import { runtime, useGame } from "./state/store";
 import type { GameProps } from "./types";
 import { useControls } from "./controls/useControls";
 import { useSound } from "./audio/useSound";
@@ -18,6 +18,7 @@ import Character from "./characters/Character";
 import FollowCamera from "./camera/FollowCamera";
 import World, { AtmosphereFog } from "./world/World";
 import Telemetry from "./world/Telemetry";
+import { SHADOW_FRUSTUM } from "./world/shadowFrustum";
 import Controls from "./ui/Controls";
 import Lock from "./ui/Lock";
 import { nextLockHintCount } from "./ui/lockHints";
@@ -44,13 +45,17 @@ function Ready({
 }) {
   const gl = useThree((s) => s.gl);
   useEffect(() => {
+    runtime.canvasElement = gl.domElement;
     onReady();
     const lost = (event: Event) => {
       event.preventDefault();
       onLost();
     };
     gl.domElement.addEventListener("webglcontextlost", lost);
-    return () => gl.domElement.removeEventListener("webglcontextlost", lost);
+    return () => {
+      gl.domElement.removeEventListener("webglcontextlost", lost);
+      if (runtime.canvasElement === gl.domElement) runtime.canvasElement = null;
+    };
   }, [gl, onReady, onLost]);
   return null;
 }
@@ -134,16 +139,20 @@ export default function Game({ active, locale, onExit }: GameProps) {
             <AtmosphereFog />
             <hemisphereLight args={["#f4e3ae", "#3a3420", 2.1]} />
             <directionalLight
+              key={quality}
               position={[10, 18, 8]}
               color="#ffd8a0"
               intensity={3.1}
               castShadow={quality !== "low"}
-              shadow-mapSize={quality === "high" ? [1024, 1024] : [512, 512]}
-              shadow-camera-left={-25}
-              shadow-camera-right={25}
-              shadow-camera-top={25}
-              shadow-camera-bottom={-40}
-              shadow-bias={-0.001}
+              shadow-mapSize={quality === "high" ? [2048, 2048] : [512, 512]}
+              shadow-camera-left={SHADOW_FRUSTUM.left}
+              shadow-camera-right={SHADOW_FRUSTUM.right}
+              shadow-camera-top={SHADOW_FRUSTUM.top}
+              shadow-camera-bottom={SHADOW_FRUSTUM.bottom}
+              shadow-camera-near={SHADOW_FRUSTUM.near}
+              shadow-camera-far={SHADOW_FRUSTUM.far}
+              shadow-bias={-0.0003}
+              shadow-normalBias={0.03}
             />
             <pointLight
               position={[-9, 5, 6]}

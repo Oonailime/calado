@@ -244,7 +244,13 @@ test("jogo coopera na ponte, recupera checkpoint e libera scroll com Esc", async
     String(revisionBeforeRecovery + 1),
   );
   await expect.poll(async () => (await position(game))[1]).toBeCloseTo(1.75, 1);
+  // Esc now opens the in-game settings panel instead of leaving outright —
+  // exiting is a deliberate click from there.
   await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "Retomar", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Sair do jogo" }).click();
   await expect(page.locator("body")).not.toHaveCSS("overflow", "hidden");
   await expect(page.getByRole("button", { name: "Retomar ↗" })).toBeVisible();
   await page.getByRole("button", { name: "Retomar ↗" }).click();

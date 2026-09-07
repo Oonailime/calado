@@ -40,9 +40,9 @@ export default function Controls({
   if (!state.learned.move || !state.learned.camera)
     hint = instruction(
       "Explore a ilha",
-      "Use WASD ou as setas para caminhar. Segure o botão esquerdo e arraste o mouse para olhar ao redor. Aproxime-se de uma banana e pressione E para coletá-la.",
+      "Use WASD ou as setas para caminhar. Clique na tela para olhar ao redor com o mouse; pressione Esc quando quiser liberar o cursor. Aproxime-se de uma banana e pressione E para coletá-la.",
       "Explore the island",
-      "Use WASD or the arrow keys to walk. Hold the left mouse button and drag to look around. Approach a banana and press E to collect it.",
+      "Use WASD or the arrow keys to walk. Click the screen to look around with the mouse; press Esc whenever you want to release the cursor. Approach a banana and press E to collect it.",
     );
   else if (!state.learned.jump && state.zone === 0)
     hint = instruction(
@@ -246,7 +246,13 @@ export default function Controls({
           );
         })}
       </div>
-      <button className={styles.exit} onClick={onExit}>
+      <button
+        className={styles.exit}
+        onClick={() => {
+          runtime.clear();
+          state.configure({ paused: true });
+        }}
+      >
         ESC ↗
       </button>
       {state.paused && (
@@ -351,6 +357,9 @@ export default function Controls({
             </label>
             <button ref={first} className={styles.resume} onClick={resume}>
               {pt ? "Retomar" : "Resume"}
+            </button>
+            <button className={styles.exitPanel} onClick={onExit}>
+              {pt ? "Sair do jogo" : "Exit game"}
             </button>
           </div>
         </div>
