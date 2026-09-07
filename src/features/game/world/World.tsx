@@ -51,6 +51,7 @@ import {
 import WisdomTotem from "./Totem";
 import BananaGroves from "./BananaGroves";
 import Portal, { PORTAL_MODEL_URL } from "./Portal";
+import { powerAnchorVisibility } from "./powerAnchorVisibility";
 
 // The collider follows both the height and silhouette of the rendered ground.
 function Island({
@@ -753,7 +754,13 @@ export function AtmosphereFog() {
     />
   );
 }
-export default function World({ running }: { running: boolean }) {
+export default function World({
+  running,
+  onPortalEnter,
+}: {
+  running: boolean;
+  onPortalEnter: () => void;
+}) {
   const puzzle = useGame((s) => s.puzzle);
   const contrast = useGame((s) => s.contrast);
   const quality = useGame((s) => s.quality);
@@ -763,6 +770,7 @@ export default function World({ running }: { running: boolean }) {
   // whole Physics/Character subtree mid-game and reset everyone to spawn.
   const bridgeModel = useLoader(GLTFLoader, BRIDGE_MODEL_URL);
   const portalModel = useLoader(GLTFLoader, PORTAL_MODEL_URL);
+  const visibleAnchors = powerAnchorVisibility(puzzle);
   return (
     <>
       {ISLANDS.map((island) => (
@@ -785,16 +793,19 @@ export default function World({ running }: { running: boolean }) {
           built={puzzle.built}
           running={running}
           reduced={reduced}
+          onEnter={onPortalEnter}
         />
         {!puzzle.powers[1] && !puzzle.bridge && (
           <BridgePlaceholder contrast={contrast} />
         )}
-        <Anchor
-          {...anchors.bridge}
-          color={CHARACTERS[1].light}
-          active={puzzle.powers[1] && !puzzle.bridge}
-          shape="reveal"
-        />
+        {visibleAnchors.bridge && (
+          <Anchor
+            {...anchors.bridge}
+            color={CHARACTERS[1].light}
+            active={puzzle.powers[1]}
+            shape="reveal"
+          />
+        )}
         {!puzzle.bridge &&
           anchors.logs.map((log, i) => (
             <LogSite
@@ -805,7 +816,7 @@ export default function World({ running }: { running: boolean }) {
               highlight={puzzle.powers[1]}
             />
           ))}
-        {puzzle.bridge && (
+        {visibleAnchors.final && (
           <>
             <Anchor
               {...anchors.reveal}

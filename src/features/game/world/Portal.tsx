@@ -12,7 +12,9 @@ import {
   Vector3,
 } from "three";
 import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { runtime, useGame } from "../state/store";
 import { PORTAL } from "./layout";
+import { isInsideOpenPortal } from "./portalEntry";
 import {
   advancePortalConstruction,
   isOriginalPortalRune,
@@ -162,11 +164,13 @@ export default function Portal({
   built,
   running,
   reduced,
+  onEnter,
 }: {
   gltf: GLTF;
   built: boolean;
   running: boolean;
   reduced: boolean;
+  onEnter: () => void;
 }) {
   const model = useMemo(() => preparePortal(gltf), [gltf]);
   const pieces = useRef<(Group | null)[]>([]);
@@ -177,6 +181,7 @@ export default function Portal({
   const glow = useRef<PointLight>(null);
   const construction = useRef(built ? 1 : 0);
   const previousBuilt = useRef(built);
+  const wasInside = useRef(false);
 
   useEffect(
     () => () => model.geometries.forEach((geometry) => geometry.dispose()),
@@ -246,6 +251,13 @@ export default function Portal({
       aura.current.scale.setScalar(0.85 + progress * 0.35);
       material.opacity = constructing ? 0.55 * (1 - progress) : 0;
     }
+    const selected = useGame.getState().puzzle.selected;
+    const inside = isInsideOpenPortal(
+      runtime.positions[selected],
+      built && progress >= 1,
+    );
+    if (inside && !wasInside.current) onEnter();
+    wasInside.current = inside;
   });
 
   return (

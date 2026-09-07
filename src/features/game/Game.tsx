@@ -69,10 +69,16 @@ export default function Game({ active, locale, onExit }: GameProps) {
   const [ready, setReady] = useState(false);
   const [lost, setLost] = useState(false);
   const [lockHintCount, setLockHintCount] = useState(0);
-  const running = active && !paused && ready && !lost;
+  const [portalNotice, setPortalNotice] = useState(false);
+  const running = active && !paused && ready && !lost && !portalNotice;
   const onReady = useCallback(() => setReady(true), []);
   const onLost = useCallback(() => setLost(true), []);
-  useControls(active && !lost, onExit);
+  const onPortalEnter = useCallback(() => setPortalNotice(true), []);
+  const exitGame = useCallback(() => {
+    setPortalNotice(false);
+    onExit();
+  }, [onExit]);
+  useControls(active && !lost && !portalNotice, exitGame);
   useSound(running);
   useEffect(() => {
     if (active && ready) root.current?.focus();
@@ -96,7 +102,7 @@ export default function Game({ active, locale, onExit }: GameProps) {
             ? "O ambiente 3D não pôde ser iniciado. Verifique a aceleração gráfica do navegador e recarregue a página."
             : "The 3D environment could not start. Check browser graphics acceleration and reload."}
         </p>
-        <button className={styles.resume} onClick={onExit}>
+        <button className={styles.resume} onClick={exitGame}>
           {locale === "pt" ? "Voltar" : "Go back"}
         </button>
       </div>
@@ -119,6 +125,7 @@ export default function Game({ active, locale, onExit }: GameProps) {
       data-code-progress={puzzle.codeProgress}
       data-unlocked={puzzle.unlocked}
       data-lock-open={lockOpen}
+      data-portal-notice={portalNotice}
       data-revision={puzzle.revision}
     >
       <WorldBoundary fallback={failure}>
@@ -173,7 +180,7 @@ export default function Game({ active, locale, onExit }: GameProps) {
                 gravity={[0, -12, 0]}
                 timeStep={1 / 60}
               >
-                <World running={running} />
+                <World running={running} onPortalEnter={onPortalEnter} />
                 {([0, 1, 2] as const).map((id) => (
                   <Character key={id} id={id} running={running} />
                 ))}
@@ -194,7 +201,9 @@ export default function Game({ active, locale, onExit }: GameProps) {
             </div>
           </div>
         )}
-        {ready && !lost && <Controls locale={locale} onExit={onExit} />}
+        {ready && !lost && !portalNotice && (
+          <Controls locale={locale} onExit={exitGame} />
+        )}
         {ready && !lost && lockOpen && (
           <Lock
             locale={locale}
@@ -203,6 +212,41 @@ export default function Game({ active, locale, onExit }: GameProps) {
               setLockHintCount((count) => nextLockHintCount(count))
             }
           />
+        )}
+        {ready && !lost && portalNotice && (
+          <div className={styles.overlay}>
+            <div
+              className={`${styles.panel} ${styles.portalPanel}`}
+              role="dialog"
+              aria-modal="true"
+              aria-label={
+                locale === "pt"
+                  ? "Próxima fase em construção"
+                  : "Next stage under construction"
+              }
+            >
+              <span className={styles.portalSeal} aria-hidden="true">
+                K · M · I
+              </span>
+              <h2>
+                {locale === "pt"
+                  ? "Próxima fase em construção"
+                  : "Next stage under construction"}
+              </h2>
+              <p>
+                {locale === "pt"
+                  ? "Você atravessou o portal e chegou ao limite desta versão. A próxima ilha ainda está sendo construída."
+                  : "You crossed the portal and reached the end of this version. The next island is still being built."}
+              </p>
+              <button
+                autoFocus
+                className={styles.resume}
+                onClick={() => setPortalNotice(false)}
+              >
+                {locale === "pt" ? "Voltar ao portal" : "Return to portal"}
+              </button>
+            </div>
+          </div>
         )}
         {lost && failure}
       </WorldBoundary>

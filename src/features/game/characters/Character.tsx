@@ -18,6 +18,7 @@ import {
   characterSpawn,
 } from "../world/layout";
 import { safeGround, waterDepth } from "../world/terrain";
+import { followerDelaySeconds, shouldFollowerJump } from "./followerNavigation";
 
 const EDGE_SLOW = 0.6;
 const EDGE_DEEP = 3.2;
@@ -33,10 +34,19 @@ export default function Character({
   const locomotion = useRef({ speed: 0, grounded: true });
   const trapped = useRef(0);
   const previous = useRef({ x: 0, z: 0 });
-  const selected = useGame((s) => s.puzzle.selected === id);
+  const followDelay = useRef(1);
+  const followWait = useRef(1);
+  const jumpCooldown = useRef(0);
+  const selectedId = useGame((s) => s.puzzle.selected);
+  const selected = selectedId === id;
   const power = useGame((s) => s.puzzle.powers[id]);
   const revision = useGame((s) => s.puzzle.revision);
   const { world, rapier } = useRapier();
+  useEffect(() => {
+    const delay = followerDelaySeconds(id, Math.random());
+    followDelay.current = delay;
+    followWait.current = delay;
+  }, [id]);
   useEffect(() => {
     const state = useGame.getState().puzzle;
     const spawn = characterSpawn(id, state.bridge);
@@ -44,7 +54,13 @@ export default function Character({
     body.current?.setLinvel({ x: 0, y: 0, z: 0 }, true);
     runtime.positions[id] = spawn;
     runtime.grounded[id] = true;
+    followWait.current = followDelay.current;
+    jumpCooldown.current = 0;
   }, [revision, id]);
+  useEffect(() => {
+    followWait.current = followDelay.current;
+    trapped.current = 0;
+  }, [selectedId]);
   useFrame((_, delta) => {
     if (!running || !body.current) return;
     const rigid = body.current;
@@ -60,6 +76,7 @@ export default function Character({
       return;
     }
     const dt = Math.min(delta, 0.04);
+    jumpCooldown.current = Math.max(0, jumpCooldown.current - dt);
     let vx = 0,
       vz = 0;
     const ground = world.castRay(
@@ -118,27 +135,79 @@ export default function Character({
       const dx = targetX - p.x,
         dz = targetZ - p.z;
       const length = Math.hypot(dx, dz);
-      if (length > 1.1) {
+      const wantsToFollow = length > 1.1;
+      if (!wantsToFollow) followWait.current = followDelay.current;
+      else if (followWait.current > 0)
+        followWait.current = Math.max(0, followWait.current - dt);
+      if (wantsToFollow && followWait.current <= 0) {
         vx = (dx / length) * 3.7;
         vz = (dz / length) * 3.7;
       }
-      if (
-        !safeGround(
-          p.x + vx * 0.18,
-          p.z + vz * 0.18,
-          puzzle.bridge,
-        )
-      ) {
+      if (!safeGround(p.x + vx * 0.18, p.z + vz * 0.18, puzzle.bridge)) {
         vx = 0;
         vz = 0;
       }
-      if (Math.abs(p.z) < 1.1 && grounded && Math.abs(dz) > 1) vy = 5;
+      const followerSpeed = Math.hypot(vx, vz);
+      if (grounded && followerSpeed > 0.1) {
+        const direction = { x: vx / followerSpeed, z: vz / followerSpeed };
+        const fixedOnly = rapier.QueryFilterFlags.ONLY_FIXED;
+        const lowerBlocked = !!world.castRay(
+          new rapier.Ray(
+            { x: p.x, y: p.y - 0.32, z: p.z },
+            { x: direction.x, y: 0, z: direction.z },
+          ),
+          0.78,
+          true,
+          fixedOnly,
+          undefined,
+          undefined,
+          rigid,
+        );
+        const upperBlocked = !!world.castRay(
+          new rapier.Ray(
+            { x: p.x, y: p.y + 0.38, z: p.z },
+            { x: direction.x, y: 0, z: direction.z },
+          ),
+          0.82,
+          true,
+          fixedOnly,
+          undefined,
+          undefined,
+          rigid,
+        );
+        const landingSafe = safeGround(
+          p.x + direction.x * 1.15,
+          p.z + direction.z * 1.15,
+          puzzle.bridge,
+        );
+        const pathJump =
+          Math.abs(p.z) < 1.1 &&
+          Math.abs(dz) > 1 &&
+          landingSafe &&
+          jumpCooldown.current <= 0;
+        if (
+          pathJump ||
+          shouldFollowerJump({
+            grounded,
+            moving: true,
+            lowerBlocked,
+            upperBlocked,
+            landingSafe,
+            cooldown: jumpCooldown.current,
+          })
+        ) {
+          vy = 5.7;
+          jumpCooldown.current = 0.7;
+        }
+      }
       const displacement = Math.hypot(
         p.x - previous.current.x,
         p.z - previous.current.z,
       );
       trapped.current =
-        length > 3 && displacement < dt * 0.2 ? trapped.current + dt : 0;
+        followWait.current <= 0 && length > 3 && displacement < dt * 0.2
+          ? trapped.current + dt
+          : 0;
       if (
         (length > 22 || trapped.current > 6) &&
         safeGround(targetX, targetZ, puzzle.bridge)

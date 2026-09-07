@@ -241,6 +241,32 @@
   font-weight: normal;
   margin: 0 0 22px;
 }
+.portalPanel {
+  max-width: 520px;
+  text-align: center;
+  border-color: #53d9df77;
+  background:
+    radial-gradient(circle at 50% 0%, #26717666, transparent 58%), #18372f;
+}
+.portalPanel h2 {
+  margin-bottom: 14px;
+  color: #bffaff;
+}
+.portalPanel p {
+  margin: 0;
+  color: #dce6d8;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.portalSeal {
+  display: inline-block;
+  margin-bottom: 18px;
+  color: #71edf3;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.32em;
+  text-shadow: 0 0 18px #4debf0aa;
+}
 .panel label {
   display: flex;
   justify-content: space-between;
