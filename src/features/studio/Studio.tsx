@@ -44,7 +44,7 @@ export default function Studio() {
         <Image
           className={styles.concept}
           src="/assets/concepts/trio-v1.png"
-          alt="Estudo dos macacos Mizaru dourado cobrindo os olhos, Kikazaru branco cobrindo os ouvidos e Calado marrom cobrindo a boca; abaixo, quatro idades de Calado e amostras de pelagem."
+          alt="Estudo dos macacos Mizaru prateado cobrindo os olhos, Kikazaru dourado cobrindo os ouvidos e Iwazaru marrom cobrindo a boca; abaixo, estudos de idade e amostras de pelagem."
           width={1536}
           height={1024}
         />
@@ -52,16 +52,16 @@ export default function Studio() {
           {[
             {
               name: "Mizaru",
-              colors: ["#775528", "#BD914E", "#E0BD76"],
-              copy: "Silhueta esguia; passos atentos, cabeça inclinada. Olhos cobertos, malha dourada e triângulos revelam estruturas. A pelagem continua natural.",
+              colors: ["#6f7578", "#c9ced1", "#f5f7f7"],
+              copy: "Silhueta esguia; passos atentos, cabeça inclinada. Olhos cobertos, branco prateado e triângulos revelam estruturas.",
             },
             {
               name: "Kikazaru",
-              colors: ["#868C81", "#D3D4C6", "#F0EEDF"],
-              copy: "Centro de gravidade baixo; movimentos redondos e estáveis. Ouvidos cobertos; círculos e ondas se anulam. O branco recebe sombra perolada.",
+              colors: ["#775528", "#bd914e", "#e0bd76"],
+              copy: "Centro de gravidade baixo; movimentos redondos e estáveis. Ouvidos cobertos; círculos e ondas se anulam. O dourado recebe sombras quentes.",
             },
             {
-              name: "Calado",
+              name: "Iwazaru",
               colors: ["#473325", "#785237", "#B37B4D"],
               copy: "Tronco firme e mãos expressivas; curioso, toca e monta. Boca coberta; quadrados se encaixam. Marrom terroso com luz cobre.",
             },
@@ -81,6 +81,22 @@ export default function Studio() {
             </article>
           ))}
         </div>
+      </section>
+      <section className={styles.section}>
+        <div className={styles.eyebrow}>02 / Rig do macaco</div>
+        <h2>Anatomia antes do movimento.</h2>
+        <p>
+          Os previews anteriores foram suspensos enquanto a animação é refeita
+          sobre um único rig anatômico. A caminhada quadrúpede original foi
+          preservada e fornece os limites reais de cada articulação.
+        </p>
+        <Link
+          className={styles.link}
+          href="/estudo/rig-macaco"
+          prefetch={false}
+        >
+          Abrir anatomia e estrutura do rig ↗
+        </Link>
       </section>
       <section className={styles.section}>
         <div className={styles.eyebrow}>02 / Storyboard biográfico</div>

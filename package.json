@@ -12,7 +12,11 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "analyze:monkey-rig": "node scripts/analyze-monkey-rig.mjs",
+    "capture:monkey-rig": "node scripts/capture-monkey-rig.mjs",
+    "render:animations": "node scripts/render-animation-previews.mjs",
+    "benchmark:quality": "node scripts/benchmark-quality.mjs"
   },
   "dependencies": {
     "@react-three/fiber": "9.7.0",

@@ -8,6 +8,35 @@ import styles from "./Game.module.css";
 
 type Instruction = { title: string; body: string };
 
+function MovementDebugPanel() {
+  const output = useRef<HTMLPreElement>(null);
+  useEffect(() => {
+    const update = () => {
+      const element = output.current;
+      if (!element) return;
+      const id = useGame.getState().puzzle.selected;
+      const frame = runtime.movementDebug[id];
+      const formatVector = (value: { x: number; y: number; z: number }) =>
+        `${value.x.toFixed(2)}, ${value.y.toFixed(2)}, ${value.z.toFixed(2)}`;
+      element.textContent = [
+        `${frame.state}  physics ${(frame.physicsDt * 1_000).toFixed(2)}ms  render ${(frame.renderDelta * 1_000).toFixed(2)}ms`,
+        `v ${formatVector(frame.velocity)}`,
+        `g ${formatVector(frame.gravity)}`,
+        `radial ${formatVector(frame.radialVelocity)}`,
+        `tangent ${formatVector(frame.tangentialVelocity)}`,
+        `swing plane n ${formatVector(frame.swingPlaneNormal)}`,
+        `L arm ${frame.leftArmLength.toFixed(3)}/${frame.leftArmMax.toFixed(3)}  error ${frame.leftConstraintError.toFixed(4)}`,
+        `R arm ${frame.rightArmLength.toFixed(3)}/${frame.rightArmMax.toFixed(3)}  error ${frame.rightConstraintError.toFixed(4)}`,
+        `candidates ${frame.candidateCount}  target ${frame.hasChosenTarget ? "yes" : "no"}  handoffs ${frame.handoffCount}`,
+      ].join("\n");
+    };
+    update();
+    const timer = window.setInterval(update, 100);
+    return () => window.clearInterval(timer);
+  }, []);
+  return <pre ref={output} className={styles.movementDebug} aria-live="off" />;
+}
+
 export default function Controls({
   locale,
   onExit,
@@ -37,7 +66,14 @@ export default function Controls({
   ): Instruction =>
     pt ? { title: titlePt, body: bodyPt } : { title: titleEn, body: bodyEn };
   let hint: Instruction | null = null;
-  if (!state.learned.move || !state.learned.camera)
+  if (state.map === "phase4")
+    hint = instruction(
+      "Fase 4 · Vale das copas",
+      "Aproxime-se do cipó que sai da clareira e pressione E para ser puxado até o primeiro platô alto. Dali, siga os cipós até o cume atrás da cachoeira. E: agarrar qualquer trecho ao alcance por baixo; segure no ar para pegar o próximo · WASD: impulso · Espaço: soltar · Shift/Ctrl: subir/descer no cipó · R: reiniciar.",
+      "Phase 4 · Canopy valley",
+      "Approach the vine leaving the clearing and press E to be pulled to the first high plateau. Then swing toward the summit behind the waterfall. E: grab any reachable section from below; hold in flight to catch the next vine · WASD: build momentum · Space: release · Shift/Ctrl: climb up/down the vine · R: restart.",
+    );
+  else if (!state.learned.move || !state.learned.camera)
     hint = instruction(
       "Explore a ilha",
       "Use WASD ou as setas para caminhar. Clique na tela para olhar ao redor com o mouse; pressione Esc quando quiser liberar o cursor. Aproxime-se de uma banana e pressione E para coletá-la.",
@@ -209,6 +245,17 @@ export default function Controls({
           ↺
         </button>
         <button
+          className={styles.icon}
+          aria-label={pt ? "Debug de movimentação" : "Movement debug"}
+          aria-pressed={state.movementDebug}
+          aria-keyshortcuts="`"
+          onClick={() =>
+            state.configure({ movementDebug: !state.movementDebug })
+          }
+        >
+          ∿
+        </button>
+        <button
           ref={pause}
           className={styles.icon}
           aria-label={pt ? "Pausa e configurações" : "Pause and settings"}
@@ -220,6 +267,7 @@ export default function Controls({
           Ⅱ
         </button>
       </div>
+      {state.movementDebug && <MovementDebugPanel />}
       {hint && !state.paused && (
         <div className={styles.hint} role="status">
           <strong>{hint.title}</strong>
@@ -300,8 +348,14 @@ export default function Controls({
                 <option value="low">{pt ? "Baixa" : "Low"}</option>
                 <option value="medium">{pt ? "Média" : "Medium"}</option>
                 <option value="high">{pt ? "Alta" : "High"}</option>
+                <option value="ultra">Ultra</option>
               </select>
             </label>
+            <p className={styles.controlHelp}>
+              {pt
+                ? "Fase 2: as bases das árvores são checkpoints. Pressione E no tronco ou cipó; durante o balanço, use Espaço para saltar e os galhos largos para deslizar. O modo Ultra acrescenta vegetação densa."
+                : "Stage 2: tree bases are checkpoints. Press E at a trunk or vine; while swinging, use Space to jump and broad branches to slide. Ultra mode adds dense vegetation."}
+            </p>
             <label>
               {pt ? "Volume ambiente" : "Ambient volume"}
               <input

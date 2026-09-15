@@ -15,6 +15,25 @@
   gap: 10px;
   z-index: 2;
 }
+.movementDebug {
+  position: absolute;
+  top: 78px;
+  right: 30px;
+  z-index: 4;
+  min-width: 330px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #8defff66;
+  background: #071a18e8;
+  color: #bffaff;
+  font:
+    11px/1.55 ui-monospace,
+    SFMono-Regular,
+    Consolas,
+    monospace;
+  pointer-events: none;
+  white-space: pre;
+}
 .icon {
   width: 42px;
   height: 42px;
@@ -275,6 +294,14 @@
   font-size: 12px;
   line-height: 2;
   margin: 14px 0;
+}
+.controlHelp {
+  margin: 12px 0 18px;
+  padding: 10px 12px;
+  border-left: 2px solid #cfb579;
+  color: #d9dcc9;
+  font-size: 11px;
+  line-height: 1.55;
 }
 .panel select {
   background: #15291f;

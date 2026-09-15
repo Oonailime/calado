@@ -96,6 +96,28 @@
   gap: 32px;
   margin-top: 30px;
 }
+.animationGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 28px;
+}
+.animation {
+  margin: 0;
+}
+.animation video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: #b8dbe1;
+  border: 1px solid #a89d8066;
+}
+.animation figcaption {
+  margin-top: 10px;
+  color: #273f30;
+  font-size: 12px;
+}
 .frame {
   margin: 0;
 }
@@ -166,7 +188,8 @@
   .hero,
   .characters,
   .notes,
-  .frames {
+  .frames,
+  .animationGrid {
     grid-template-columns: 1fr;
   }
   .root {

@@ -47,7 +47,9 @@ export function useNatureMesh(name: string, colors: string | string[]) {
     // Imported mesh origins vary; place the bottom of every asset on the soil.
     geometry.translate(0, -(geometry.boundingBox?.min.y ?? 0), 0);
     const material = Array.isArray(colors)
-      ? colors.map((color) => new MeshStandardMaterial({ color, roughness: 0.92 }))
+      ? colors.map(
+          (color) => new MeshStandardMaterial({ color, roughness: 0.92 }),
+        )
       : new MeshStandardMaterial({ color: colors, roughness: 0.92 });
     return { geometry, material };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,6 +137,7 @@ export function IslandVegetation({
   halfWidth,
   halfDepth,
   seed,
+  dense = false,
 }: {
   x: number;
   y: number;
@@ -142,18 +145,19 @@ export function IslandVegetation({
   halfWidth: number;
   halfDepth: number;
   seed: number;
+  dense?: boolean;
 }) {
   const palms = useMemo(
     () =>
       ring(
-        6,
+        dense ? 9 : 6,
         halfWidth * 0.85,
         halfDepth * 0.85,
         seed + 1,
         [0.0056, 0.01],
         0.4,
       ),
-    [halfWidth, halfDepth, seed],
+    [dense, halfWidth, halfDepth, seed],
   );
   const rocks = useMemo(
     () =>
@@ -170,18 +174,37 @@ export function IslandVegetation({
   const bushes = useMemo(
     () =>
       scatter(
-        8,
+        dense ? 18 : 8,
         halfWidth * 0.75,
         halfDepth * 0.75,
         seed + 3,
         [0.0032, 0.0056],
       ),
-    [halfWidth, halfDepth, seed],
+    [dense, halfWidth, halfDepth, seed],
   );
   const grass = useMemo(
     () =>
-      scatter(24, halfWidth * 0.9, halfDepth * 0.9, seed + 4, [0.0025, 0.0045]),
-    [halfWidth, halfDepth, seed],
+      scatter(
+        dense ? 72 : 24,
+        halfWidth * 0.9,
+        halfDepth * 0.9,
+        seed + 4,
+        [0.0025, 0.0045],
+      ),
+    [dense, halfWidth, halfDepth, seed],
+  );
+  const flowers = useMemo(
+    () =>
+      dense
+        ? scatter(
+            30,
+            halfWidth * 0.82,
+            halfDepth * 0.82,
+            seed + 5,
+            [0.002, 0.0036],
+          )
+        : [],
+    [dense, halfWidth, halfDepth, seed],
   );
   return (
     <group position={[x, y, z]}>
@@ -202,6 +225,22 @@ export function IslandVegetation({
       />
       <Instances name="Bush_1" color="#4f7d49" places={bushes} />
       <Instances name="Grass" color="#5c9153" places={grass} />
+      {dense && (
+        <>
+          {(["#d9c568", "#d7a9a1", "#d8e0c2"] as const).map(
+            (color, colorIndex) => (
+              <Instances
+                key={color}
+                name="Flowers"
+                color={color}
+                places={flowers.filter(
+                  (_, placementIndex) => placementIndex % 3 === colorIndex,
+                )}
+              />
+            ),
+          )}
+        </>
+      )}
     </group>
   );
 }
