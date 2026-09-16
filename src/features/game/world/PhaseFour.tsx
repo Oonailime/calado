@@ -44,6 +44,7 @@ import {
   PHASE_FOUR_TREES,
   PHASE_FOUR_WATERFALL,
 } from "./phaseFourLayout";
+import RubiksCube from "./RubiksCube";
 import {
   createSwingingVine,
   stepSwingingVine,
@@ -423,6 +424,7 @@ export default function PhaseFour({ running }: { running: boolean }) {
       {PHASE_FOUR_SWING_SITES.map((site) => (
         <SwingingVine key={site.id} site={site} running={running} />
       ))}
+      <RubiksCube running={running} />
       <pointLight
         position={[-16.6, 9.7, 15.5]}
         color={new Color("#ffb744")}

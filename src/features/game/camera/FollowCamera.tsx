@@ -9,8 +9,13 @@ import {
   Vector3,
 } from "three";
 import { runtime, useGame } from "../state/store";
+import { PHASE_FOUR_PLATFORMS } from "../world/phaseFourLayout";
 import { occlusionRaycast } from "./occlusionRaycast";
 import { InstanceOcclusion } from "./instanceOcclusion";
+
+const SHRINE_FOCUS = PHASE_FOUR_PLATFORMS.find(
+  (deck) => deck.id === "summit-shrine",
+)!.center;
 
 const OCCLUDER_OPACITY = 0.16;
 const PLAYER_CLEARANCE = 0.35;
@@ -158,15 +163,21 @@ export default function FollowCamera({ running }: { running: boolean }) {
   useFrame(({ camera, scene }, delta) => {
     if (!running) return;
     const state = useGame.getState();
-    const p = runtime.positions[state.puzzle.selected];
     const dt = Math.min(delta, 0.04);
     const pitch = state.reduced ? 0.43 : runtime.pitch;
-    const distance = state.map === "phase4" ? 10 : 8;
-    player.current.set(p.x, p.y + 0.55, p.z);
+    // While the shrine's puzzle overlay is open, frame the cube itself
+    // instead of the selected character — same orbit math, tighter distance.
+    const focusingCube = state.cubePuzzleOpen;
+    const p = focusingCube
+      ? { x: SHRINE_FOCUS[0], y: SHRINE_FOCUS[1] + 1.85, z: SHRINE_FOCUS[2] }
+      : runtime.positions[state.puzzle.selected];
+    const height = focusingCube ? 0 : 0.55;
+    const distance = focusingCube ? 3.6 : state.map === "phase4" ? 10 : 8;
+    player.current.set(p.x, p.y + height, p.z);
     look.current.lerp(player.current, 1 - Math.exp(-dt * 7));
     target.current.set(
       p.x + Math.sin(runtime.yaw) * distance,
-      p.y + 2.1 + pitch * 5,
+      p.y + height + (focusingCube ? 0.9 : 2.1) + pitch * (focusingCube ? 2 : 5),
       p.z + Math.cos(runtime.yaw) * distance,
     );
     camera.position.lerp(
@@ -174,6 +185,20 @@ export default function FollowCamera({ running }: { running: boolean }) {
       1 - Math.exp(-dt * (state.reduced ? 10 : 5)),
     );
     camera.lookAt(look.current);
+
+    // The occlusion system below fades anything between the camera and
+    // `player.current` — meant for trees blocking the character. While
+    // focusing the shrine, that same point sits inside/behind the cube and
+    // pedestal, which were getting faded as if they were occluders blocking
+    // a (nonexistent) character standing there. Skip it entirely and make
+    // sure nothing is left stuck translucent from before the overlay opened.
+    if (focusingCube) {
+      for (const [mesh, entry] of faded.current)
+        if (entry.active) restoreMesh(mesh, entry, true);
+      faded.current.clear();
+      blocked.current.clear();
+      return;
+    }
 
     sampleElapsed.current += dt;
     if (sampleElapsed.current >= OCCLUSION_SAMPLE_SECONDS) {

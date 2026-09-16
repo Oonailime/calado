@@ -1,17 +1,19 @@
 import { useEffect } from "react";
 import { runtime, useGame } from "../state/store";
-import { anchors, distance, LOCK_RANGE } from "../state/rules";
+import { anchors, distance, LOCK_RANGE, nearCubeShrine } from "../state/rules";
 import { CHARACTER_KEY_BINDINGS } from "../types";
 export function useControls(active: boolean, onExit: () => void) {
   const paused = useGame((s) => s.paused);
   const lockOpen = useGame((s) => s.lockOpen);
+  const cubePuzzleOpen = useGame((s) => s.cubePuzzleOpen);
   // The pointer stays locked only while actually playing — any dialog that
-  // needs a visible, clickable cursor (settings, the padlock's hint button)
-  // must force it to release, since a locked pointer can't reliably hit UI.
+  // needs a visible, clickable cursor (settings, the padlock's hint button,
+  // the cube shrine's turn buttons) must force it to release, since a locked
+  // pointer can't reliably hit UI.
   useEffect(() => {
-    if ((!active || paused || lockOpen) && document.pointerLockElement)
+    if ((!active || paused || lockOpen || cubePuzzleOpen) && document.pointerLockElement)
       document.exitPointerLock();
-  }, [active, paused, lockOpen]);
+  }, [active, paused, lockOpen, cubePuzzleOpen]);
   useEffect(() => {
     if (!active) return;
     const isField = (target: EventTarget | null) =>
@@ -19,8 +21,9 @@ export function useControls(active: boolean, onExit: () => void) {
       !!target.closest("input,select,textarea");
     const down = (e: KeyboardEvent) => {
       const state = useGame.getState();
-      // The lock dial owns the keyboard entirely while open — see Lock.tsx.
-      if (state.lockOpen) return;
+      // The lock dial and the cube shrine's overlay each own the keyboard
+      // entirely while open — see Lock.tsx / RubiksCubePuzzle.tsx.
+      if (state.lockOpen || state.cubePuzzleOpen) return;
       if (e.code === "Escape") {
         e.preventDefault();
         // The browser itself already force-releases pointer lock on Escape;
@@ -108,6 +111,10 @@ export function useControls(active: boolean, onExit: () => void) {
           runtime.triggerEating(id);
           return;
         }
+        if (state.collectCube(id, position)) {
+          runtime.triggerPose(id);
+          return;
+        }
         if (
           id === 2 &&
           !state.puzzle.unlocked &&
@@ -115,6 +122,13 @@ export function useControls(active: boolean, onExit: () => void) {
         ) {
           runtime.clear();
           state.configure({ lockOpen: true });
+        } else if (
+          state.puzzle.cubePieces.every(Boolean) &&
+          !state.puzzle.cubeSolved &&
+          nearCubeShrine(position)
+        ) {
+          runtime.clear();
+          state.configure({ cubePuzzleOpen: true });
         } else {
           if (id === 2) runtime.triggerPose(id);
           state.build(position);
@@ -132,18 +146,21 @@ export function useControls(active: boolean, onExit: () => void) {
       if (document.hidden) blur();
     };
     const mouse = (e: MouseEvent) => {
-      if (
-        useGame.getState().paused ||
-        !(e.buttons === 1 || document.pointerLockElement)
-      )
-        return;
+      const state = useGame.getState();
+      if (state.paused) return;
       if ((e.target as HTMLElement)?.closest("button,input,select")) return;
+      // While the cube puzzle is open, the camera holds a fixed angle so
+      // "Front" (facing the camera) is a stable reference for U/D/L/R/F/B —
+      // reorienting the view is the D-pad's job (RubiksCubePuzzle.tsx),
+      // which turns the cube itself rather than orbiting the camera.
+      if (state.cubePuzzleOpen) return;
+      if (!(e.buttons === 1 || document.pointerLockElement)) return;
       runtime.yaw -= e.movementX * 0.004;
       runtime.pitch = Math.max(
         0.18,
         Math.min(0.85, runtime.pitch + e.movementY * 0.003),
       );
-      useGame.getState().learn("camera");
+      state.learn("camera");
     };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -154,10 +171,24 @@ export function useControls(active: boolean, onExit: () => void) {
     // not trigger this, so it's scoped to the canvas itself as the target.
     const click = (e: MouseEvent) => {
       const state = useGame.getState();
-      if (state.paused || state.lockOpen) return;
+      if (state.paused || state.lockOpen || state.cubePuzzleOpen || state.puzzle.cubeSolved)
+        return;
       if (document.pointerLockElement) return;
       if (e.target !== runtime.canvasElement) return;
-      runtime.canvasElement?.requestPointerLock();
+      // Browsers enforce a brief cooldown after exitPointerLock() before a
+      // new request is allowed, rejecting with a SecurityError if one lands
+      // inside it (e.g. right as an overlay that had just released the lock
+      // closes). Some browsers throw synchronously; newer ones return a
+      // rejected Promise — requesting is best-effort either way, the next
+      // click retries.
+      try {
+        const result = runtime.canvasElement?.requestPointerLock() as
+          | Promise<void>
+          | undefined;
+        result?.catch(() => {});
+      } catch {
+        // Ignored — see above.
+      }
     };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);

@@ -4,9 +4,22 @@ import type { LocomotionState } from "../characters/monkeyMotion";
 import { LOCOMOTION_TUNING } from "../characters/locomotionConfig";
 import { characterSpawn } from "../world/layout";
 import {
-  collectLog,
+  type Axis,
+  type Direction,
+  type Layer,
+  type RubiksCubeRuntimeState,
+  DEFAULT_SCRAMBLE_SEED,
+  scrambleCube,
+  turnFace,
+} from "../world/rubiksCubeState";
+import { RESTING_FACE_BASIS, type FaceBasis } from "../world/rubiksCubeView";
+import {
+  beginCubeTurn,
+  collectCubePiece,
   construct,
+  collectLog,
   eatBanana,
+  finishCubeTurn,
   initialPuzzle,
   recover,
   selectCharacter,
@@ -35,6 +48,9 @@ type Store = {
   learned: Record<string, boolean>;
   zone: number;
   lockOpen: boolean;
+  // Mirrors lockOpen for the shrine's cube-twisting overlay — see Lock.tsx's
+  // precedent and useControls.ts's pointer-lock-release effect.
+  cubePuzzleOpen: boolean;
   // Which world is currently mounted. The islands map is the puzzle from
   // the start of the game; phase4 is the canopy valley reached through its
   // portal. Only one world is mounted at a time.
@@ -43,6 +59,9 @@ type Store = {
   power: (id: CharacterId, position: Vec3) => void;
   build: (position: Vec3) => void;
   eat: (id: CharacterId, position: Vec3) => boolean;
+  collectCube: (id: CharacterId, position: Vec3) => boolean;
+  turnCubeFace: (axis: Axis, layer: Layer, direction: Direction) => void;
+  completeCubeTurn: () => void;
   submitLockDigit: (position: Vec3, digit: number) => void;
   reset: () => void;
   learn: (key: string) => void;
@@ -61,6 +80,7 @@ type Store = {
         | "abilityKey"
         | "zone"
         | "lockOpen"
+        | "cubePuzzleOpen"
         | "map"
       >
     >,
@@ -80,6 +100,7 @@ export const useGame = create<Store>((set) => ({
   learned: {},
   zone: 0,
   lockOpen: false,
+  cubePuzzleOpen: false,
   map: "islands",
   select: (id) =>
     set((s) => ({
@@ -106,9 +127,45 @@ export const useGame = create<Store>((set) => ({
     });
     return ate;
   },
+  collectCube: (id, position) => {
+    let collected = false;
+    set((state) => {
+      const puzzle = collectCubePiece(state.puzzle, id, position);
+      collected = puzzle !== state.puzzle;
+      return collected ? { puzzle } : state;
+    });
+    return collected;
+  },
+  turnCubeFace: (axis, layer, direction) =>
+    set((s) => {
+      if (!runtime.rubiksCube || runtime.rubiksCube.activeTurn) return s;
+      const puzzle = beginCubeTurn(s.puzzle);
+      if (puzzle === s.puzzle) return s;
+      runtime.rubiksCube.activeTurn = { axis, layer, direction, startedAt: performance.now() };
+      return { puzzle };
+    }),
+  completeCubeTurn: () =>
+    set((s) => {
+      const cube = runtime.rubiksCube;
+      const active = cube?.activeTurn;
+      if (!cube || !active) return s;
+      cube.cubies = turnFace(cube.cubies, active.axis, active.layer, active.direction);
+      cube.activeTurn = null;
+      const puzzle = finishCubeTurn(s.puzzle, cube.cubies);
+      // The overlay unmounts once solved (Game.tsx switches to the ending
+      // screen) — close it explicitly so it isn't left "open" underneath,
+      // which previously left the pointer-lock-release effect and the
+      // canvas click-to-relock handler fighting each other.
+      return puzzle.cubeSolved ? { puzzle, cubePuzzleOpen: false } : { puzzle };
+    }),
   submitLockDigit: (position, digit) =>
     set((s) => ({ puzzle: submitCodeDigit(s.puzzle, position, digit) })),
-  reset: () => set((s) => ({ puzzle: recover(s.puzzle), lockOpen: false })),
+  reset: () =>
+    set((s) => ({
+      puzzle: recover(s.puzzle),
+      lockOpen: false,
+      cubePuzzleOpen: false,
+    })),
   learn: (key) =>
     set((s) =>
       s.learned[key] ? s : { learned: { ...s.learned, [key]: true } },
@@ -186,6 +243,14 @@ export const runtime = {
   keys: new Set<string>(),
   yaw: 0,
   pitch: 0.38,
+  // Which raw direction is currently "Right/Up/Front" for the cube puzzle's
+  // view-relative U/D/L/R/F/B notation (see world/rubiksCubeView.ts) —
+  // updated instantly and persistently by RubiksCubePuzzle.tsx's D-pad
+  // (never springs back); RubiksCube.tsx's useFrame animates the visible
+  // transition toward whatever this currently is.
+  cubeInspect: {
+    faceBasis: RESTING_FACE_BASIS as FaceBasis,
+  },
   jump: false,
   interact: false,
   motions: [null, null, null] as [string | null, string | null, string | null],
@@ -212,6 +277,16 @@ export const runtime = {
   // request pointer lock on it without threading a ref through props.
   canvasElement: null as HTMLElement | null,
   splashes: [] as Vec3[],
+  // Created lazily once all three pieces are collected — see useControls.ts.
+  rubiksCube: null as RubiksCubeRuntimeState | null,
+  ensureRubiksCube(): RubiksCubeRuntimeState {
+    if (!this.rubiksCube)
+      this.rubiksCube = {
+        cubies: scrambleCube(DEFAULT_SCRAMBLE_SEED),
+        activeTurn: null,
+      };
+    return this.rubiksCube;
+  },
   binarySequenceStep: null as number | null,
   binarySequenceStartedAt: 0,
   binarySequenceElapsed(step: number, now = performance.now()) {
@@ -243,6 +318,7 @@ export const runtime = {
     this.motions.fill(null);
     this.activeVine = null;
     this.swingingVines.clear();
+    if (this.rubiksCube) this.rubiksCube.activeTurn = null;
     for (const contacts of this.vineContacts) {
       contacts.left = null;
       contacts.right = null;
