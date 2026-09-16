@@ -6,6 +6,11 @@
 .canvas {
   position: absolute;
   inset: 0;
+  filter: grayscale(0);
+  transition: filter 0.6s ease;
+}
+.blindVision {
+  filter: grayscale(1);
 }
 .bar {
   position: absolute;

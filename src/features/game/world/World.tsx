@@ -789,7 +789,7 @@ export default function World({
           denseVegetation={QUALITY_PROFILES[quality].denseVegetation}
         />
       ))}
-      <Forest ultra={QUALITY_PROFILES[quality].denseVegetation} />
+      <Forest ultra={QUALITY_PROFILES[quality].denseVegetation} running={running} />
       <BananaGroves />
       <group position={[0, ISLAND_SURFACE_Y, 0]}>
         <Bridge

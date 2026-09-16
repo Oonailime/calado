@@ -11,6 +11,7 @@ import {
 import {
   CLASSIC_QUADRUPED_CLIP,
   proceduralMonkeyMotion,
+  monkeyRenderMotion,
   type MonkeyLocomotion,
 } from "../src/features/game/characters/monkeyMotion";
 import {
@@ -287,4 +288,42 @@ test("caminhada preserva o clipe original e não passa pelo solver procedural", 
   assert.equal(rig.actions.motion["biped-walk"], undefined);
   assert.equal(proceduralMonkeyMotion("vine-grab"), "vine-grab");
   assert.equal(proceduralMonkeyMotion("tree-climb"), "tree-climb");
+});
+
+test("queda livre eleva as mãos, dobra as pernas para trás e conserva os ossos do FBX", () => {
+  const { rig, parent, point } = fixture();
+  const pairs = [
+    ["Arm01_L", "Arm02_L"], ["Arm02_L", "Hand_L"],
+    ["Arm01_R", "Arm02_R"], ["Arm02_R", "Hand_R"],
+    ["Foot_L", "Foot_L001"], ["Foot_L001", "Foot_L002"],
+    ["Foot_R", "Foot_R001"], ["Foot_R001", "Foot_R002"],
+  ];
+  const lengths = pairs.map(([a, b]) => point(a).distanceTo(point(b)));
+  const forward = new Vector3(0, 0, 1).applyQuaternion(parent.quaternion);
+  for (const time of [0, 0.3, 1, 3, 8]) {
+    restoreNeutralPose(rig);
+    applyContactMotion(rig, "fall", time, 1 / 60, {
+      grounded: false, speed: 8, velocity: { x: 0, y: -8, z: 0 },
+    });
+    parent.updateMatrixWorld(true);
+    for (const side of ["L", "R"]) {
+      const shoulder = point(`Arm01_${side}`), hand = point(`Hand_${side}`);
+      assert.ok(hand.y > shoulder.y + 0.08, `${side}: mão deve ficar elevada`);
+      assert.ok(hand.clone().sub(shoulder).dot(forward) > 0.08);
+      assert.ok(point(`Foot_${side}002`).sub(point(`Foot_${side}`)).dot(forward) < -0.1);
+    }
+    pairs.forEach(([a, b], i) => assert.ok(
+      Math.abs(point(a).distanceTo(point(b)) - lengths[i]) < 1e-5, `${a}: osso alongado`,
+    ));
+  }
+});
+
+test("queda só substitui voo livre descendente, preservando salto, escalada e pegadas", () => {
+  const falling = { grounded: false, speed: 5, velocity: { x: 1, y: -5, z: 0 } };
+  assert.equal(monkeyRenderMotion(falling), "fall");
+  assert.equal(monkeyRenderMotion({ ...falling, motion: "vine-jump" }), "fall");
+  assert.equal(monkeyRenderMotion({ ...falling, grounded: true }), undefined);
+  assert.equal(monkeyRenderMotion({ ...falling, velocity: { x: 0, y: 3, z: 0 } }), undefined);
+  for (const motion of ["tree-climb", "tree-descend", "vine-swing", "vine-grab", "vine-pull"] as const)
+    assert.equal(monkeyRenderMotion({ ...falling, motion }), motion);
 });

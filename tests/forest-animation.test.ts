@@ -46,10 +46,18 @@ test("árvore e cipó usam os mesmos pontos para render e interação", () => {
     nearestArborealInteraction({ ...site.climb, y: CHARACTER_SPAWN_Y })?.kind,
     "tree",
   );
-  assert.equal(
+  assert.notEqual(
     nearestArborealInteraction({
       x: site.vine.x,
       y: CHARACTER_SPAWN_Y,
+      z: site.vine.z,
+    })?.kind,
+    "vine",
+  );
+  assert.equal(
+    nearestArborealInteraction({
+      x: site.vine.x,
+      y: site.vine.attachY - 0.42,
       z: site.vine.z,
     })?.kind,
     "vine",

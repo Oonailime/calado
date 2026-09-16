@@ -32,6 +32,7 @@ import {
   createPhaseFourVineTieGeometry,
   createPhaseFourVineLeafGeometry,
   PHASE_FOUR_VINE_LEAF_COLORS,
+  type AnchorTree,
 } from "./phaseFourAssets";
 import { createPhaseFourGroundGeometry } from "./phaseFourTerrain";
 import {
@@ -232,12 +233,14 @@ function WaterfallSpray({ running }: { running: boolean }) {
   );
 }
 
-function SwingingVine({
+export function SwingingVine({
   site,
   running,
+  trees = PHASE_FOUR_TREES,
 }: {
   site: ArborealSite;
   running: boolean;
+  trees?: readonly AnchorTree[];
 }) {
   const segments = useRef<InstancedMesh>(null);
   const leaves = useRef<Group>(null);
@@ -251,18 +254,17 @@ function SwingingVine({
   const ties = useMemo(() => {
     const span = site.vine.twoPoint!;
     return {
-      front: createPhaseFourVineTieGeometry(span.frontTreeIndex, [
-        site.vine.x,
-        site.vine.attachY,
-        site.vine.z,
-      ]),
-      rear: createPhaseFourVineTieGeometry(span.rearTreeIndex, [
+      front: createPhaseFourVineTieGeometry(
+        trees[span.frontTreeIndex],
+        [site.vine.x, site.vine.attachY, site.vine.z],
+      ),
+      rear: createPhaseFourVineTieGeometry(trees[span.rearTreeIndex], [
         span.rear.x,
         span.rear.y,
         span.rear.z,
       ]),
     };
-  }, [site]);
+  }, [site, trees]);
   useBeforePhysicsStep(() => {
     if (!running) return;
     const registered = runtime.swingingVines.get(site.id);

@@ -14,7 +14,7 @@ export const ISLANDS = [
   {
     x: 0,
     z: 7.25,
-    halfWidth: 9,
+    halfWidth: 16,
     halfDepth: 10,
     seed: 4471,
     grass: "#708d4d",
@@ -23,7 +23,7 @@ export const ISLANDS = [
   {
     x: 0,
     z: -27.25,
-    halfWidth: 10,
+    halfWidth: 17,
     halfDepth: 11,
     seed: 9142,
     grass: "#637f45",

@@ -86,6 +86,9 @@ function PreviewCamera({ motion }: { motion: MonkeyMotion }) {
     if (motion === "biped-walk") {
       camera.position.set(0.65, 1.02, 2.15);
       camera.lookAt(0, 0.66, 0);
+    } else if (motion === "fall") {
+      camera.position.set(1.8, 1.85, 2.8);
+      camera.lookAt(0, 1.5, 0);
     } else if (motion === "vine-jump") {
       camera.position.set(0.65, 2.7, 6.8);
       camera.lookAt(0.65, 2.05, 0);
@@ -133,7 +136,7 @@ function Subject({ motion }: { motion: MonkeyMotion }) {
   }, []);
   const locomotion = useRef<MonkeyLocomotion>({
     speed: motion === "biped-walk" ? 2 : 0,
-    grounded: motion !== "vine-jump",
+    grounded: motion !== "vine-jump" && motion !== "fall",
     motion,
     motionTime: 0,
   });
@@ -148,7 +151,7 @@ function Subject({ motion }: { motion: MonkeyMotion }) {
     group.current.position.set(0, 0.55, 0);
     group.current.rotation.set(0, Math.PI, 0);
     locomotion.current.speed = motion === "biped-walk" ? 2 : 0;
-    locomotion.current.grounded = motion !== "vine-jump";
+    locomotion.current.grounded = motion !== "vine-jump" && motion !== "fall";
     locomotion.current.motionElapsed = cycle;
     locomotion.current.vineAnchor = undefined;
     locomotion.current.nextVineAnchor = undefined;
@@ -162,6 +165,11 @@ function Subject({ motion }: { motion: MonkeyMotion }) {
 
     if (motion === "biped-walk") {
       cycle = time % 4;
+      group.current.rotation.y = Math.PI / 2;
+    } else if (motion === "fall") {
+      // Hold the falling body in frame for inspection; the same pose is used
+      // during physical descent in the game.
+      group.current.position.set(0, 1.4, 0);
       group.current.rotation.y = Math.PI / 2;
     } else if (motion === "tree-climb" || motion === "tree-descend") {
       cycle = time % 3.45;
@@ -452,7 +460,7 @@ export default function AnimationPreview({ motion }: { motion: MonkeyMotion }) {
         </Suspense>
       </Canvas>
       <div className={styles.label}>
-        {reference?.title ?? motion.replaceAll("-", " ")}
+        {reference?.title ?? (motion === "fall" ? "Queda livre" : motion.replaceAll("-", " "))}
       </div>
       {reference && (
         <figure className={styles.reference} data-reference-motion={motion}>

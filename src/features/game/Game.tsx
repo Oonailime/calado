@@ -151,7 +151,11 @@ export default function Game({ active, locale, onExit }: GameProps) {
       data-revision={puzzle.revision}
     >
       <WorldBoundary fallback={failure}>
-        <div className={styles.canvas}>
+        <div
+          className={`${styles.canvas} ${
+            puzzle.selected === 0 ? styles.blindVision : ""
+          }`}
+        >
           <Canvas
             shadows={qualityProfile.shadow}
             dpr={qualityProfile.dpr}

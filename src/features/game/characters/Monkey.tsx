@@ -41,7 +41,7 @@ import { BANANA_MODEL_URL } from "../world/BananaGroves";
 import { VerletSystem } from "./verlet";
 import {
   CLASSIC_QUADRUPED_CLIP,
-  proceduralMonkeyMotion,
+  monkeyRenderMotion,
   type MonkeyLocomotion,
   type MonkeyMotion,
 } from "./monkeyMotion";
@@ -189,6 +189,7 @@ function createMotionActions(
     "vine-grab",
     "vine-swing",
     "vine-jump",
+    "fall",
   ] as const satisfies readonly MonkeyMotion[]) {
     const clip = baseClip.clone();
     clip.name = `gibbon-procedural-${motion}`;
@@ -1455,6 +1456,40 @@ function measureBodyRig(
   if (rig.bones.footR) writeDebugPoint(debug.rightFoot, IK.wrist);
 }
 
+// Reference: imagem_queda_referencia.jpg. Aim the complete limb chains from
+// the bind pose, preserving bone lengths instead of stretching a walking clip.
+function poseFreeFall(rig: Rig, elapsed: number) {
+  poseTorso(rig, [0, 0.38, 0.92], [0, 0.45, 0.89], [0, 0.92, 0.38]);
+  for (const side of ["left", "right"] as const) {
+    const left = side === "left";
+    const sign = left ? 1 : -1;
+    const upper = left ? rig.bones.armL : rig.bones.armR;
+    const lower = left ? rig.bones.forearmL : rig.bones.forearmR;
+    const hand = left ? rig.bones.handL : rig.bones.handR;
+    if (upper && lower && hand) {
+      const reach = rig.armCalibration[side]!.armLength;
+      const flutter = Math.sin(elapsed * 3.2 + (left ? 0 : 1.4)) * 0.025;
+      // One hand reaches higher; the other opens forward, as in the image.
+      const direction = characterDirection(rig, sign * 0.44, left ? 0.85 : 0.48, 0.65);
+      upper.getWorldPosition(IK.poseTargetL);
+      IK.poseTargetL.addScaledVector(direction, reach * (0.9 + flutter));
+      solveTwoBone(rig, upper, lower, hand, IK.poseTargetL, [sign, -0.25, 0.2]);
+    }
+    const thigh = left ? rig.bones.thighL : rig.bones.thighR;
+    const shin = left ? rig.bones.shinL : rig.bones.shinR;
+    const foot = left ? rig.bones.footL : rig.bones.footR;
+    if (thigh && shin && foot) {
+      thigh.getWorldPosition(IK.poseTargetL);
+      shin.getWorldPosition(IK.elbow);
+      foot.getWorldPosition(IK.wrist);
+      const reach = IK.poseTargetL.distanceTo(IK.elbow) + IK.elbow.distanceTo(IK.wrist);
+      IK.poseTargetL.addScaledVector(characterDirection(rig, sign * 0.2, 0.35, -0.9), reach * 0.62);
+      solveTwoBone(rig, thigh, shin, foot, IK.poseTargetL, [sign * 0.35, -1, -0.35]);
+    }
+  }
+  orientFeet(rig);
+}
+
 export function applyContactMotion(
   rig: Rig,
   motion: MonkeyMotion,
@@ -1475,12 +1510,16 @@ export function applyContactMotion(
     }
   }
   poseContactMotion(rig, motion, elapsed, dt, locomotion);
-  poseHeadTowardMotion(rig, locomotion, dt);
+  if (motion !== "fall") poseHeadTowardMotion(rig, locomotion, dt);
   // The cleared bind pose has a straight horizontal tail. Give its existing
   // bone chain a curved counter-swing so the whole model follows locomotion.
   for (let index = 0; index < rig.tail.length - 1; index++) {
     const t = index / Math.max(1, rig.tail.length - 2);
-    aimBodySegment(rig, rig.tail[index], rig.tail[index + 1], [
+    aimBodySegment(rig, rig.tail[index], rig.tail[index + 1], motion === "fall" ? [
+      Math.sin(elapsed * 2 - t * 2) * 0.07,
+      Math.cos(t * Math.PI * 1.25),
+      -Math.sin(t * Math.PI * 1.25),
+    ] : [
       Math.sin(elapsed * 3 - t * 2) * 0.12,
       -0.25 - Math.sin(t * Math.PI * 1.4) * 0.65,
       -Math.cos(t * Math.PI * 0.6),
@@ -1503,6 +1542,11 @@ function poseContactMotion(
   rig.model.rotation.x = 0;
   rig.model.rotation.z = 0;
   if (motion !== "vine-jump") rig.releaseHands = undefined;
+
+  if (motion === "fall") {
+    poseFreeFall(rig, elapsed);
+    return;
+  }
 
   if (motion === "tree-climb" || motion === "tree-descend") {
     const direction = motion === "tree-descend" ? -1 : 1;
@@ -1815,13 +1859,30 @@ export default function Monkey({
   const activeAction = useRef<"idle" | "run" | MonkeyMotion>("idle");
   const switchCooldown = useRef(0);
   const powerPoseBlend = useRef(0);
+  const fallTransition = useRef<{
+    active: boolean;
+    elapsed: number;
+    pose?: NeutralBoneTransform[];
+  }>({ active: false, elapsed: 0 });
 
   useFrame(({ clock }, delta) => {
     const rig = getRig(template, id);
     const dt = Math.min(delta, 0.05);
     const { speed, grounded, distance, metersPerStride, motionTime } =
       locomotion.current;
-    const motion = proceduralMonkeyMotion(locomotion.current.motion);
+    const motion = monkeyRenderMotion(locomotion.current);
+    const fall = fallTransition.current;
+    if (fall.active !== (motion === "fall")) {
+      fall.active = motion === "fall";
+      fall.elapsed = 0;
+      fall.pose = rig.neutralPose.map(({ bone }) => ({
+        bone,
+        position: bone.position.clone(),
+        quaternion: bone.quaternion.clone(),
+        scale: bone.scale.clone(),
+      }));
+    }
+    fall.elapsed += dt;
     // Hysteresis + cooldown: without this, a companion hovering near the
     // follow-distance threshold flickers between idle/run several times a
     // second as its speed nudges past a single cutoff.
@@ -1913,7 +1974,7 @@ export default function Monkey({
       applyContactMotion(
         rig,
         motion,
-        motionTime ?? clock.elapsedTime,
+        motion === "fall" ? fall.elapsed : (motionTime ?? clock.elapsedTime),
         dt,
         locomotion.current,
       );
@@ -1977,6 +2038,23 @@ export default function Monkey({
       (rig.baseScale * targetScaleXZ - rig.model.scale.x) * 0.25;
     rig.model.scale.z +=
       (rig.baseScale * targetScaleXZ - rig.model.scale.z) * 0.25;
+    if (fall.pose) {
+      // Blend the whole skeleton on entry and landing, not only the wrists.
+      // A new grab must take its exact contact immediately.
+      const contact = motion && motion !== "fall" && motion !== "vine-jump";
+      const blend = contact ? 1 : MathUtils.smoothstep(fall.elapsed, 0, fall.active ? 0.28 : 0.18);
+      for (const saved of fall.pose) {
+        const bone = saved.bone;
+        bone.position.lerpVectors(saved.position, bone.position, blend);
+        IK.desiredWorld.copy(bone.quaternion);
+        bone.quaternion.copy(saved.quaternion).slerp(IK.desiredWorld, blend);
+        bone.scale.lerpVectors(saved.scale, bone.scale, blend);
+      }
+      if (blend >= 1) fall.pose = undefined;
+      rig.model.updateWorldMatrix(true, true);
+      rig.bones.handL?.getWorldPosition(rig.lastHands.left);
+      rig.bones.handR?.getWorldPosition(rig.lastHands.right);
+    }
   });
 
   return (

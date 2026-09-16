@@ -5,6 +5,7 @@ export type MonkeyMotion =
   | "vine-grab"
   | "vine-swing"
   | "vine-jump"
+  | "fall"
   // Hand-over-hand pull up a hanging liana, distinct from tree-climb's
   // flat-against-the-trunk pose - not part of the animation-studio catalog
   // since it has no baked reference clip, only the procedural pose below.
@@ -44,6 +45,19 @@ export const CLASSIC_QUADRUPED_CLIP = "monkey_run";
 // ground travel. Only climbing and vine motions replace its bone transforms.
 export function proceduralMonkeyMotion(motion: MonkeyMotion | undefined) {
   return motion === "biped-walk" ? undefined : motion;
+}
+
+/** Free descent owns the pose; climbing and reaching keep their contacts. */
+export function monkeyRenderMotion(locomotion: MonkeyLocomotion) {
+  const motion = proceduralMonkeyMotion(locomotion.motion);
+  if (
+    !locomotion.grounded &&
+    (locomotion.velocity?.y ?? 0) < -0.35 &&
+    (!motion || motion === "vine-jump") &&
+    !locomotion.hands?.left.grabbed &&
+    !locomotion.hands?.right.grabbed
+  ) return "fall";
+  return motion;
 }
 
 export const MONKEY_ANIMATION_PREVIEWS = [
@@ -95,7 +109,7 @@ export const MONKEY_MOTIONS = MONKEY_ANIMATION_PREVIEWS.map(
 ) as MonkeyMotion[];
 
 export function isMonkeyMotion(value: string): value is MonkeyMotion {
-  return MONKEY_MOTIONS.includes(value as MonkeyMotion);
+  return value === "fall" || MONKEY_MOTIONS.includes(value as MonkeyMotion);
 }
 
 export function motionPhase(motion: MonkeyMotion, elapsed: number) {

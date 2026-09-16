@@ -175,14 +175,13 @@ export const PHASE_FOUR_PATHS: CanopyPath[] = [
     to: "crown",
     kind: "ladder",
     width: 1.4,
-    // A straight line whose base sits just inside heart's own south edge
-    // (z=-9) instead of floating past it with a gap underneath. The run is
-    // long enough to keep this walkable alongside every other path (see
-    // "upward-facing continuous collision surfaces" - tangent.y stays under
-    // the shared 0.72 slope limit here).
+    // Climb beside crown's east edge, then turn onto a level landing. A
+    // direct approach from heart reaches the underside of the enlarged deck.
     points: [
-      [-2, 11, -8.85],
-      [-2, 16, -14.35],
+      [2.2, 11, -8],
+      [4.2, 13.5, -14],
+      [4.2, 16, -18],
+      [0.5, 16, -18],
     ],
   },
 ];

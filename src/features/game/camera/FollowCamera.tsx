@@ -1,7 +1,16 @@
 import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Material, Mesh, Object3D, Raycaster, Vector3 } from "three";
+import {
+  InstancedMesh,
+  Material,
+  Mesh,
+  Object3D,
+  Raycaster,
+  Vector3,
+} from "three";
 import { runtime, useGame } from "../state/store";
+import { occlusionRaycast } from "./occlusionRaycast";
+import { InstanceOcclusion } from "./instanceOcclusion";
 
 const OCCLUDER_OPACITY = 0.16;
 const PLAYER_CLEARANCE = 0.35;
@@ -101,6 +110,22 @@ function restoreMesh(mesh: Mesh, entry: FadeEntry, dispose = false) {
   entry.active = false;
 }
 
+function advanceRestore(mesh: Mesh, entry: FadeEntry, dt: number) {
+  entry.clearElapsed += dt;
+  if (entry.clearElapsed < RESTORE_DELAY_SECONDS) return;
+  entry.restoreElapsed = Math.min(RESTORE_SECONDS, entry.restoreElapsed + dt);
+  const progress = entry.restoreElapsed / RESTORE_SECONDS;
+  const eased = progress * progress * (3 - 2 * progress);
+  const originals = materialList(entry.original);
+  entry.faded.forEach((material, index) => {
+    if (material === originals[index]) return;
+    const snapshot = entry.snapshots[index];
+    material.opacity =
+      OCCLUDER_OPACITY + (snapshot.opacity - OCCLUDER_OPACITY) * eased;
+  });
+  if (progress >= 1) restoreMesh(mesh, entry);
+}
+
 export default function FollowCamera({ running }: { running: boolean }) {
   const look = useRef(new Vector3(0, 0.9, 3));
   const target = useRef(new Vector3());
@@ -114,11 +139,15 @@ export default function FollowCamera({ running }: { running: boolean }) {
   const occluderGroups = useRef(new Map<string, Mesh[]>());
   const blocked = useRef(new Set<Mesh>());
   const faded = useRef(new Map<Mesh, FadeEntry>());
+  const instances = useRef(new InstanceOcclusion());
+  const rayTargets = useRef<Mesh[]>([]);
 
   useEffect(
     () => () => {
       for (const [mesh, entry] of faded.current) restoreMesh(mesh, entry, true);
       faded.current.clear();
+      for (const proxy of instances.current.proxies.keys())
+        instances.current.restore(proxy);
       blocked.current.clear();
       occluders.current = [];
       occluderGroups.current.clear();
@@ -158,8 +187,11 @@ export default function FollowCamera({ running }: { running: boolean }) {
         for (const [mesh, entry] of faded.current) {
           // Map changes remove and dispose old meshes while the camera stays
           // mounted. Drop those cached materials before the next raycast.
-          if (!mesh.parent) {
+          let ancestor: Object3D | null = mesh;
+          while (ancestor && ancestor !== scene) ancestor = ancestor.parent;
+          if (!ancestor) {
             restoreMesh(mesh, entry, true);
+            instances.current.restore(mesh);
             faded.current.delete(mesh);
           }
         }
@@ -168,6 +200,7 @@ export default function FollowCamera({ running }: { running: boolean }) {
         scene.traverse((object) => {
           if (
             object instanceof Mesh &&
+            !object.userData.cameraOcclusionProxy &&
             visibleSolid(object) &&
             (faded.current.has(object) ||
               materialList(object.material).some(canFade))
@@ -183,27 +216,42 @@ export default function FollowCamera({ running }: { running: boolean }) {
         });
       }
       blocked.current.clear();
-      const toPlayer = view.current.subVectors(player.current, camera.position);
-      const playerDistance = toPlayer.length();
-      if (playerDistance > PLAYER_CLEARANCE) {
-        raycaster.current.set(camera.position, toPlayer.normalize());
-        occlusionHits.current.length = 0;
-        raycaster.current.intersectObjects(
-          occluders.current,
-          false,
-          occlusionHits.current,
-        );
-        for (const hit of occlusionHits.current) {
-          if (hit.distance >= playerDistance - PLAYER_CLEARANCE) break;
-          if (hit.object instanceof Mesh && visibleSolid(hit.object)) {
-            const key =
-              (hit.object.userData.cameraOcclusionGroup as
-                string | undefined) ?? hit.object.uuid;
-            const members = occluderGroups.current.get(key);
-            if (members)
-              members.forEach((member) => blocked.current.add(member));
-            else blocked.current.add(hit.object);
+      rayTargets.current.length = 0;
+      rayTargets.current.push(...occluders.current);
+      for (const proxy of instances.current.proxies.keys()) {
+        if (proxy.visible) rayTargets.current.push(proxy);
+      }
+      occlusionRaycast(
+        raycaster.current,
+        camera.position,
+        player.current,
+        PLAYER_CLEARANCE,
+        rayTargets.current,
+        occlusionHits.current,
+        view.current,
+      );
+      for (const hit of occlusionHits.current) {
+        if (hit.distance >= raycaster.current.far) break;
+        if (hit.object instanceof Mesh && visibleSolid(hit.object)) {
+          if (
+            hit.object instanceof InstancedMesh &&
+            hit.instanceId !== undefined
+          ) {
+            blocked.current.add(
+              instances.current.get(hit.object, hit.instanceId),
+            );
+            continue;
           }
+          if (hit.object.userData.cameraOcclusionProxy) {
+            blocked.current.add(hit.object);
+            continue;
+          }
+          const key =
+            (hit.object.userData.cameraOcclusionGroup as string | undefined) ??
+            hit.object.uuid;
+          const members = occluderGroups.current.get(key);
+          if (members) members.forEach((member) => blocked.current.add(member));
+          else blocked.current.add(hit.object);
         }
       }
     }
@@ -230,23 +278,10 @@ export default function FollowCamera({ running }: { running: boolean }) {
     for (const [mesh, entry] of faded.current) {
       if (!entry.active) continue;
       if (blocked.current.has(mesh)) continue;
-      entry.clearElapsed += dt;
-      if (entry.clearElapsed < RESTORE_DELAY_SECONDS) continue;
-      entry.restoreElapsed = Math.min(
-        RESTORE_SECONDS,
-        entry.restoreElapsed + dt,
-      );
-      const progress = entry.restoreElapsed / RESTORE_SECONDS;
-      const eased = progress * progress * (3 - 2 * progress);
-      const originals = materialList(entry.original);
-      entry.faded.forEach((material, index) => {
-        if (material === originals[index]) return;
-        const snapshot = entry.snapshots[index];
-        material.opacity =
-          OCCLUDER_OPACITY + (snapshot.opacity - OCCLUDER_OPACITY) * eased;
-      });
-      if (progress >= 1) {
-        restoreMesh(mesh, entry);
+      advanceRestore(mesh, entry, dt);
+      if (!entry.active && instances.current.proxies.has(mesh)) {
+        // Retain the transparent material for the next pass by this tree.
+        instances.current.suspend(mesh);
       }
     }
   });

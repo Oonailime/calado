@@ -17,6 +17,7 @@ import {
   type Material,
 } from "three";
 import { ISLAND_SURFACE_Y } from "./layout";
+import { SwingingVine } from "./PhaseFour";
 import { runtime } from "../state/store";
 import type { Vec3 } from "../types";
 import {
@@ -28,6 +29,13 @@ import {
   vineLeafWind,
   type ArborealSite,
 } from "./forestLayout";
+import {
+  createPhaseFourTreeGroup,
+  createPhaseFourVineGroup,
+  createVineAnchorGroup,
+  ROOT_EMBED_DEPTH,
+  type AnchorTree,
+} from "./phaseFourAssets";
 
 export type ForestAsset = {
   parts: { geometry: BufferGeometry; material: Material | Material[] }[];
@@ -373,10 +381,57 @@ export function useTreeAsset(treeUrl: string = TREE_MODEL_URL) {
   return useMemo(() => prepareAsset(tree.scene), [tree]);
 }
 
+// Phase one's climbable trees/vines - built from phase four's procedural
+// giant-tree look instead of a loaded GLB, genuinely tall like phase four's
+// own background trees (a giant trunk with a comparatively short, climbable
+// vine reaching partway up it, not a shrunken human-scale tree). No
+// network/GLTF loading involved, so this needs neither useLoader nor
+// Suspense.
+export const PHASE_ONE_TREE_RADIUS = 2.4;
+const PHASE_ONE_TREE_HEIGHT = 34;
+const PHASE_ONE_TREE_SEED = 7;
+const PHASE_ONE_ANCHOR_TREES: readonly AnchorTree[] = ARBOREAL_SITES.map(
+  (site, index) => ({
+    position: [site.tree.x, ISLAND_SURFACE_Y, site.tree.z],
+    radius: PHASE_ONE_TREE_RADIUS * site.tree.scale,
+    seed: index + 1,
+  }),
+);
+const PHASE_ONE_VINE_LENGTH = 3.6;
+const PHASE_ONE_VINE_SEED = 11;
+
+function usePhaseOneForestAssets() {
+  return useMemo(
+    () => ({
+      // Same buried-buttress treatment as phase four's own giant trees
+      // (ROOT_EMBED_DEPTH) - a shallow, constant sink rather than one scaled
+      // to this tree's own radius, so only the flat cylinder base disappears
+      // into the ground and the buttress flare above it stays visible.
+      tree: {
+        parts: partsFromMeshes(
+          collectMeshes(
+            createPhaseFourTreeGroup(
+              PHASE_ONE_TREE_RADIUS,
+              PHASE_ONE_TREE_HEIGHT,
+              PHASE_ONE_TREE_SEED,
+              true,
+            ),
+          ),
+          -ROOT_EMBED_DEPTH,
+        ),
+      },
+      vine: prepareAsset(
+        createPhaseFourVineGroup(PHASE_ONE_VINE_LENGTH, PHASE_ONE_VINE_SEED),
+      ),
+    }),
+    [],
+  );
+}
+
 // The per-site tree+vine+collider group, shared by the island map and any
-// other course built from an ArborealSite list (see Canopy.tsx) — surfaceY
-// is the world Y each tree is planted at, since different courses don't
-// necessarily share one ground height.
+// other course built from an ArborealSite list — surfaceY is the world Y
+// each tree is planted at, since different courses don't necessarily share
+// one ground height.
 export function ArborealSites({
   sites,
   treeAsset,
@@ -384,6 +439,8 @@ export function ArborealSites({
   trunkRadius = 0.48,
   checkpoints = false,
   checkpointRadius = 2.25,
+  vineAnchorTreeRadius,
+  connectedVines = false,
 }: {
   sites: readonly ArborealSite[];
   treeAsset: ForestAsset;
@@ -391,10 +448,32 @@ export function ArborealSites({
   trunkRadius?: number;
   checkpoints?: boolean;
   checkpointRadius?: number;
+  // When set, each vine also grows a branch reaching back to the trunk and
+  // wrapped in a tie knot (phase four's vine-anchor look), scaled from this
+  // base giant-tree radius by the site's own tree.scale.
+  vineAnchorTreeRadius?: number;
+  connectedVines?: boolean;
 }) {
+  const vineAnchors = useMemo(
+    () =>
+      vineAnchorTreeRadius === undefined
+        ? null
+        : sites.map((site, index) =>
+            createVineAnchorGroup(
+              {
+                position: [site.tree.x, surfaceY, site.tree.z],
+                radius: vineAnchorTreeRadius * site.tree.scale,
+                seed: index + 1,
+              },
+              [site.vine.x, site.vine.attachY, site.vine.z],
+              !connectedVines,
+            ),
+          ),
+    [sites, surfaceY, vineAnchorTreeRadius, connectedVines],
+  );
   return (
     <>
-      {sites.map((site) => (
+      {sites.map((site, index) => (
         <group key={site.id}>
           <TreeMesh
             asset={treeAsset}
@@ -402,7 +481,8 @@ export function ArborealSites({
             scale={site.tree.scale}
             rotationY={site.tree.rotationY}
           />
-          <SegmentedVine site={site} />
+          {vineAnchors && <primitive object={vineAnchors[index]} />}
+          {!connectedVines && <SegmentedVine site={site} />}
           {checkpoints && (
             <TreeCheckpoint
               site={site}
@@ -422,14 +502,31 @@ export function ArborealSites({
   );
 }
 
-export default function Forest({ ultra }: { ultra: boolean }) {
-  const assets = useForestAssets();
+export default function Forest({ ultra, running }: { ultra: boolean; running: boolean }) {
+  const assets = usePhaseOneForestAssets();
+  // Always defined in practice (a procedurally-built group always has
+  // geometry) - the check just satisfies ForestAsset's shared, loader-aware
+  // (possibly-undefined) type.
   if (!assets.tree || !assets.vine) return null;
   const treeAsset = assets.tree;
   const vineAsset = assets.vine;
   return (
     <>
-      <ArborealSites sites={ARBOREAL_SITES} treeAsset={treeAsset} />
+      <ArborealSites
+        sites={ARBOREAL_SITES}
+        treeAsset={treeAsset}
+        vineAnchorTreeRadius={PHASE_ONE_TREE_RADIUS}
+        trunkRadius={PHASE_ONE_TREE_RADIUS * 0.65}
+        connectedVines
+      />
+      {ARBOREAL_SITES.filter((site) => site.vine.twoPoint).map((site) => (
+        <SwingingVine
+          key={site.id}
+          site={site}
+          running={running}
+          trees={PHASE_ONE_ANCHOR_TREES}
+        />
+      ))}
       {ultra && (
         <>
           <ForestInstances asset={treeAsset} placements={ULTRA_TREES} />

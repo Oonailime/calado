@@ -62,7 +62,7 @@ const point = (p: Point3) => new Vector3(...p);
 
 // Sitting a trunk exactly on phaseFourGroundHeight left its buttress-root
 // flare (see giantTree) fully exposed with no earth covering any of it.
-const ROOT_EMBED_DEPTH = 0.45;
+export const ROOT_EMBED_DEPTH = 0.45;
 
 function nearestPolylinePoint(x: number, z: number, points: readonly Point3[]) {
   let best = Infinity,
@@ -540,6 +540,63 @@ function giantTree(
   }
 }
 
+// Standalone, origin-centred versions of phase four's tree/vine look, for
+// reuse anywhere else in the game that just wants "the phase-four tree" or
+// "the phase-four vine" as a static asset (see Forest.tsx, which feeds these
+// into the same prepareAsset()/instancing pipeline used for loaded GLTFs) -
+// giantTree() itself always draws at an absolute world position, so both
+// wrappers build at the origin and let the caller place/scale the result.
+export function createPhaseFourTreeGroup(
+  radius: number,
+  height: number,
+  seed: number,
+  detailed = true,
+): Group {
+  const builder = new AssetBuilder();
+  giantTree(builder, [0, 0, 0], radius, height, seed, detailed);
+  return builder.finish("phase4-style-tree");
+}
+
+export function createPhaseFourVineGroup(length: number, seed: number): Group {
+  const builder = new AssetBuilder();
+  const rng = random(seed);
+  const curve = new CatmullRomCurve3([
+    new Vector3(0, 0, 0),
+    new Vector3((rng() - 0.5) * length * 0.18, length * 0.34, (rng() - 0.5) * length * 0.18),
+    new Vector3((rng() - 0.5) * length * 0.22, length * 0.68, (rng() - 0.5) * length * 0.22),
+    new Vector3(0, length, 0),
+  ]);
+  builder.add(new TubeGeometry(curve, 32, length * 0.014, 7, false), "#536d2e");
+  const leafCount = Math.max(3, Math.round(length * 2.6));
+  for (let i = 1; i < leafCount; i++) {
+    const t = i / leafCount;
+    const p = curve.getPointAt(t);
+    builder.add(
+      createPhaseFourVineLeafGeometry(),
+      palette.leaf[(seed + i) % 5],
+      p.toArray() as Point3,
+      undefined,
+      new Quaternion().setFromAxisAngle(UP, seed + i * 2.1),
+      "foliage",
+    );
+  }
+  return builder.finish("phase4-style-vine");
+}
+
+// The "tied off to a branch" anchor from a swing/pull vine (see
+// vineAttachment above), as a standalone group in absolute world space -
+// reusable anywhere a vine needs to visibly wrap around a wooden branch
+// instead of hanging with no support (e.g. phase one's climbable trees).
+export function createVineAnchorGroup(
+  tree: AnchorTree,
+  anchor: Point3,
+  wrapped = true,
+): Group {
+  const builder = new AssetBuilder();
+  vineAttachment(builder, tree, anchor, wrapped);
+  return builder.finish("vine-anchor");
+}
+
 class WalkingCurve extends Curve<Vector3> {
   private readonly spline: CatmullRomCurve3;
   private transitionStart = 0;
@@ -574,7 +631,6 @@ class WalkingCurve extends Curve<Vector3> {
   }
   getPoint(t: number, target = new Vector3()) {
     this.spline.getPoint(t, target);
-    if (this.path.kind === "ladder") return target;
     const blend = Math.max(
       0,
       Math.min(
@@ -583,7 +639,9 @@ class WalkingCurve extends Curve<Vector3> {
           Math.max(0.01, this.transitionEnd - this.transitionStart),
       ),
     );
-    const smooth = blend * blend * (3 - 2 * blend);
+    const smooth = this.path.kind === "ladder"
+      ? blend
+      : blend * blend * (3 - 2 * blend);
     target.y = this.startHeight + (this.endHeight - this.startHeight) * smooth;
     if (this.path.kind === "bridge")
       target.y -= Math.sin(blend * Math.PI) ** 2 * 0.32;
@@ -622,28 +680,96 @@ function closeTubeEnds(geometry: BufferGeometry, rings: number, sides: number) {
 
 export const PHASE_FOUR_BRANCH_CLEARANCE = 0.38;
 
+function nearestDeckTree(deck: (typeof PHASE_FOUR_PLATFORMS)[number]) {
+  return PHASE_FOUR_TREES.reduce((closest, candidate) =>
+    Math.hypot(candidate.position[0] - deck.center[0], candidate.position[2] - deck.center[2]) <
+    Math.hypot(closest.position[0] - deck.center[0], closest.position[2] - deck.center[2])
+      ? candidate
+      : closest,
+  );
+}
+
 // Vertical rings keep the bark below the planks even on curved, sloping paths.
 // Offsetting a second spline changed its parameterization and caused the old
 // branch crest to cut through the deck at bends.
 export function createPhaseFourBranchGeometry(path: CanopyPath) {
   const curve = phaseFourPathCurve(path),
     radius = path.width * 0.58;
-  const rings = Math.ceil(curve.getLength() * 5),
-    sides = 12;
+  const samples: { center: Vector3; direction: Vector3; radius: number }[] = [];
+  const walkingRings = Math.ceil(curve.getLength() * 5);
+  // Each walking bough and its two trunk roots share a single mesh. There
+  // are no separately capped limbs meeting at an angle beneath the decks.
+  const addRoot = (atStart: boolean) => {
+    const deck = PHASE_FOUR_PLATFORMS.find(
+      (candidate) => candidate.id === (atStart ? path.from : path.to),
+    );
+    if (!deck) return;
+    const tree = nearestDeckTree(deck);
+    const end = curve.getPoint(atStart ? 0 : 1);
+    end.y -= radius + PHASE_FOUR_BRANCH_CLEARANCE;
+    const outward = curve.getTangent(atStart ? 0 : 1).multiplyScalar(atStart ? -1 : 1);
+    const root = new Vector3(tree.position[0], end.y - 2.6, tree.position[2]);
+    const approach = end.clone().addScaledVector(outward, 1.5);
+    const support = new CatmullRomCurve3([
+      end,
+      approach,
+      approach.clone().lerp(root, 0.6),
+      root,
+    ]);
+    const steps = Math.ceil(support.getLength() * 5);
+    for (let i = 0; i < steps; i++) {
+      const t = atStart ? 1 - i / steps : (i + 1) / steps;
+      samples.push({
+        center: support.getPoint(t),
+        direction: support.getTangent(t).multiplyScalar(atStart ? -1 : 1),
+        radius: radius + (tree.radius * 0.9 - radius) * t * t * (3 - 2 * t),
+      });
+    }
+  };
+  addRoot(true);
+  for (let ring = 0; ring <= walkingRings; ring++) {
+    const center = curve.getPoint(ring / walkingRings);
+    center.y -= radius + PHASE_FOUR_BRANCH_CLEARANCE;
+    samples.push({ center, direction: curve.getTangent(ring / walkingRings), radius });
+  }
+  addRoot(false);
+  const rings = samples.length - 1, sides = 54;
   const positions: number[] = [],
+    colors: number[] = [],
     indices: number[] = [];
+  const bark = new Color("#77502f"),
+    grainShadow = new Color("#5d3d26"),
+    grainHighlight = new Color("#95683c"),
+    color = new Color();
+  let distance = 0;
   for (let ring = 0; ring <= rings; ring++) {
-    const p = curve.getPoint(ring / rings),
-      direction = curve.getTangent(ring / rings);
+    const { center: p, direction, radius: ringRadius } = samples[ring];
+    if (ring) distance += p.distanceTo(samples[ring - 1].center);
     const side = new Vector3(direction.z, 0, -direction.x).normalize();
     for (let j = 0; j <= sides; j++) {
       const angle = (j * Math.PI * 2) / sides;
-      const r = radius * (1 + Math.sin(angle * 3 + ring * 0.1) * 0.018);
+      // Restore the nine raised bark veins of the old grown limbs directly
+      // in the continuous skin. World-distance phase carries the grain across
+      // both root/walkway junctions without a seam or a separate end cap.
+      const grain = angle * 9 + Math.sin(distance * 0.24 + angle * 2) * 0.45;
+      const ridge = ((Math.cos(grain) + 1) / 2) ** 5;
+      const furrow = ((1 - Math.cos(grain)) / 2) ** 7;
+      const irregularity =
+        Math.sin(angle * 3 + distance * 0.31) * 0.018 +
+        Math.sin(angle * 5 - distance * 0.17) * 0.009;
+      // Limit relief near the upper crest so the bark stays below the planks.
+      const relief = Math.min(0.095, ringRadius * 0.05);
+      const r = ringRadius * (1 + irregularity) + relief * (ridge - furrow * 0.35);
       positions.push(
         p.x + side.x * Math.sin(angle) * r,
-        p.y - radius - PHASE_FOUR_BRANCH_CLEARANCE + Math.cos(angle) * r,
+        p.y + Math.cos(angle) * r,
         p.z + side.z * Math.sin(angle) * r,
       );
+      color.copy(bark)
+        .lerp(grainShadow, 0.12 + furrow * 0.55)
+        .lerp(grainHighlight, ridge * 0.72)
+        .multiplyScalar(1 + Math.sin(distance * 0.63 + angle * 3) * 0.055);
+      colors.push(color.r, color.g, color.b);
       if (ring < rings && j < sides) {
         const a = ring * (sides + 1) + j,
           b = a + sides + 1;
@@ -654,7 +780,21 @@ export function createPhaseFourBranchGeometry(path: CanopyPath) {
   const geometry = new BufferGeometry();
   geometry.setAttribute("position", new Float32BufferAttribute(positions, 3));
   geometry.setIndex(indices);
-  return closeTubeEnds(geometry, rings, sides);
+  closeTubeEnds(geometry, rings, sides);
+  colors.push(bark.r, bark.g, bark.b, bark.r, bark.g, bark.b);
+  geometry.setAttribute("color", new Float32BufferAttribute(colors, 3));
+  // The duplicated UV-seam vertices share a position and must also share a
+  // normal, otherwise lighting draws an artificial line along the branch.
+  const normals = geometry.getAttribute("normal");
+  const normal = new Vector3();
+  for (let ring = 0; ring <= rings; ring++) {
+    const first = ring * (sides + 1), last = first + sides;
+    normal.fromBufferAttribute(normals, first)
+      .add(new Vector3().fromBufferAttribute(normals, last)).normalize();
+    normals.setXYZ(first, normal.x, normal.y, normal.z);
+    normals.setXYZ(last, normal.x, normal.y, normal.z);
+  }
+  return geometry;
 }
 
 // A continuous closed ribbon avoids collider seams between individual planks.
@@ -732,23 +872,7 @@ function canopyPath(builder: AssetBuilder, path: CanopyPath, seed: number) {
   const segments = Math.ceil(length / (path.kind === "ladder" ? 0.42 : 0.62));
   const radius = path.width * 0.58;
   if (path.kind === "branch") {
-    builder.add(createPhaseFourBranchGeometry(path), "#77502f");
-    for (const sign of [-1, 1]) {
-      const ridge: Point3[] = [];
-      for (let i = 0; i <= 20; i++) {
-        const p = curve.getPoint(i / 20),
-          dir = curve.getTangent(i / 20);
-        ridge.push([
-          p.x + dir.z * path.width * 0.48 * sign,
-          p.y -
-            radius * 0.55 -
-            PHASE_FOUR_BRANCH_CLEARANCE +
-            Math.sin(i) * 0.06,
-          p.z - dir.x * path.width * 0.48 * sign,
-        ]);
-      }
-      builder.tube(ridge, 0.1, sign > 0 ? "#af8247" : "#493322", 30);
-    }
+    builder.add(createPhaseFourBranchGeometry(path), null);
   }
   for (let i = 0; i <= segments; i++) {
     const t = i / segments,
@@ -817,19 +941,30 @@ function canopyPath(builder: AssetBuilder, path: CanopyPath, seed: number) {
       }
     }
     if (path.kind === "branch" && i % 10 === 2) {
-      const axis = new Vector3(dir.x, dir.y, dir.z).normalize();
-      for (let wrap = 0; wrap < 3; wrap++)
+      const ropeRadius = 0.055;
+      // Clear the full bark relief (both irregularity waves and raised grain),
+      // including the rope's inner surface and the ring's polygonal edges.
+      const wrapRadius =
+        radius * 1.027 + Math.min(0.095, radius * 0.05) + ropeRadius + 0.025;
+      for (let wrap = 0; wrap < 3; wrap++) {
+        const wrapT = Math.min(1, t + (wrap * 0.14) / length);
+        const wrapPoint = curve.getPointAt(wrapT);
+        const wrapDirection = curve.getTangentAt(wrapT);
+        // Bark uses vertical cross-sections. Tilting the rope with the slope
+        // cuts its upper/lower arcs into those sections on an ascent.
+        const axis = new Vector3(wrapDirection.x, 0, wrapDirection.z).normalize();
         builder.add(
-          new TorusGeometry(radius * 1.01, 0.055, 5, 18),
+          new TorusGeometry(wrapRadius, ropeRadius, 7, 64),
           "#ab9560",
           [
-            p.x + dir.x * wrap * 0.14,
-            p.y - radius - PHASE_FOUR_BRANCH_CLEARANCE + dir.y * wrap * 0.14,
-            p.z + dir.z * wrap * 0.14,
+            wrapPoint.x,
+            wrapPoint.y - radius - PHASE_FOUR_BRANCH_CLEARANCE,
+            wrapPoint.z,
           ],
           undefined,
           new Quaternion().setFromUnitVectors(new Vector3(0, 0, 1), axis),
         );
+      }
     }
   }
   if (path.kind !== "branch") {
@@ -995,18 +1130,11 @@ function connectDeckToTree(
   builder: AssetBuilder,
   deck: (typeof PHASE_FOUR_PLATFORMS)[number],
 ) {
-  const tree = PHASE_FOUR_TREES.reduce((closest, candidate) =>
-    Math.hypot(
-      candidate.position[0] - deck.center[0],
-      candidate.position[2] - deck.center[2],
-    ) <
-    Math.hypot(
-      closest.position[0] - deck.center[0],
-      closest.position[2] - deck.center[2],
-    )
-      ? candidate
-      : closest,
-  );
+  // Walking boughs already extend into the trunks as continuous geometry.
+  if (PHASE_FOUR_PATHS.some((path) =>
+    path.kind === "branch" && (path.from === deck.id || path.to === deck.id),
+  )) return;
+  const tree = nearestDeckTree(deck);
   const [x, y, z] = deck.center;
   const direction = new Vector3(
     x - tree.position[0],
@@ -1014,14 +1142,7 @@ function connectDeckToTree(
     z - tree.position[2],
   ).normalize();
   const r = tree.radius;
-  const connectedPaths = PHASE_FOUR_PATHS.filter(
-    (path) =>
-      path.kind === "branch" && (path.from === deck.id || path.to === deck.id),
-  );
-  const branchRadius = Math.max(
-    1.95,
-    ...connectedPaths.map((path) => path.width * 0.58),
-  );
+  const branchRadius = 1.95;
   const centerY = y - branchRadius - PHASE_FOUR_BRANCH_CLEARANCE - 0.12;
   // The branch begins inside the trunk, broadens at the crotch, and continues
   // underneath the platform into the walking boughs instead of ending in air.
@@ -1041,34 +1162,16 @@ function connectDeckToTree(
     branchRadius * 1.03,
     palette.bark[tree.seed % 4],
   );
-  for (const path of PHASE_FOUR_PATHS.filter(
-    (path) =>
-      path.kind === "branch" && (path.from === deck.id || path.to === deck.id),
-  )) {
-    const end = path.from === deck.id ? path.points[0] : path.points.at(-1)!;
-    const centerY = end[1] - path.width * 0.58 - PHASE_FOUR_BRANCH_CLEARANCE;
-    if (Math.hypot(end[0] - x, end[2] - z) > 1)
-      grownLimb(
-        builder,
-        [
-          [x, y - branchRadius - PHASE_FOUR_BRANCH_CLEARANCE - 0.12, z],
-          [(x + end[0]) / 2, centerY - 0.1, (z + end[2]) / 2],
-          [end[0], centerY, end[2]],
-        ],
-        branchRadius * 1.03,
-        path.width * 0.6,
-        "#77502f",
-      );
-  }
 }
+
+export type AnchorTree = { position: Point3; radius: number; seed: number };
 
 function vineAttachment(
   builder: AssetBuilder,
-  treeIndex: number,
+  tree: AnchorTree,
   anchor: Point3,
   wrapped = true,
 ) {
-  const tree = PHASE_FOUR_TREES[treeIndex];
   const direction = new Vector3(
     anchor[0] - tree.position[0],
     0,
@@ -1095,7 +1198,7 @@ function vineAttachment(
   );
   if (wrapped)
     builder.add(
-      createPhaseFourVineTieGeometry(treeIndex, anchor),
+      createPhaseFourVineTieGeometry(tree, anchor),
       "#4b682c",
       undefined,
       undefined,
@@ -1105,10 +1208,9 @@ function vineAttachment(
 }
 
 export function createPhaseFourVineTieGeometry(
-  treeIndex: number,
+  tree: Pick<AnchorTree, "position">,
   anchor: Point3,
 ) {
-  const tree = PHASE_FOUR_TREES[treeIndex];
   const direction = new Vector3(
     anchor[0] - tree.position[0],
     0,
@@ -1168,7 +1270,7 @@ export function createPhaseFourEnvironment() {
     // swing spans, so the whole thing looks load-bearing.
     vineAttachment(
       builder,
-      1,
+      PHASE_FOUR_TREES[1],
       PHASE_FOUR_PULL_VINE_CURVE.getPointAt(1).toArray() as Point3,
       true,
     );
@@ -1197,13 +1299,13 @@ export function createPhaseFourEnvironment() {
       const span = site.vine.twoPoint!;
       vineAttachment(
         builder,
-        span.frontTreeIndex,
+        PHASE_FOUR_TREES[span.frontTreeIndex],
         [site.vine.x, site.vine.attachY, site.vine.z],
         false,
       );
       vineAttachment(
         builder,
-        span.rearTreeIndex,
+        PHASE_FOUR_TREES[span.rearTreeIndex],
         [span.rear.x, span.rear.y, span.rear.z],
         false,
       );

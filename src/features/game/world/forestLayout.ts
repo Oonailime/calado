@@ -57,7 +57,7 @@ export type ArborealSite = {
 // Each site keeps the trunk and the reachable end of its vine clear of puzzle
 // props. The same coordinates drive rendering and character interaction, so
 // the player never reaches for an invisible/offset anchor.
-export const ARBOREAL_SITES: readonly ArborealSite[] = [
+const ISLAND_TREE_SITES: readonly ArborealSite[] = [
   {
     id: "north-west",
     tree: { x: -6.8, z: 5.3, scale: 0.67, rotationY: 0.45 },
@@ -108,6 +108,56 @@ export const ARBOREAL_SITES: readonly ArborealSite[] = [
   },
 ] as const;
 
+// Move each trunk and its handholds together into the wider side clearings.
+const expandedSites = ISLAND_TREE_SITES.map((site) => {
+  const offset = Math.sign(site.tree.x) * 3.8;
+  return {
+    ...site,
+    tree: { ...site.tree, x: site.tree.x + offset },
+    climb: { ...site.climb, x: site.climb.x + offset, topY: site.climb.topY + 3 },
+    vine: {
+      ...site.vine,
+      x: site.vine.x + offset,
+      attachY: site.vine.attachY + 3,
+      interactionRequiresHeight: true,
+    },
+  };
+});
+
+// Distance from the character's centre to its gripping hands.
+export const VINE_GRIP_OFFSET = 0.42;
+
+export const ARBOREAL_SITES: readonly ArborealSite[] = expandedSites.map(
+  (site, index) => {
+    // Consecutive pairs belong to one island; never span the channel.
+    if (index % 2 !== 0)
+      return { ...site, vine: { ...site.vine, grabbable: false } };
+    const other = expandedSites[index + 1];
+    const grip = {
+      x: (site.vine.x + other.vine.x) / 2,
+      y: Math.min(site.vine.attachY, other.vine.attachY) - 1.8,
+      z: (site.vine.z + other.vine.z) / 2,
+    };
+    return {
+      ...site,
+      vine: {
+        ...site.vine,
+        length: Math.hypot(
+          site.vine.x - grip.x,
+          site.vine.attachY - grip.y,
+          site.vine.z - grip.z,
+        ) + VINE_GRIP_OFFSET,
+        twoPoint: {
+          rear: { x: other.vine.x, y: other.vine.attachY, z: other.vine.z },
+          grip,
+          frontTreeIndex: index,
+          rearTreeIndex: index + 1,
+        },
+      },
+    };
+  },
+);
+
 export const TREE_INTERACTION_RANGE = 1.35;
 export const VINE_INTERACTION_RANGE = 1.5;
 export const TREE_CLIMB_SECONDS = 2.35;
@@ -116,10 +166,6 @@ export const VINE_GRAB_SECONDS = 0.9;
 export const VINE_JUMP_SECONDS = 0.72;
 export const VINE_SWING_RATE = 1.75;
 export const VINE_SWING_AMPLITUDE = 0.56;
-// Distance from the character's physical centre to both gripping hands,
-// measured along the taut rope. Keeping this separate prevents the last vine
-// fragment from terminating inside the torso.
-export const VINE_GRIP_OFFSET = 0.42;
 
 export function nearestArborealInteraction(
   position: Vec3,
@@ -146,7 +192,9 @@ export function nearestArborealInteraction(
     // deliberately projected onto the ground for a forgiving interaction.
     if (site.vine.grabbable !== false) {
       const target = site.vine.interactionRequiresHeight
-        ? vineSwingPosition(site, 0)
+        ? site.vine.twoPoint
+          ? { x: site.vine.x, y: site.vine.attachY - VINE_GRIP_OFFSET, z: site.vine.z }
+          : vineSwingPosition(site, 0)
         : { x: site.vine.x, y: position.y, z: site.vine.z };
       const vineDistance = Math.hypot(
         position.x - target.x,
