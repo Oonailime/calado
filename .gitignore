@@ -6,3 +6,6 @@ test-results/
 playwright-report/
 .env*
 !.env.example
+reference/
+assets_referencia/
+.claude/settings.json

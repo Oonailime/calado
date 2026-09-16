@@ -10,7 +10,7 @@ import { PORTAL } from "../src/features/game/world/layout";
 import { isInsideOpenPortal } from "../src/features/game/world/portalEntry";
 import { powerAnchorVisibility } from "../src/features/game/world/powerAnchorVisibility";
 
-test("cada seguidor recebe um atraso próprio entre um e três segundos", () => {
+test("cada seguidor recebe um atraso próprio entre um e dois segundos", () => {
   const delays = ([0, 1, 2] as const).map((id) =>
     followerDelaySeconds(id, 0.25),
   );

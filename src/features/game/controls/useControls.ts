@@ -57,6 +57,11 @@ export function useControls(active: boolean, onExit: () => void) {
         "Digit1",
         "Digit2",
         "Digit3",
+        "Backquote",
+        "ShiftLeft",
+        "ShiftRight",
+        "ControlLeft",
+        "ControlRight",
         state.abilityKey,
       ];
       if (!tracked.includes(e.code)) return;
@@ -84,6 +89,8 @@ export function useControls(active: boolean, onExit: () => void) {
         runtime.clear();
         state.reset();
       }
+      if (e.code === "Backquote")
+        state.configure({ movementDebug: !state.movementDebug });
       if (e.code === state.abilityKey) {
         const id = state.puzzle.selected;
         // The gesture communicates who was invoked even when the character is
@@ -94,6 +101,7 @@ export function useControls(active: boolean, onExit: () => void) {
         } else state.power(id, runtime.positions[id]);
       }
       if (e.code === "KeyE" || e.code === "Enter") {
+        runtime.interact = true;
         const id = state.puzzle.selected;
         const position = runtime.positions[id];
         if (state.eat(id, position)) {

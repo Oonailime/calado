@@ -51,17 +51,41 @@ export default function Inventory({ locale }: { locale: Locale }) {
   const logs = useGame((state) => state.puzzle.logs);
   const bridge = useGame((state) => state.puzzle.bridge);
   const [pickups, setPickups] = useState<Pickup[]>([]);
+  const [bananaCounterVisible, setBananaCounterVisible] = useState(false);
+  const [woodCounterVisible, setWoodCounterVisible] = useState(false);
   const nextId = useRef(0);
   const pt = locale === "pt";
 
   useEffect(() => {
     let previous = useGame.getState().puzzle;
     const activeTimers = new Map<number, number>();
+    let bananaCounterTimer: number | undefined;
+    let woodCounterTimer: number | undefined;
     const unsubscribe = useGame.subscribe((state) => {
       const bananaDelta =
         collected(state.puzzle.bananas) - collected(previous.bananas);
       const woodDelta = collected(state.puzzle.logs) - collected(previous.logs);
       previous = state.puzzle;
+
+      // The counters themselves only surface around a collect/use event (see
+      // PICKUP_VISIBLE_MS) instead of sitting on screen permanently; each new
+      // event within that window restarts its own 5s countdown.
+      if (bananaDelta !== 0) {
+        setBananaCounterVisible(true);
+        window.clearTimeout(bananaCounterTimer);
+        bananaCounterTimer = window.setTimeout(
+          () => setBananaCounterVisible(false),
+          PICKUP_VISIBLE_MS,
+        );
+      }
+      if (woodDelta !== 0) {
+        setWoodCounterVisible(true);
+        window.clearTimeout(woodCounterTimer);
+        woodCounterTimer = window.setTimeout(
+          () => setWoodCounterVisible(false),
+          PICKUP_VISIBLE_MS,
+        );
+      }
       if (bananaDelta <= 0 && woodDelta <= 0) return;
 
       const additions: Pickup[] = [];
@@ -86,6 +110,8 @@ export default function Inventory({ locale }: { locale: Locale }) {
       unsubscribe();
       activeTimers.forEach((timer) => window.clearTimeout(timer));
       activeTimers.clear();
+      window.clearTimeout(bananaCounterTimer);
+      window.clearTimeout(woodCounterTimer);
     };
   }, []);
 
@@ -98,17 +124,19 @@ export default function Inventory({ locale }: { locale: Locale }) {
         role="group"
         aria-label={pt ? "Inventário" : "Inventory"}
       >
-        <div
-          className={`${styles.inventoryItem} ${styles.inventoryBanana}`}
-          data-item="banana"
-        >
-          <BananaIcon />
-          <span>Bananas</span>
-          <strong>
-            {bananaCount}/{bananas.length}
-          </strong>
-        </div>
-        {!bridge && (
+        {bananaCounterVisible && (
+          <div
+            className={`${styles.inventoryItem} ${styles.inventoryBanana}`}
+            data-item="banana"
+          >
+            <BananaIcon />
+            <span>Bananas</span>
+            <strong>
+              {bananaCount}/{bananas.length}
+            </strong>
+          </div>
+        )}
+        {!bridge && woodCounterVisible && (
           <div
             className={`${styles.inventoryItem} ${styles.inventoryWood}`}
             data-item="wood"

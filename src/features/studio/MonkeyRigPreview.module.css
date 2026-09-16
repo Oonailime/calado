@@ -1,0 +1,113 @@
+.root {
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(20rem, 0.75fr);
+  color: #ecf7fb;
+  background: #101820;
+}
+
+.viewer {
+  position: relative;
+  min-height: 100dvh;
+}
+
+.viewer button {
+  position: absolute;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  padding: 0.7rem 0.95rem;
+  border: 1px solid #70cce8;
+  border-radius: 999px;
+  color: #ecf7fb;
+  background: rgb(11 29 39 / 84%);
+  cursor: pointer;
+}
+
+.panel {
+  align-content: center;
+  padding: clamp(2rem, 5vw, 5rem);
+  background: #17242d;
+}
+
+.eyebrow {
+  color: #70cce8;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+}
+
+.panel h1 {
+  max-width: 11ch;
+  margin: 0.8rem 0 1.25rem;
+  font-size: clamp(2rem, 4vw, 4rem);
+  line-height: 0.95;
+}
+
+.panel p {
+  color: #b9cad3;
+  line-height: 1.65;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.65rem;
+  margin: 2rem 0;
+}
+
+.stats div {
+  padding: 0.85rem;
+  border: 1px solid #2c4655;
+  border-radius: 0.65rem;
+}
+
+.stats dt {
+  color: #8aa3af;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.stats dd {
+  margin: 0.3rem 0 0;
+  font-size: 1.6rem;
+  font-weight: 800;
+}
+
+.legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 1rem;
+  padding: 0;
+  list-style: none;
+  color: #d6e4ea;
+  font-size: 0.8rem;
+}
+
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend span {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+}
+
+.note {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid #2c4655;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 800px) {
+  .root {
+    grid-template-columns: 1fr;
+  }
+
+  .viewer {
+    min-height: 62dvh;
+  }
+}

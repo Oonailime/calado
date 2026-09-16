@@ -67,6 +67,17 @@ export default function Experience() {
     document.documentElement.lang = locale === "pt" ? "pt-BR" : "en";
   }, [locale]);
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("map") !== "phase4") return;
+    let cancelled = false;
+    import("@/features/game/Game").then((module) => {
+      if (cancelled) return;
+      setGame(() => module.default);
+      setStarted(true);
+      setPlaying(true);
+    }).catch(() => setLoadError(true));
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
     import("./scene3d/StoryScene").then((module) =>
       setStoryScene(() => module.default),
     );

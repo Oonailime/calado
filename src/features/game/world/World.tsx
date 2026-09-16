@@ -52,6 +52,8 @@ import WisdomTotem from "./Totem";
 import BananaGroves from "./BananaGroves";
 import Portal, { PORTAL_MODEL_URL } from "./Portal";
 import { powerAnchorVisibility } from "./powerAnchorVisibility";
+import Forest from "./Forest";
+import { QUALITY_PROFILES } from "../quality";
 
 // The collider follows both the height and silhouette of the rendered ground.
 function Island({
@@ -62,6 +64,7 @@ function Island({
   seed,
   grass,
   earth,
+  denseVegetation,
 }: {
   x: number;
   z: number;
@@ -70,6 +73,7 @@ function Island({
   seed: number;
   grass: string;
   earth: string;
+  denseVegetation: boolean;
 }) {
   const soilShape = useMemo(
     () => organicIslandShape(halfWidth, halfDepth, seed),
@@ -122,6 +126,7 @@ function Island({
         halfWidth={halfWidth}
         halfDepth={halfDepth}
         seed={seed}
+        dense={denseVegetation}
       />
     </>
   );
@@ -479,7 +484,11 @@ function Motes() {
     const instanced = mesh.current;
     if (!instanced) return;
     const t = clock.elapsedTime;
-    if (quality !== "high" && t - lastUpdate.current < 1 / 30) return;
+    if (
+      (quality === "low" || quality === "medium") &&
+      t - lastUpdate.current < 1 / 30
+    )
+      return;
     lastUpdate.current = t;
     const boost = revealed ? 1 : 0;
     const count =
@@ -774,8 +783,13 @@ export default function World({
   return (
     <>
       {ISLANDS.map((island) => (
-        <Island key={island.seed} {...island} />
+        <Island
+          key={island.seed}
+          {...island}
+          denseVegetation={QUALITY_PROFILES[quality].denseVegetation}
+        />
       ))}
+      <Forest ultra={QUALITY_PROFILES[quality].denseVegetation} running={running} />
       <BananaGroves />
       <group position={[0, ISLAND_SURFACE_Y, 0]}>
         <Bridge

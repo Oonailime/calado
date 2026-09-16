@@ -1,7 +1,7 @@
 import type { CharacterId } from "../types";
 
 export const FOLLOWER_DELAY_MIN = 1;
-export const FOLLOWER_DELAY_MAX = 3;
+export const FOLLOWER_DELAY_MAX = 2;
 
 export function followerDelaySeconds(id: CharacterId, randomValue: number) {
   const clamped = Math.max(0, Math.min(0.999_999, randomValue));

@@ -14,8 +14,8 @@ const LIGHT_TARGET = new Vector3(0, 0, 0);
 // of palm trees at the edge of an island fell outside the shadow camera and
 // never got a shadow at all.
 const WORLD_BOUNDS = new Box3(
-  new Vector3(-16, -1, -45),
-  new Vector3(16, 7.5, 24),
+  new Vector3(-26, -1, -45),
+  new Vector3(26, 28, 24),
 );
 
 function computeShadowFrustum() {
