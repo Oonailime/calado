@@ -69,9 +69,9 @@ export default function Controls({
   if (state.map === "phase4")
     hint = instruction(
       "Fase 4 · Vale das copas",
-      "Aproxime-se do cipó que sai da clareira e pressione E para ser puxado até o primeiro platô alto. Dali, siga os cipós até o cume atrás da cachoeira. E: agarrar qualquer trecho ao alcance por baixo; segure no ar para pegar o próximo · WASD: impulso · Espaço: soltar · Shift/Ctrl: subir/descer no cipó · R: reiniciar.",
+      "Aproxime-se do cipó que sai da clareira e pressione E para caminhar sobre ele até o platô alto. Para voltar, aproxime-se da ponta no platô e pressione E. No trajeto, WASD segue a direção da câmera; solte as teclas para parar. Dali, siga os cipós até o cume atrás da cachoeira. E: agarrar qualquer trecho ao alcance por baixo; segure no ar para pegar o próximo · WASD: impulso · Espaço: soltar · Shift/Ctrl: subir/descer no cipó · R: reiniciar.",
       "Phase 4 · Canopy valley",
-      "Approach the vine leaving the clearing and press E to be pulled to the first high plateau. Then swing toward the summit behind the waterfall. E: grab any reachable section from below; hold in flight to catch the next vine · WASD: build momentum · Space: release · Shift/Ctrl: climb up/down the vine · R: restart.",
+      "Approach the vine leaving the clearing and press E to walk along it to the high plateau. To return, approach its end on the plateau and press E. On this rope, WASD follows the camera heading; release the keys to stop. Then swing toward the summit behind the waterfall. E: grab any reachable section from below; hold in flight to catch the next vine · WASD: build momentum · Space: release · Shift/Ctrl: climb up/down the vine · R: restart.",
     );
   else if (!state.learned.move || !state.learned.camera)
     hint = instruction(

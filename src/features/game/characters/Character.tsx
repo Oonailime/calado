@@ -48,7 +48,6 @@ import {
   PHASE_FOUR_SITES,
   PHASE_FOUR_FALL_Y,
   PHASE_FOUR_LADDER_SITE,
-  PHASE_FOUR_PULL_VINE_CURVE,
   phaseFourCharacterSpawn,
   phaseFourAdjacentSite,
 } from "../world/phaseFourLayout";
@@ -83,6 +82,8 @@ import {
   PHYSICS_FIXED_DT,
   WORLD_GRAVITY,
 } from "./locomotionConfig";
+
+import { createVineWalk, stepVineWalk, vineWalkInput, type VineWalk } from "./vineWalking";
 
 const EDGE_SLOW = 0.6;
 const EDGE_DEEP = 3.2;
@@ -124,6 +125,7 @@ type ReachTarget = {
 };
 
 type TreeActivity = {
+  vineWalk?: VineWalk;
   kind: "tree-climb" | "tree-hold" | "tree-descend";
   site: ArborealSite;
   elapsed: number;
@@ -781,10 +783,9 @@ function locomotionMotion(controller: Controller): MonkeyMotion | undefined {
   const { state } = controller;
   if (state === "RUN") return "biped-walk";
   if (state === "CLIMB") {
-    // The only phase-four climb site is the hanging liana up to the high
-    // plateau - a hand-over-hand pull, not a flat-trunk tree-climb.
+    // The fixed rope has its own quadrupedal walking pose.
     if (controller.tree?.site.id === PHASE_FOUR_LADDER_SITE.id)
-      return "vine-pull";
+      return "vine-walk";
     return controller.tree?.kind === "tree-descend"
       ? "tree-descend"
       : "tree-climb";
@@ -808,6 +809,7 @@ function updateLocomotion(
   velocity: Readonly<Vec3>,
   grounded: boolean,
 ) {
+  locomotion.vineWalk = controller.tree?.vineWalk;
   locomotion.state = controller.state;
   locomotion.grounded = grounded && grabbedCount(controller) === 0;
   locomotion.speed =
@@ -899,18 +901,6 @@ function updateLocomotion(
   }
 }
 
-// The pull vine's own curve sweeps out and back like a real swinging liana,
-// but its authored points sit higher up near its branch anchor, not at this
-// climb's actual start/end - so its shape is re-anchored onto the real climb
-// line below rather than sampled directly.
-const PULL_VINE_SHAPE_START = PHASE_FOUR_PULL_VINE_CURVE.getPointAt(0);
-const PULL_VINE_SHAPE_END = PHASE_FOUR_PULL_VINE_CURVE.getPointAt(1);
-const PULL_VINE_SHAPE_MID = PHASE_FOUR_PULL_VINE_CURVE.getPointAt(0.5);
-const PULL_VINE_BULGE_X =
-  PULL_VINE_SHAPE_MID.x - (PULL_VINE_SHAPE_START.x + PULL_VINE_SHAPE_END.x) / 2;
-const PULL_VINE_BULGE_Z =
-  PULL_VINE_SHAPE_MID.z - (PULL_VINE_SHAPE_START.z + PULL_VINE_SHAPE_END.z) / 2;
-
 function setTreeTarget(out: MutableVec3, tree: TreeActivity, progress: number) {
   const topX = tree.site.climb.topX ?? tree.site.climb.x;
   const topZ = tree.site.climb.topZ ?? tree.site.climb.z;
@@ -919,14 +909,6 @@ function setTreeTarget(out: MutableVec3, tree: TreeActivity, progress: number) {
   out.x = tree.site.climb.x + (topX - tree.site.climb.x) * t;
   out.y = baseY + (tree.site.climb.topY - baseY) * t;
   out.z = tree.site.climb.z + (topZ - tree.site.climb.z) * t;
-  if (tree.site.id === PHASE_FOUR_LADDER_SITE.id) {
-    // Straight point-to-point interpolation read as a robotic elevator ride;
-    // reusing the vine's own sideways sway (peaking mid-climb, zero at both
-    // ends so the endpoints are untouched) sells the hand-over-hand pull.
-    const arc = 4 * t * (1 - t);
-    out.x += PULL_VINE_BULGE_X * arc;
-    out.z += PULL_VINE_BULGE_Z * arc;
-  }
   return out;
 }
 
@@ -941,6 +923,9 @@ function startTreeActivity(
     kind: "tree-climb",
     site,
     elapsed: 0,
+    vineWalk: site.id === PHASE_FOUR_LADDER_SITE.id
+      ? createVineWalk(position, Math.abs(position.y - site.climb.topY) < 1.5)
+      : undefined,
   };
   setState(controller, "CLIMB");
   rigid.setBodyType(kinematicType, true);
@@ -1095,7 +1080,7 @@ export default function Character({
     locomotion.current.classicGroundMotion = inPhaseFour;
     // Match main's shorter ordinary jump without changing pendulum gravity.
     const gravityScale =
-      inPhaseFour && !traversal.fromSwing && !traversal.reach ? 1.5 : 1;
+      !traversal.fromSwing && !traversal.reach ? 1.5 : 1;
     if (rigid.gravityScale() !== gravityScale)
       rigid.setGravityScale(gravityScale, true);
     const debug = runtime.movementDebug[id];
@@ -1283,8 +1268,11 @@ export default function Character({
       undefined,
       rigid,
     );
+    // The probe still sees the launch surface during the first jump steps.
+    const risingJump = traversal.state === "JUMP" &&
+      velocity.x * basis.up.x + velocity.y * basis.up.y + velocity.z * basis.up.z > 0;
     const grounded =
-      !!ground && grabbedCount(traversal) === 0 && !traversal.tree;
+      !!ground && grabbedCount(traversal) === 0 && !traversal.tree && !risingJump;
     let interactionRequested =
       selected &&
       (runtime.interact ||
@@ -1296,6 +1284,36 @@ export default function Character({
     if (traversal.tree) {
       const tree = traversal.tree;
       tree.elapsed += dt;
+      if (tree.vineWalk) {
+        const walk = tree.vineWalk;
+        const input = vineWalkInput(walk.distance, runtime.yaw, inputForward, inputRight);
+        const arrived = stepVineWalk(walk, input, dt);
+        runtime.jump = false;
+        if (arrived) {
+          // Finish the kinematic step before restoring collision, above the
+          // deck. No gravity frame can strand the capsule under its edge.
+          rigid.setTranslation(walk.position, true);
+          rigid.setBodyType(rapier.RigidBodyType.Dynamic, true);
+          rigid.setLinvel(vector(), true);
+          traversal.tree = null;
+          capsule.current?.setSensor(false);
+          setState(traversal, "LANDING");
+        } else {
+          rigid.setNextKinematicTranslation(walk.position);
+          capsule.current?.setSensor(true);
+          setState(traversal, "CLIMB");
+        }
+        updateLocomotion(traversal, locomotion.current, position, velocity, false);
+        locomotion.current.bodyBasis = arrived ? undefined : walk.basis;
+        locomotion.current.speed = Math.abs(walk.speed);
+        runtime.grounded[id] = false;
+        runtime.speeds[id] = locomotion.current.speed;
+        runtime.motions[id] = locomotion.current.motion ?? null;
+        debug.state = traversal.state;
+        previous.current.x = position.x;
+        previous.current.z = position.z;
+        return;
+      }
       if (interactionRequested && tree.kind === "tree-hold") {
         tree.kind = "tree-descend";
         tree.elapsed = 0;
@@ -1694,17 +1712,12 @@ export default function Character({
         if (traversal.elapsed >= LOCOMOTION_TUNING.releaseThreshold)
           setState(traversal, "FLIGHT");
       } else if (!grounded) {
+        // A ground jump keeps its animation through descent until landing.
+        // Walking off an edge and releasing a vine still use free flight.
         if (traversal.state !== "REACH" && traversal.state !== "JUMP")
           setState(traversal, "FLIGHT");
-        else if (
-          traversal.state === "JUMP" &&
-          velocity.x * basis.up.x +
-            velocity.y * basis.up.y +
-            velocity.z * basis.up.z <=
-            0
-        )
-          setState(traversal, "FLIGHT");
       } else if (
+        traversal.state === "JUMP" ||
         traversal.state === "FLIGHT" ||
         traversal.state === "REACH" ||
         traversal.state === "LANDING"
@@ -1714,7 +1727,7 @@ export default function Character({
           traversal.fromSwing = false;
           setState(traversal, inputForward || inputRight ? "RUN" : "GROUND");
         }
-      } else if (traversal.state !== "JUMP")
+      } else
         setState(traversal, inputForward || inputRight ? "RUN" : "GROUND");
 
       if (

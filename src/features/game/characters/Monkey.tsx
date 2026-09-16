@@ -156,6 +156,7 @@ type Rig = {
   lastMotion?: MonkeyMotion;
   lastMotionTime?: number;
   tail: Bone[];
+  idleTailCycle: IdleTailCycle;
   headYaw?: number;
   headPitch?: number;
 };
@@ -176,6 +177,8 @@ type VerletArms = {
   bonesMeasured: boolean;
 };
 const RIG_CACHE = new WeakMap<Group, Partial<Record<CharacterId, Rig>>>();
+type IdleTailCycle = { duration: number; frames: Vector3[][] };
+const IDLE_TAIL_CACHE = new WeakMap<Group, IdleTailCycle>();
 
 function createMotionActions(
   mixer: AnimationMixer,
@@ -189,6 +192,7 @@ function createMotionActions(
     "vine-grab",
     "vine-swing",
     "vine-jump",
+    "vine-walk",
     "fall",
   ] as const satisfies readonly MonkeyMotion[]) {
     const clip = baseClip.clone();
@@ -370,6 +374,7 @@ export function buildRig(template: Group, id: CharacterId): Rig {
     tail: neutralPose
       .map(({ bone }) => bone)
       .filter((bone) => /^tail\d{3}(?:_end)?$/.test(bone.name)),
+    idleTailCycle: { duration: 1, frames: [] } as IdleTailCycle,
     armCalibration: {},
     bodyDimensions: {
       baseOffset: new Vector3(),
@@ -409,6 +414,33 @@ export function buildRig(template: Group, id: CharacterId): Rig {
   }
   calibrateNeutralBody(rig);
   calibrateNeutralArms(rig);
+  // Sample on an isolated model. Evaluating the live mixer here and then
+  // restoring the imported pose leaves its cached bindings out of sync:
+  // constant idle tracks are skipped on the first frames, tilting the rig.
+  let idleTailCycle = IDLE_TAIL_CACHE.get(template);
+  if (!idleTailCycle) {
+    const sample = cloneSkeleton(template) as Group;
+    const sampler = new AnimationMixer(sample);
+    if (idleClip) sampler.clipAction(idleClip).play();
+    const duration = idleClip?.duration || 1;
+    const frameCount = Math.ceil(duration * 30);
+    idleTailCycle = { duration, frames: [] };
+    const tail = rig.tail.map((bone) => sample.getObjectByName(bone.name)!);
+    for (let frame = 0; frame < frameCount; frame++) {
+      sampler.setTime(frame * duration / frameCount);
+      sample.updateWorldMatrix(true, true);
+      const directions: Vector3[] = [];
+      for (let index = 0; index < tail.length - 1; index++) {
+        directions.push(tail[index + 1].getWorldPosition(new Vector3())
+          .sub(tail[index].getWorldPosition(new Vector3())).normalize());
+      }
+      idleTailCycle.frames.push(directions);
+    }
+    sampler.stopAllAction();
+    sampler.uncacheRoot(sample);
+    IDLE_TAIL_CACHE.set(template, idleTailCycle);
+  }
+  rig.idleTailCycle = idleTailCycle;
   for (const transform of importedPose) {
     transform.bone.position.copy(transform.position);
     transform.bone.quaternion.copy(transform.quaternion);
@@ -1014,7 +1046,7 @@ export function poseHeadTowardMotion(
   const head = rig.bones.head;
   if (!neck || !head) return;
   head.getWorldPosition(IK.head);
-  const lookTarget = locomotion.nextVineAnchor;
+  const lookTarget = locomotion.vineWalk?.lookTarget ?? locomotion.nextVineAnchor;
   if (lookTarget) IK.target.set(lookTarget.x, lookTarget.y, lookTarget.z);
   else if (locomotion.velocity) {
     IK.direction.set(
@@ -1027,7 +1059,7 @@ export function poseHeadTowardMotion(
     IK.target.copy(IK.head).addScaledVector(IK.direction, 0.45);
   } else return;
   IK.direction.subVectors(IK.target, IK.head).normalize();
-  const basis = rig.bodyBasis;
+  const basis = locomotion.vineWalk?.basis ?? locomotion.bodyBasis ?? rig.bodyBasis;
   const x = -IK.direction.dot(basis.right as Vector3);
   const z = IK.direction.dot(basis.forward as Vector3);
   const y = IK.direction.dot(basis.up as Vector3);
@@ -1513,7 +1545,18 @@ export function applyContactMotion(
   if (motion !== "fall") poseHeadTowardMotion(rig, locomotion, dt);
   // The cleared bind pose has a straight horizontal tail. Give its existing
   // bone chain a curved counter-swing so the whole model follows locomotion.
+  const tailCycle = rig.idleTailCycle;
+  const tailFrame = MathUtils.euclideanModulo(elapsed / tailCycle.duration, 1) * tailCycle.frames.length;
   for (let index = 0; index < rig.tail.length - 1; index++) {
+    if (motion === "vine-walk") {
+      const from = tailCycle.frames[Math.floor(tailFrame)]?.[index];
+      const to = tailCycle.frames[(Math.floor(tailFrame) + 1) % tailCycle.frames.length]?.[index];
+      if (from && to) {
+        const direction = IK.direction.lerpVectors(from, to, tailFrame % 1).normalize();
+        aimBodySegment(rig, rig.tail[index], rig.tail[index + 1], [direction.x, direction.y, direction.z]);
+      }
+      continue;
+    }
     const t = index / Math.max(1, rig.tail.length - 2);
     aimBodySegment(rig, rig.tail[index], rig.tail[index + 1], motion === "fall" ? [
       Math.sin(elapsed * 2 - t * 2) * 0.07,
@@ -1604,6 +1647,43 @@ function poseContactMotion(
       0.9 * enter,
     );
     orientFeet(rig);
+    return;
+  }
+
+  if (motion === "vine-walk" && locomotion.vineWalk) {
+    const walk = locomotion.vineWalk;
+    const idle = 1 - MathUtils.smoothstep(Math.abs(walk.speed), 0.02, 0.4);
+    const breath = Math.sin(elapsed * 2.2) * idle;
+    // Lower toward the rope as the hand reaches and the opposite foot pushes;
+    // rise again as they gather under the body. Move the torso before IK so
+    // planted contacts remain fixed throughout the stride and idle breathing.
+    poseTorso(rig, [0, breath * 0.018, 1], [0, 0.08 + breath * 0.035, 1], [0, 0.9, 0.35]);
+    if (rig.bones.spine && rig.model.parent) {
+      rig.bones.spine.getWorldPosition(IK.characterOrigin);
+      rig.model.parent.worldToLocal(IK.characterOrigin);
+      rig.model.position.add(IK.poseOffset.set(0, -0.22 - walk.stretch * 0.12 + breath * 0.006, -0.06).sub(IK.characterOrigin));
+      rig.model.updateWorldMatrix(true, true);
+    }
+    solveTwoBone(rig, rig.bones.armL, rig.bones.forearmL, rig.bones.handL,
+      walk.leftHand, [1, 0.05, -0.15]);
+    solveTwoBone(rig, rig.bones.armR, rig.bones.forearmR, rig.bones.handR,
+      walk.rightHand, [-1, 0.05, -0.15]);
+    solveTwoBone(rig, rig.bones.thighL, rig.bones.shinL, rig.bones.footL,
+      walk.leftFoot, [0.5, 0.1, 1]);
+    solveTwoBone(rig, rig.bones.thighR, rig.bones.shinR, rig.bones.footR,
+      walk.rightFoot, [-0.5, 0.1, 1]);
+    for (const [hand, foot, ball, side] of [
+      [rig.bones.handL, rig.bones.footL, rig.bones.ballL, 1],
+      [rig.bones.handR, rig.bones.footR, rig.bones.ballR, -1],
+    ] as const) {
+      const finger = hand?.children.find(
+        (child) => child instanceof Bone && /finger/i.test(child.name),
+      ) as Bone | undefined;
+      const tip = finger?.children.find((child) => child instanceof Bone) as Bone | undefined;
+      aimBodySegment(rig, hand, finger, [-side * 0.8, -0.5, 0.35]);
+      aimBodySegment(rig, finger, tip, [side * 0.15, -1, 0.15]);
+      aimBodySegment(rig, foot, ball, [-side * 0.65, -0.2, 0.75]);
+    }
     return;
   }
 

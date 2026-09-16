@@ -140,7 +140,10 @@ export const PHASE_FOUR_PATHS: CanopyPath[] = [
     width: 2.2,
     points: [
       [-19, 13, -5],
-      [-12, 13.1, -11],
+      // Pass behind the heart tree, between its trunk and the crown tree.
+      [-20, 14, -13],
+      [-18, 15, -17.2],
+      [-11, 15.6, -17],
       [-3, 16, -17],
     ],
   },
@@ -186,20 +189,17 @@ export const PHASE_FOUR_PATHS: CanopyPath[] = [
   },
 ];
 
-// Trunk base Y is phaseFourGroundHeight(x, z) minus ROOT_EMBED_DEPTH: sitting
-// exactly on the ground surface left the buttress-root flare (see giantTree)
-// fully exposed, with no earth covering any of it. Tree 6 (behind the falls)
-// used to sit at x=19, only 2.8 units from the upper river's centerline -
-// well inside its own 3.1 trunk radius, i.e. literally in the water; moved
-// to x=26 for real clearance from the bank.
+// Bases follow phaseFourGroundHeight minus ROOT_EMBED_DEPTH. River clearance
+// includes the full tapered root spread, not just the trunk. Decks and vine
+// anchors stay in place; their supporting branches follow these tree positions.
 export const PHASE_FOUR_TREES = [
   { position: [-20, -4.54, 12] as Point3, radius: 3.4, height: 38, seed: 41 },
-  { position: [-6, -4.42, -11] as Point3, radius: 3.8, height: 43, seed: 91 },
-  { position: [22, -4.11, -5] as Point3, radius: 3.7, height: 39, seed: 62 },
+  { position: [-13, -4.401, -11] as Point3, radius: 3.8, height: 43, seed: 91 },
+  { position: [31, -4.268, -5] as Point3, radius: 3.7, height: 39, seed: 62 },
   { position: [-24, -4.66, -7] as Point3, radius: 2.8, height: 36, seed: 18 },
-  { position: [-8, -4.0, -22] as Point3, radius: 2.8, height: 39, seed: 73 },
-  { position: [20, -4.55, -28] as Point3, radius: 2.7, height: 49, seed: 32 },
-  { position: [26, 13.43, -49] as Point3, radius: 3.1, height: 38, seed: 84 },
+  { position: [-11, -4.13, -22] as Point3, radius: 2.8, height: 39, seed: 73 },
+  { position: [29, -4.096, -28] as Point3, radius: 2.7, height: 49, seed: 32 },
+  { position: [35, 13.667, -49] as Point3, radius: 3.1, height: 38, seed: 84 },
 ];
 
 export const PHASE_FOUR_LADDER_SITE: ArborealSite = {
@@ -223,6 +223,7 @@ export const PHASE_FOUR_LADDER_SITE: ArborealSite = {
       PHASE_FOUR_FEET_OFFSET +
       0.08,
     dismount: true,
+    bidirectional: true,
   },
   vine: {
     x: -3,
@@ -240,17 +241,18 @@ export const PHASE_FOUR_LADDER_SITE: ArborealSite = {
 export const PHASE_FOUR_PULL_VINE_POINTS: Point3[] = [
   [-16.2, 17.8, 14.5],
   [-14.8, 13.2, 14.1],
-  [PHASE_FOUR_SPAWN.x, 9.45, PHASE_FOUR_SPAWN.z],
+  [PHASE_FOUR_SPAWN.x, 8.08, PHASE_FOUR_SPAWN.z],
   [-9.5, 13.5, 9.2],
   [-6.2, 18.5, 3.4],
-  [-3.9, 22.4, -2.2],
-  [-3, 24, -7],
+  [-3.9, 22.58, -2.2],
+  [-3, 22.58, -7],
 ];
 export const PHASE_FOUR_PULL_VINE_CURVE = new CatmullRomCurve3(
   PHASE_FOUR_PULL_VINE_POINTS.map((p) => new Vector3(...p)),
   false,
   "centripetal",
 );
+PHASE_FOUR_PULL_VINE_CURVE.arcLengthDivisions = 600;
 
 // Each span repeats the initial vine's wooden branch + wrapped liana at BOTH
 // ends. The low point is the reachable grip; capture releases the end behind

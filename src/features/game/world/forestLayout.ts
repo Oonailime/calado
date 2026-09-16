@@ -15,6 +15,7 @@ export type ArborealSite = {
     topZ?: number;
     baseY?: number;
     dismount?: boolean;
+    bidirectional?: boolean;
     enabled?: boolean;
   };
   vine: {
@@ -175,14 +176,23 @@ export function nearestArborealInteraction(
     { kind: "tree" | "vine"; site: ArborealSite; distance: number } | undefined;
   for (const site of sites) {
     if (site.climb.enabled !== false) {
-      const treeDistance = Math.hypot(
+      let treeDistance = Math.hypot(
         position.x - site.climb.x,
         position.z - site.climb.z,
       );
+      let atHeight = site.climb.baseY === undefined ||
+        Math.abs(position.y - site.climb.baseY) < 1.5;
+      if (site.climb.bidirectional && Math.abs(position.y - site.climb.topY) < 1.5) {
+        const topDistance = Math.hypot(
+          position.x - (site.climb.topX ?? site.climb.x),
+          position.z - (site.climb.topZ ?? site.climb.z),
+        );
+        treeDistance = atHeight ? Math.min(treeDistance, topDistance) : topDistance;
+        atHeight = true;
+      }
       if (
         treeDistance <= TREE_INTERACTION_RANGE &&
-        (site.climb.baseY === undefined ||
-          Math.abs(position.y - site.climb.baseY) < 1.5) &&
+        atHeight &&
         (!nearest || treeDistance < nearest.distance)
       )
         nearest = { kind: "tree", site, distance: treeDistance };

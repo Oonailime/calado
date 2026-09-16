@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Mesh, Raycaster, Vector3 } from "three";
+import { CatmullRomCurve3, Mesh, Raycaster, Vector3 } from "three";
 import { gameMapFromQuery } from "../src/features/game/state/store";
 import {
   climbingPosition,
@@ -10,7 +10,11 @@ import {
 import {
   createPhaseFourBranchGeometry,
   createPhaseFourPathCollider,
+  createGiantTreeRootGeometry,
+  GIANT_TREE_ROOT_REACH,
+  ROOT_EMBED_DEPTH,
   phaseFourPathCurve,
+  phaseFourRailingRange,
 } from "../src/features/game/world/phaseFourAssets";
 import {
   PHASE_FOUR_TREES,
@@ -31,6 +35,51 @@ import {
   phaseFourCliffBlend,
   phaseFourGroundHeight,
 } from "../src/features/game/world/phaseFourTerrain";
+
+test("giant roots extend into solid tapered tips without open mesh edges", () => {
+  const radius = 3;
+  const geometry = createGiantTreeRootGeometry(radius);
+  const positions = geometry.getAttribute("position");
+  const indices = geometry.index!;
+  const edges = new Map<string, number>();
+  const key = (index: number) => [positions.getX(index), positions.getY(index), positions.getZ(index)]
+    .map((v) => Math.round(v * 1e5)).join(",");
+  for (let i = 0; i < indices.count; i += 3) {
+    const face = [indices.getX(i), indices.getX(i + 1), indices.getX(i + 2)];
+    for (let side = 0; side < 3; side++) {
+      const edge = [key(face[side]), key(face[(side + 1) % 3])].sort().join("|");
+      edges.set(edge, (edges.get(edge) ?? 0) + 1);
+    }
+  }
+  for (const [edge, count] of edges) assert.equal(count, 2, `open or overlapping edge: ${edge}`);
+  const mesh = new Mesh(geometry);
+  mesh.updateMatrixWorld();
+  let previousHeight = Infinity;
+  for (const z of [9, 10, 11, 11.3]) {
+    const hits = new Raycaster(new Vector3(0, 5, z), new Vector3(0, -1, 0)).intersectObject(mesh);
+    assert.ok(hits.length, "the extension must have outward-facing bark");
+    assert.ok(hits[0].point.y < previousHeight, "the root must taper toward its tip");
+    previousHeight = hits[0].point.y;
+  }
+  geometry.dispose();
+});
+
+test("the entire giant root spread clears both rivers and bases stay embedded", () => {
+  const rivers = [PHASE_FOUR_RIVER, PHASE_FOUR_UPPER_RIVER].map((points) =>
+    new CatmullRomCurve3(points.map((p) => new Vector3(...p))).getSpacedPoints(1200),
+  );
+  for (const tree of PHASE_FOUR_TREES) {
+    const [x, y, z] = tree.position;
+    for (const [index, samples] of rivers.entries()) {
+      const distance = Math.min(...samples.map((p) => Math.hypot(x - p.x, z - p.z)));
+      const waterHalfWidth = index === 0 ? 5 : 3.85;
+      assert.ok(distance > tree.radius * GIANT_TREE_ROOT_REACH + waterHalfWidth + 0.75,
+        `tree ${tree.seed}: roots intrude into river ${index}`);
+    }
+    assert.ok(Math.abs(y - (phaseFourGroundHeight(x, z) - ROOT_EMBED_DEPTH)) < 0.03,
+      `tree ${tree.seed}: base no longer follows its new ground position`);
+  }
+});
 
 test("phase4 resolves independently and all three spawns clear the arrival deck edges", () => {
   assert.equal(gameMapFromQuery("phase4"), "phase4");
@@ -56,6 +105,58 @@ test("the lower platforms retain their walking routes", () => {
     (deck) => deck.id !== "vine-plateau" && deck.id !== "waterfall-summit",
   ))
     assert.ok(visited.has(deck.id), deck.id);
+});
+
+test("the western bridge goes behind the tree with clearance for its full width", () => {
+  const path = PHASE_FOUR_PATHS.find((p) => p.id === "crown-bridge")!;
+  const curve = phaseFourPathCurve(path);
+  for (let i = 0; i <= 600; i++) {
+    const p = curve.getPoint(i / 600);
+    for (const tree of PHASE_FOUR_TREES)
+      assert.ok(Math.hypot(p.x - tree.position[0], p.z - tree.position[2]) >
+        tree.radius + path.width / 2 + 0.3, `bridge clips tree ${tree.seed}`);
+    if (Math.abs(p.x - PHASE_FOUR_TREES[1].position[0]) < 1)
+      assert.ok(p.z < PHASE_FOUR_TREES[1].position[2] - 5, "cross behind the trunk");
+  }
+});
+
+test("railings end at the platform edges instead of crossing their floors", () => {
+  for (const path of PHASE_FOUR_PATHS.filter((p) => p.kind !== "branch")) {
+    const curve = phaseFourPathCurve(path);
+    for (const side of [-1, 1]) {
+      const [start, end] = phaseFourRailingRange(path, side);
+      assert.ok(start > 0 && end < 1 && end > start);
+      for (let i = 0; i <= 120; i++) {
+        const t = start + (end - start) * i / 120;
+        const p = curve.getPoint(t), tangent = curve.getTangent(t);
+        const length = Math.hypot(tangent.x, tangent.z);
+        const x = p.x + tangent.z / length * path.width / 2 * side;
+        const z = p.z - tangent.x / length * path.width / 2 * side;
+        for (const deck of PHASE_FOUR_PLATFORMS.filter((d) => d.id === path.from || d.id === path.to))
+          assert.ok(Math.abs(x - deck.center[0]) > deck.width / 2 + 0.1 ||
+            Math.abs(z - deck.center[2]) > deck.depth / 2 + 0.1,
+          `${path.id}: railing intrudes into ${deck.id}`);
+      }
+    }
+  }
+});
+
+test("wide branch supports remain below every platform they cross", () => {
+  for (const path of PHASE_FOUR_PATHS.filter((p) => p.kind === "branch")) {
+    const geometry = createPhaseFourBranchGeometry(path);
+    const mesh = new Mesh(geometry);
+    mesh.updateMatrixWorld();
+    for (const deck of PHASE_FOUR_PLATFORMS) {
+      for (let x = -deck.width / 2; x <= deck.width / 2; x += 0.4)
+        for (let z = -deck.depth / 2; z <= deck.depth / 2; z += 0.4) {
+          const hits = new Raycaster(new Vector3(deck.center[0] + x, deck.center[1] + 10, deck.center[2] + z),
+            new Vector3(0, -1, 0)).intersectObject(mesh);
+          if (hits.length) assert.ok(hits[0].point.y < deck.center[1] - 0.28,
+            `${path.id}: bark protrudes through ${deck.id}`);
+        }
+    }
+    geometry.dispose();
+  }
 });
 
 test("the pull vine reaches a high plateau and pendulums continue to the summit behind the waterfall", () => {

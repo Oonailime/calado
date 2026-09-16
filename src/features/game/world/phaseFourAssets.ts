@@ -12,7 +12,6 @@ import {
   Mesh,
   MeshStandardMaterial,
   Quaternion,
-  SphereGeometry,
   TorusGeometry,
   TubeGeometry,
   Vector3,
@@ -63,6 +62,15 @@ const point = (p: Point3) => new Vector3(...p);
 // Sitting a trunk exactly on phaseFourGroundHeight left its buttress-root
 // flare (see giantTree) fully exposed with no earth covering any of it.
 export const ROOT_EMBED_DEPTH = 0.45;
+// Includes the tapered tip and the thickness of the buttress near the ground.
+export const GIANT_TREE_ROOT_REACH = 4;
+const riverBankSamples = new Map<readonly Point3[], Point3[]>(
+  [PHASE_FOUR_RIVER, PHASE_FOUR_UPPER_RIVER].map((points) => [
+    points,
+    new CatmullRomCurve3(points.map(point)).getSpacedPoints(360)
+      .map((p) => p.toArray() as Point3),
+  ]),
+);
 
 function nearestPolylinePoint(x: number, z: number, points: readonly Point3[]) {
   let best = Infinity,
@@ -93,20 +101,26 @@ function nearestPolylinePoint(x: number, z: number, points: readonly Point3[]) {
   return { distance: best, x: bestX, z: bestZ };
 }
 
-/** Push (x, z) away from a river polyline so a tree of this radius clears the bank. */
+/** Keep the entire root spread beyond the widest water edge, plus a dry margin. */
 function clearRiverBank(
   x: number,
   z: number,
   radius: number,
   points: readonly Point3[],
-  minClearance = 4,
+  minClearance = 6,
 ) {
-  const nearest = nearestPolylinePoint(x, z, points);
-  const needed = radius + minClearance;
-  if (nearest.distance >= needed || nearest.distance < 1e-6) return [x, z];
-  const dx = (x - nearest.x) / nearest.distance,
-    dz = (z - nearest.z) / nearest.distance;
-  return [nearest.x + dx * needed, nearest.z + dz * needed];
+  const samples = riverBankSamples.get(points) ?? points;
+  const needed = radius * GIANT_TREE_ROOT_REACH + minClearance;
+  // A push away from one bend can approach the next bend of the same river.
+  for (let pass = 0; pass < 12; pass++) {
+    const nearest = nearestPolylinePoint(x, z, samples);
+    if (nearest.distance >= needed - 1e-5) break;
+    const dx = nearest.distance > 1e-6 ? (x - nearest.x) / nearest.distance : 1;
+    const dz = nearest.distance > 1e-6 ? (z - nearest.z) / nearest.distance : 0;
+    x = nearest.x + dx * needed;
+    z = nearest.z + dz * needed;
+  }
+  return [x, z];
 }
 
 /** Bake vertex colour/transforms once and keep each playable tree in one draw. */
@@ -376,6 +390,51 @@ function plant(builder: AssetBuilder, p: Point3, size: number, seed: number) {
   }
 }
 
+/** A closed buttress that continues beyond the old cut end into a solid tip. */
+export function createGiantTreeRootGeometry(radius: number) {
+  const curve = new CatmullRomCurve3([
+    new Vector3(0, radius * 3.2, radius * 0.4),
+    new Vector3(0, radius * 0.9, radius * 1.4),
+    new Vector3(0, 0.2, radius * 3),
+    new Vector3(0, 0.08, radius * 3.8),
+  ]);
+  const rings = 20, sides = 8;
+  const geometry = new TubeGeometry(curve, rings, 1, sides, false);
+  const positions = geometry.getAttribute("position");
+  for (let ring = 0; ring <= rings; ring++) {
+    const t = ring / rings;
+    const center = curve.getPointAt(t);
+    // Broad at the trunk; the exposed end narrows continuously to one point.
+    const thickness = radius * 0.34 * Math.pow(1 - t, 0.8);
+    for (let side = 0; side <= sides; side++) {
+      const index = ring * (sides + 1) + side;
+      positions.setXYZ(
+        index,
+        center.x + (positions.getX(index) - center.x) * thickness,
+        center.y + (positions.getY(index) - center.y) * thickness,
+        center.z + (positions.getZ(index) - center.z) * thickness,
+      );
+    }
+  }
+  // Replace the collapsed final ring with a triangle fan to a single tip.
+  const indices = Array.from(geometry.index!.array).slice(0, (rings - 1) * sides * 6);
+  const tip = rings * (sides + 1);
+  const lastRing = (rings - 1) * (sides + 1);
+  for (let side = 0; side < sides; side++)
+    indices.push(lastRing + side, tip, lastRing + side + 1);
+  // Only the trunk end needs a cap; the other end already meets at the tip.
+  const vertices = Array.from(positions.array).slice(0, (tip + 1) * 3);
+  const base = curve.getPointAt(0);
+  vertices.push(base.x, base.y, base.z);
+  for (let side = 0; side < sides; side++) indices.push(tip + 1, side, side + 1);
+  geometry.deleteAttribute("normal");
+  geometry.deleteAttribute("uv");
+  geometry.setAttribute("position", new Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 function giantTree(
   builder: AssetBuilder,
   p: Point3,
@@ -422,27 +481,12 @@ function giantTree(
       18,
     );
     if (i % 2 === 0) {
-      builder.tube(
-        [
-          [
-            p[0] + Math.sin(angle) * radius * 3,
-            p[1] + 0.2,
-            p[2] + Math.cos(angle) * radius * 3,
-          ],
-          [
-            p[0] + Math.sin(angle) * radius * 1.4,
-            p[1] + radius * 0.9,
-            p[2] + Math.cos(angle) * radius * 1.4,
-          ],
-          [
-            p[0] + Math.sin(angle) * radius * 0.72,
-            p[1] + radius * 3.2,
-            p[2] + Math.cos(angle) * radius * 0.72,
-          ],
-        ],
-        radius * 0.34,
+      builder.add(
+        createGiantTreeRootGeometry(radius),
         palette.bark[i % 4],
-        10,
+        p,
+        undefined,
+        new Quaternion().setFromAxisAngle(UP, angle),
       );
     }
   }
@@ -512,18 +556,6 @@ function giantTree(
         "#4c6b2b",
         20,
         "foliage",
-      );
-    }
-    // Shelf fungi, root plants and moss islands break up the large bark planes.
-    for (let i = 0; i < 13; i++) {
-      const a = rng() * Math.PI * 2,
-        y = p[1] + 9 + rng() * height * 0.38;
-      const r = radius * (1 - ((y - p[1]) / height) * 0.43);
-      builder.add(
-        new SphereGeometry(0.5, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2),
-        i % 3 ? "#b8863f" : "#d9b264",
-        [p[0] + Math.sin(a) * r, y, p[2] + Math.cos(a) * r],
-        [1.2, 0.3, 0.85],
       );
     }
     for (let i = 0; i < 4; i++)
@@ -680,6 +712,40 @@ function closeTubeEnds(geometry: BufferGeometry, rings: number, sides: number) {
 
 export const PHASE_FOUR_BRANCH_CLEARANCE = 0.38;
 
+function barkBelowPlatforms(x: number, y: number, z: number) {
+  for (const deck of PHASE_FOUR_PLATFORMS) {
+    if (Math.abs(x - deck.center[0]) <= deck.width / 2 + 0.18 &&
+        Math.abs(z - deck.center[2]) <= deck.depth / 2 + 0.18)
+      y = Math.min(y, deck.center[1] - 0.38);
+  }
+  return y;
+}
+
+// Distinct, millimetric levels keep angled board corners from sharing a plane
+// with either the platform or another path at a multi-way junction.
+export function phaseFourPathFloorOffset(path: CanopyPath) {
+  return 0.006 + Math.max(0, PHASE_FOUR_PATHS.indexOf(path)) * 0.003;
+}
+
+export function phaseFourRailingRange(path: CanopyPath, side: number) {
+  const curve = phaseFourPathCurve(path);
+  const from = PHASE_FOUR_PLATFORMS.find((deck) => deck.id === path.from)!;
+  const to = PHASE_FOUR_PLATFORMS.find((deck) => deck.id === path.to)!;
+  let start = 0, end = 1;
+  for (let i = 0; i <= 600; i++) {
+    const t = i / 600, p = curve.getPoint(t), tangent = curve.getTangent(t);
+    const length = Math.hypot(tangent.x, tangent.z);
+    const x = p.x + tangent.z / length * path.width * 0.5 * side;
+    const z = p.z - tangent.x / length * path.width * 0.5 * side;
+    const inside = (deck: typeof from) =>
+      Math.abs(x - deck.center[0]) < deck.width / 2 + 0.15 &&
+      Math.abs(z - deck.center[2]) < deck.depth / 2 + 0.15;
+    if (inside(from)) start = Math.min(1, t + 1 / 600);
+    if (inside(to)) { end = Math.max(start, t - 1 / 600); break; }
+  }
+  return [start, end] as const;
+}
+
 function nearestDeckTree(deck: (typeof PHASE_FOUR_PLATFORMS)[number]) {
   return PHASE_FOUR_TREES.reduce((closest, candidate) =>
     Math.hypot(candidate.position[0] - deck.center[0], candidate.position[2] - deck.center[2]) <
@@ -760,11 +826,9 @@ export function createPhaseFourBranchGeometry(path: CanopyPath) {
       // Limit relief near the upper crest so the bark stays below the planks.
       const relief = Math.min(0.095, ringRadius * 0.05);
       const r = ringRadius * (1 + irregularity) + relief * (ridge - furrow * 0.35);
-      positions.push(
-        p.x + side.x * Math.sin(angle) * r,
-        p.y + Math.cos(angle) * r,
-        p.z + side.z * Math.sin(angle) * r,
-      );
+      const x = p.x + side.x * Math.sin(angle) * r;
+      const z = p.z + side.z * Math.sin(angle) * r;
+      positions.push(x, barkBelowPlatforms(x, p.y + Math.cos(angle) * r, z), z);
       color.copy(bark)
         .lerp(grainShadow, 0.12 + furrow * 0.55)
         .lerp(grainHighlight, ridge * 0.72)
@@ -906,7 +970,7 @@ function canopyPath(builder: AssetBuilder, path: CanopyPath, seed: number) {
           path.kind === "ladder" ? 0.19 : (length / segments) * 0.95,
         ),
         palette.wood[i % 4],
-        [p.x - normal.x * 0.08, p.y - normal.y * 0.08, p.z - normal.z * 0.08],
+        [p.x - normal.x * 0.08, p.y - normal.y * 0.08 - phaseFourPathFloorOffset(path), p.z - normal.z * 0.08],
         undefined,
         rotation,
       );
@@ -932,13 +996,6 @@ function canopyPath(builder: AssetBuilder, path: CanopyPath, seed: number) {
         rotation,
         "foliage",
       );
-    }
-    if (path.kind === "bridge" && (i % 4 === 0 || i === segments)) {
-      for (const sign of [-1, 1]) {
-        const x = p.x + dir.z * path.width * 0.49 * sign,
-          z = p.z - dir.x * path.width * 0.49 * sign;
-        builder.beam([x, p.y - 0.2, z], [x, p.y + 1.05, z], 0.065, "#a68b55");
-      }
     }
     if (path.kind === "branch" && i % 10 === 2) {
       const ropeRadius = 0.055;
@@ -969,15 +1026,21 @@ function canopyPath(builder: AssetBuilder, path: CanopyPath, seed: number) {
   }
   if (path.kind !== "branch") {
     for (const sign of [-1, 1]) {
+      const [start, end] = phaseFourRailingRange(path, sign);
       const line: Point3[] = [],
         lower: Point3[] = [];
       for (let i = 0; i <= 24; i++) {
-        const p = curve.getPoint(i / 24),
-          dir = curve.getTangent(i / 24);
+        const t = start + (end - start) * i / 24;
+        const p = curve.getPoint(t),
+          dir = curve.getTangent(t);
+        dir.y = 0;
+        dir.normalize();
         const x = p.x + dir.z * path.width * 0.5 * sign,
           z = p.z - dir.x * path.width * 0.5 * sign;
         line.push([x, p.y + (path.kind === "bridge" ? 1.07 : 0.05), z]);
         lower.push([x, p.y + 0.42, z]);
+        if (path.kind === "bridge" && i % 4 === 0)
+          builder.beam([x, p.y - 0.2, z], [x, p.y + 1.05, z], 0.065, "#a68b55");
       }
       builder.tube(line, path.kind === "ladder" ? 0.095 : 0.075, "#ab9257", 36);
       if (path.kind === "bridge") builder.tube(lower, 0.042, "#85733f", 36);

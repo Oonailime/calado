@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { Group, LoadingManager, Matrix4, Vector3 } from "three";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
+import { monkeyAnimation } from "../src/features/game/characters/monkeyAppearance";
 import {
   applyContactMotion,
   buildRig,
@@ -326,4 +327,23 @@ test("queda só substitui voo livre descendente, preservando salto, escalada e p
   assert.equal(monkeyRenderMotion({ ...falling, velocity: { x: 0, y: 3, z: 0 } }), undefined);
   for (const motion of ["tree-climb", "tree-descend", "vine-swing", "vine-grab", "vine-pull"] as const)
     assert.equal(monkeyRenderMotion({ ...falling, motion }), motion);
+});
+
+test("pulo comum conserva a animação original na subida, no ápice e na descida", () => {
+  for (const y of [6, 3, 0, -0.36, -3, -6, -12]) {
+    for (const speed of [0, 4]) {
+      const locomotion = {
+        state: "JUMP" as const,
+        grounded: false,
+        speed,
+        velocity: { x: speed, y, z: 0 },
+      };
+      assert.equal(monkeyRenderMotion(locomotion), undefined);
+      assert.equal(monkeyAnimation(false, speed, true), "run");
+    }
+  }
+  assert.equal(monkeyRenderMotion({
+    state: "FLIGHT", grounded: false, speed: 4,
+    velocity: { x: 4, y: -3, z: 0 },
+  }), "fall", "sair de uma borda ainda deve acionar a queda");
 });
