@@ -25,6 +25,7 @@ import { QUALITY_PROFILES } from "./quality";
 import Controls from "./ui/Controls";
 import Lock from "./ui/Lock";
 import { nextLockHintCount } from "./ui/lockHints";
+import RubiksCubePuzzle from "./ui/RubiksCubePuzzle";
 import styles from "./ui/Game.module.css";
 
 class WorldBoundary extends Component<
@@ -70,6 +71,7 @@ export default function Game({ active, locale, onExit }: GameProps) {
   const contrast = useGame((s) => s.contrast);
   const puzzle = useGame((s) => s.puzzle);
   const lockOpen = useGame((s) => s.lockOpen);
+  const cubePuzzleOpen = useGame((s) => s.cubePuzzleOpen);
   const map = useGame((s) => s.map);
   const [ready, setReady] = useState(false);
   const [lost, setLost] = useState(false);
@@ -149,6 +151,10 @@ export default function Game({ active, locale, onExit }: GameProps) {
       data-portal-notice={portalNotice}
       data-map={map}
       data-revision={puzzle.revision}
+      data-cube-pieces={puzzle.cubePieces.join(",")}
+      data-cube-puzzle-open={cubePuzzleOpen}
+      data-cube-layers-solved={puzzle.cubeLayersSolved}
+      data-cube-solved={puzzle.cubeSolved}
     >
       <WorldBoundary fallback={failure}>
         <div
@@ -228,7 +234,7 @@ export default function Game({ active, locale, onExit }: GameProps) {
             </div>
           </div>
         )}
-        {ready && !lost && !portalNotice && (
+        {ready && !lost && !portalNotice && !puzzle.cubeSolved && (
           <Controls locale={locale} onExit={exitGame} />
         )}
         {ready && !lost && lockOpen && (
@@ -239,6 +245,36 @@ export default function Game({ active, locale, onExit }: GameProps) {
               setLockHintCount((count) => nextLockHintCount(count))
             }
           />
+        )}
+        {ready && !lost && cubePuzzleOpen && !puzzle.cubeSolved && (
+          <RubiksCubePuzzle locale={locale} />
+        )}
+        {ready && !lost && puzzle.cubeSolved && (
+          <div className={styles.overlay}>
+            <div
+              className={`${styles.panel} ${styles.portalPanel}`}
+              role="dialog"
+              aria-modal="true"
+              aria-label={locale === "pt" ? "Cubo resolvido" : "Cube solved"}
+            >
+              <span className={styles.portalSeal} aria-hidden="true">
+                M · K · I
+              </span>
+              <h2>
+                {locale === "pt"
+                  ? "O cubo foi resolvido"
+                  : "The cube has been solved"}
+              </h2>
+              <p>
+                {locale === "pt"
+                  ? "As três marcas do vale se uniram numa só peça brilhante, no alto do santuário. É aqui que a jornada, por enquanto, termina."
+                  : "The valley's three marks became one gleaming whole, atop the shrine. For now, this is where the journey ends."}
+              </p>
+              <button autoFocus className={styles.resume} onClick={exitGame}>
+                {locale === "pt" ? "Voltar" : "Go back"}
+              </button>
+            </div>
+          </div>
         )}
         {ready && !lost && portalNotice && (
           <div className={styles.overlay}>

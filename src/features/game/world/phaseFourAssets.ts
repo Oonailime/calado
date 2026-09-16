@@ -101,6 +101,18 @@ function nearestPolylinePoint(x: number, z: number, points: readonly Point3[]) {
   return { distance: best, x: bestX, z: bestZ };
 }
 
+// The shrine sits high and its own platform is small; a nearby background
+// tree's canopy can visually swallow it. Generous horizontal clearance around
+// its (x, z) keeps any tall decorative tree's crown out of that airspace.
+const SUMMIT_SHRINE_XZ: [number, number] = [
+  PHASE_FOUR_PLATFORMS.find((deck) => deck.id === "summit-shrine")!.center[0],
+  PHASE_FOUR_PLATFORMS.find((deck) => deck.id === "summit-shrine")!.center[2],
+];
+const SUMMIT_SHRINE_CLEARANCE = 25;
+function clearsSummitShrine(x: number, z: number) {
+  return Math.hypot(x - SUMMIT_SHRINE_XZ[0], z - SUMMIT_SHRINE_XZ[1]) >= SUMMIT_SHRINE_CLEARANCE;
+}
+
 /** Keep the entire root spread beyond the widest water edge, plus a dry margin. */
 function clearRiverBank(
   x: number,
@@ -1414,6 +1426,7 @@ export function createPhaseFourEnvironment() {
         radius,
         PHASE_FOUR_UPPER_RIVER,
       );
+      if (!clearsSummitShrine(x, z)) continue;
       giantTree(
         builder,
         [x, phaseFourGroundHeight(x, z) - ROOT_EMBED_DEPTH, z],
@@ -1434,6 +1447,7 @@ export function createPhaseFourEnvironment() {
         radius,
         PHASE_FOUR_UPPER_RIVER,
       );
+      if (!clearsSummitShrine(x, z)) continue;
       giantTree(
         builder,
         [x, phaseFourGroundHeight(x, z) - ROOT_EMBED_DEPTH, z],

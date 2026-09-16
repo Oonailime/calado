@@ -102,7 +102,11 @@ test("the lower platforms retain their walking routes", () => {
     }
   }
   for (const deck of PHASE_FOUR_PLATFORMS.filter(
-    (deck) => deck.id !== "vine-plateau" && deck.id !== "waterfall-summit",
+    (deck) =>
+      deck.id !== "vine-plateau" &&
+      deck.id !== "waterfall-summit" &&
+      // Reached only once the cube shrine unlocks, not via the base graph.
+      deck.id !== "summit-shrine",
   ))
     assert.ok(visited.has(deck.id), deck.id);
 });
@@ -181,9 +185,11 @@ test("the pull vine reaches a high plateau and pendulums continue to the summit 
   assert.ok(
     summit.center[1] >
       Math.max(
-        ...PHASE_FOUR_PLATFORMS.filter((p) => p !== summit).map(
-          (p) => p.center[1],
-        ),
+        ...PHASE_FOUR_PLATFORMS.filter(
+          // The shrine sits higher still, but it's reached by a footpath
+          // once unlocked, not by this swing-vine sequence.
+          (p) => p !== summit && p.id !== "summit-shrine",
+        ).map((p) => p.center[1]),
       ),
   );
   assert.ok(summit.center[2] < -39);

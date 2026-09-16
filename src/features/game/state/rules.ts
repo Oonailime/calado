@@ -1,5 +1,7 @@
 import type { CharacterId, Vec3 } from "../types";
 import { ISLAND_SURFACE_Y } from "../world/layout";
+import { PHASE_FOUR_CUBE_PIECE_SPAWNS, PHASE_FOUR_PLATFORMS } from "../world/phaseFourLayout";
+import { solvedLayerCount, type CubieState } from "../world/rubiksCubeState";
 export type PuzzleState = {
   selected: CharacterId;
   powers: [boolean, boolean, boolean];
@@ -14,6 +16,12 @@ export type PuzzleState = {
   // Counts wrong padlock guesses so the UI can flash feedback once per miss
   // (see Lock.tsx) — never decremented, only ever compared for a change.
   wrongAttempts: number;
+  // Phase 4's shrine puzzle. Indexed like CHARACTERS: 0 white (Mizaru), 1
+  // yellow (Kikazaru), 2 brown (Iwazaru) — see PHASE_FOUR_CUBE_PIECE_SPAWNS.
+  cubePieces: [boolean, boolean, boolean];
+  cubeTurning: boolean;
+  cubeLayersSolved: number;
+  cubeSolved: boolean;
 };
 export const initialPuzzle = (): PuzzleState => ({
   selected: 2,
@@ -27,6 +35,10 @@ export const initialPuzzle = (): PuzzleState => ({
   built: false,
   revision: 0,
   wrongAttempts: 0,
+  cubePieces: [false, false, false],
+  cubeTurning: false,
+  cubeLayersSolved: 0,
+  cubeSolved: false,
 });
 export const distance = (a: Vec3, b: Vec3) => Math.hypot(a.x - b.x, a.z - b.z);
 export const anchors = {
@@ -175,4 +187,43 @@ export function recover(state: PuzzleState): PuzzleState {
     sustained: [false, false, false],
     revision: state.revision + 1,
   };
+}
+const CUBE_PIECE_RANGE = 2;
+// Mirrors collectLog/eatBanana: only the matching character, within range of
+// their own plateau, can pick up their cube piece.
+export function collectCubePiece(
+  state: PuzzleState,
+  id: CharacterId,
+  position: Vec3,
+): PuzzleState {
+  if (state.selected !== id || state.cubePieces[id]) return state;
+  const [x, y, z] = PHASE_FOUR_CUBE_PIECE_SPAWNS[id];
+  if (distance(position, { x, y, z }) > CUBE_PIECE_RANGE) return state;
+  const cubePieces = [...state.cubePieces] as PuzzleState["cubePieces"];
+  cubePieces[id] = true;
+  return { ...state, cubePieces };
+}
+export function beginCubeTurn(state: PuzzleState): PuzzleState {
+  if (state.cubeTurning || state.cubeSolved) return state;
+  return { ...state, cubeTurning: true };
+}
+export function finishCubeTurn(
+  state: PuzzleState,
+  cubies: readonly CubieState[],
+): PuzzleState {
+  const cubeLayersSolved = solvedLayerCount(cubies);
+  return {
+    ...state,
+    cubeTurning: false,
+    cubeLayersSolved,
+    cubeSolved: cubeLayersSolved === 3,
+  };
+}
+const CUBE_SHRINE_RANGE = 2.6;
+const cubeShrineCenter = PHASE_FOUR_PLATFORMS.find(
+  (deck) => deck.id === "summit-shrine",
+)!.center;
+export function nearCubeShrine(position: Vec3): boolean {
+  const [x, y, z] = cubeShrineCenter;
+  return distance(position, { x, y, z }) < CUBE_SHRINE_RANGE;
 }

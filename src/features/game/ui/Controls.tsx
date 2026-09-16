@@ -1,12 +1,18 @@
 import { useEffect, useRef, type CSSProperties } from "react";
 import { MonkeyGlyph } from "@/features/story/SceneArt";
 import { runtime, useGame, type Quality } from "../state/store";
-import { CHARACTERS, CHARACTER_KEY_BINDINGS } from "../types";
+import { CHARACTERS, CHARACTER_KEY_BINDINGS, type CharacterId } from "../types";
 import type { Locale } from "@/content/story";
 import Inventory from "./Inventory";
 import styles from "./Game.module.css";
 
 type Instruction = { title: string; body: string };
+// Matches CHARACTERS' order — each monkey's own cube-piece colour.
+const CUBE_PIECE_NAMES: Record<CharacterId, { pt: string; en: string }> = {
+  0: { pt: "branca", en: "white" },
+  1: { pt: "amarela", en: "yellow" },
+  2: { pt: "marrom", en: "brown" },
+};
 
 function MovementDebugPanel() {
   const output = useRef<HTMLPreElement>(null);
@@ -66,14 +72,30 @@ export default function Controls({
   ): Instruction =>
     pt ? { title: titlePt, body: bodyPt } : { title: titleEn, body: bodyEn };
   let hint: Instruction | null = null;
-  if (state.map === "phase4")
-    hint = instruction(
-      "Fase 4 · Vale das copas",
-      "Aproxime-se do cipó que sai da clareira e pressione E para caminhar sobre ele até o platô alto. Para voltar, aproxime-se da ponta no platô e pressione E. No trajeto, WASD segue a direção da câmera; solte as teclas para parar. Dali, siga os cipós até o cume atrás da cachoeira. E: agarrar qualquer trecho ao alcance por baixo; segure no ar para pegar o próximo · WASD: impulso · Espaço: soltar · Shift/Ctrl: subir/descer no cipó · R: reiniciar.",
-      "Phase 4 · Canopy valley",
-      "Approach the vine leaving the clearing and press E to walk along it to the high plateau. To return, approach its end on the plateau and press E. On this rope, WASD follows the camera heading; release the keys to stop. Then swing toward the summit behind the waterfall. E: grab any reachable section from below; hold in flight to catch the next vine · WASD: build momentum · Space: release · Shift/Ctrl: climb up/down the vine · R: restart.",
-    );
-  else if (!state.learned.move || !state.learned.camera)
+  if (state.map === "phase4") {
+    if (!p.cubePieces.every(Boolean)) {
+      const missing = CUBE_PIECE_NAMES[p.selected];
+      hint = p.cubePieces[p.selected]
+        ? instruction(
+            "Fase 4 · Vale das copas",
+            "Sua peça do cubo mágico já foi coletada. Troque de macaco (1, 2 ou 3) para ajudar a encontrar as peças que faltam, ou siga os cipós até o cume atrás da cachoeira.",
+            "Phase 4 · Canopy valley",
+            "Your magic-cube piece is already collected. Switch monkeys (1, 2 or 3) to help find the remaining pieces, or follow the vines to the summit behind the waterfall.",
+          )
+        : instruction(
+            "Fase 4 · Vale das copas",
+            `Cada macaco carrega sua própria peça de um cubo mágico: procure a peça ${missing.pt} e pressione E para coletá-la. Aproxime-se do cipó que sai da clareira e pressione E para caminhar sobre ele até o platô alto; dali, siga os cipós até o cume atrás da cachoeira. E: agarrar qualquer trecho ao alcance por baixo; segure no ar para pegar o próximo · WASD: impulso/direção · Espaço: soltar · Shift/Ctrl: subir/descer no cipó · R: reiniciar.`,
+            "Phase 4 · Canopy valley",
+            `Each monkey carries their own piece of a magic cube: find the ${missing.en} piece and press E to collect it. Approach the vine leaving the clearing and press E to walk along it to the high plateau; from there, follow the vines to the summit behind the waterfall. E: grab any reachable section from below; hold in flight to catch the next vine · WASD: build momentum/steer · Space: release · Shift/Ctrl: climb up/down the vine · R: restart.`,
+          );
+    } else if (!p.cubeSolved)
+      hint = instruction(
+        "O santuário está aberto",
+        "As três peças foram reunidas. Siga além do cume, atrás da cachoeira, até o santuário no alto, e pressione E para abrir o cubo mágico.",
+        "The shrine is open",
+        "All three pieces have been gathered. Continue beyond the summit behind the waterfall to the shrine above, and press E to open the magic cube.",
+      );
+  } else if (!state.learned.move || !state.learned.camera)
     hint = instruction(
       "Explore a ilha",
       "Use WASD ou as setas para caminhar. Clique na tela para olhar ao redor com o mouse; pressione Esc quando quiser liberar o cursor. Aproxime-se de uma banana e pressione E para coletá-la.",
@@ -268,7 +290,7 @@ export default function Controls({
         </button>
       </div>
       {state.movementDebug && <MovementDebugPanel />}
-      {hint && !state.paused && (
+      {hint && !state.paused && !state.cubePuzzleOpen && (
         <div className={styles.hint} role="status">
           <strong>{hint.title}</strong>
           <span>{hint.body}</span>
