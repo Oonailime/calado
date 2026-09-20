@@ -16,15 +16,37 @@ const CUBE_PIECE_NAMES: Record<CharacterId, { pt: string; en: string }> = {
 
 function MovementDebugPanel() {
   const output = useRef<HTMLPreElement>(null);
+  // requestAnimationFrame counts actual browser paint frames, independent of
+  // the R3F render loop's per-frame delta (which this panel only samples
+  // every 100ms below) — a much steadier FPS reading than 1/renderDelta.
+  const fps = useRef(0);
+  useEffect(() => {
+    let frames = 0,
+      last = performance.now(),
+      raf: number;
+    const tick = (now: number) => {
+      frames++;
+      if (now - last >= 500) {
+        fps.current = (frames * 1_000) / (now - last);
+        frames = 0;
+        last = now;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
   useEffect(() => {
     const update = () => {
       const element = output.current;
       if (!element) return;
       const id = useGame.getState().puzzle.selected;
+      const map = useGame.getState().map;
       const frame = runtime.movementDebug[id];
       const formatVector = (value: { x: number; y: number; z: number }) =>
         `${value.x.toFixed(2)}, ${value.y.toFixed(2)}, ${value.z.toFixed(2)}`;
       element.textContent = [
+        `${fps.current.toFixed(0)} fps  map ${map}  pos ${formatVector(frame.position)}`,
         `${frame.state}  physics ${(frame.physicsDt * 1_000).toFixed(2)}ms  render ${(frame.renderDelta * 1_000).toFixed(2)}ms`,
         `v ${formatVector(frame.velocity)}`,
         `g ${formatVector(frame.gravity)}`,

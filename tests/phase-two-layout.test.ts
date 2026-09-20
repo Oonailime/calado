@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Mesh, Raycaster, Vector3 } from "three";
+import { BoxGeometry, Mesh, Raycaster, Vector3 } from "three";
 import { gameMapFromQuery } from "../src/features/game/state/store";
 import {
   createPhaseTwoLava,
@@ -8,7 +8,22 @@ import {
   createPhaseTwoTrees,
   createPhaseTwoMotes,
   createPhaseTwoChess,
+  PHASE_TWO_CHESS_PIECE_KINDS,
+  type ChessPieceKind,
 } from "../src/features/game/world/phaseTwoAssets";
+
+// The real pieces are loaded GLTF models (see PhaseTwo.tsx); stand in with a
+// small box resting on y=0, matching every piece's own base-centered pivot,
+// so createPhaseTwoChess's per-kind scale fit has something sane to measure.
+function stubPieceGeometries(): Record<ChessPieceKind, BoxGeometry> {
+  return Object.fromEntries(
+    PHASE_TWO_CHESS_PIECE_KINDS.map((kind) => {
+      const box = new BoxGeometry(0.2, 0.4, 0.2);
+      box.translate(0, 0.2, 0);
+      return [kind, box];
+    }),
+  ) as Record<ChessPieceKind, BoxGeometry>;
+}
 import {
   PHASE_TWO_VOLCANOES,
   phaseTwoCharacterSpawn,
@@ -30,7 +45,7 @@ test("queens stand on their own color and kings face kings across the board", ()
 });
 
 test("the scaled chess set has stump seats behind both armies, with no old side seats", () => {
-  const g = createPhaseTwoChess(),
+  const g = createPhaseTwoChess(stubPieceGeometries()),
     mesh = new Mesh(g);
   mesh.updateMatrixWorld();
   g.computeBoundingBox();
@@ -117,7 +132,7 @@ test("all phase2 spawns stand above the actual upward-facing terrain triangles",
     assert.ok(hit.distance > 0.55 && hit.distance < 0.8);
     assert.equal(phaseTwoOutsideMap(p), false);
   }
-  assert.equal(phaseTwoOutsideMap({ x: 133, y: 0, z: 0 }), true);
+  assert.equal(phaseTwoOutsideMap({ x: 208, y: 0, z: 0 }), true);
   assert.equal(phaseTwoOutsideMap({ x: 0, y: -25, z: 0 }), true);
   geometry.dispose();
 });

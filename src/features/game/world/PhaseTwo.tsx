@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useLoader } from "@react-three/fiber";
 import {
   CuboidCollider,
   CylinderCollider,
@@ -13,12 +13,14 @@ import {
   BufferGeometry,
   DoubleSide,
   Float32BufferAttribute,
+  Mesh,
   PointLight,
   ShaderMaterial,
   type WebGLProgramParametersWithUniforms,
   UniformsLib,
   UniformsUtils,
 } from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { useGame } from "../state/store";
 import {
   createPhaseTwoChess,
@@ -28,6 +30,9 @@ import {
   createPhaseTwoTerrain,
   createPhaseTwoTrees,
   createPhaseTwoMotes,
+  PHASE_TWO_CHESS_PIECE_KINDS,
+  PHASE_TWO_CHESS_PIECE_URL,
+  type ChessPieceKind,
 } from "./phaseTwoAssets";
 import {
   PHASE_TWO_TABLE,
@@ -237,16 +242,36 @@ function VolcanicAtmosphere({
 }
 
 export default function PhaseTwo({ running }: { running: boolean }) {
+  const pieceModels = useLoader(
+    GLTFLoader,
+    PHASE_TWO_CHESS_PIECE_KINDS.map(PHASE_TWO_CHESS_PIECE_URL),
+  );
+  // Each model is a single recentered, decimated mesh (see
+  // public/assets/models/chess-monkey/ and phaseTwoAssets.ts's Batch-based
+  // pieceFit) — pull the raw geometry back out so createPhaseTwoChess can
+  // merge clones of it into the board's one static batch mesh, same as every
+  // other prop on this map, rather than 32 separate draw calls.
+  const pieceGeometries = useMemo(() => {
+    const entries = PHASE_TWO_CHESS_PIECE_KINDS.map((kind, i) => {
+      let geometry: BufferGeometry | undefined;
+      pieceModels[i].scene.traverse((child) => {
+        if (!geometry && (child as Mesh).isMesh)
+          geometry = (child as Mesh).geometry;
+      });
+      return [kind, geometry!] as const;
+    });
+    return Object.fromEntries(entries) as Record<ChessPieceKind, BufferGeometry>;
+  }, [pieceModels]);
   const assets = useMemo(
     () => ({
       terrain: createPhaseTwoTerrain(),
       rocks: createPhaseTwoRocks(),
       ...createPhaseTwoTrees(),
-      chess: createPhaseTwoChess(),
+      chess: createPhaseTwoChess(pieceGeometries),
       lantern: createPhaseTwoLantern(),
       lava: createPhaseTwoLava(),
     }),
-    [],
+    [pieceGeometries],
   );
   const lava = useRef<ShaderMaterial>(null),
     light = useRef<PointLight>(null),
@@ -346,7 +371,17 @@ export default function PhaseTwo({ running }: { running: boolean }) {
         <mesh
           key={key}
           name={`phase2-${key}`}
-          userData={{ cameraOccluder: key !== "rocks" && key !== "dead" }}
+          // The cherry tree's bark is one huge merged, non-instanced mesh
+          // (trunk + roots + limbs + twigs); unlike islands/phase4's
+          // instanced foliage, three.js has no acceleration structure for
+          // it, so letting the occlusion system raycast against it made the
+          // camera-to-character ray occasionally scan its full triangle
+          // list every sample — a multi-frame hitch whenever a switch (or
+          // just walking) moved that ray near the tree. Not worth fading.
+          userData={{
+            cameraOccluder:
+              key !== "rocks" && key !== "dead" && key !== "bark",
+          }}
           geometry={assets[key]}
           castShadow={quality !== "low"}
           receiveShadow
@@ -363,6 +398,10 @@ export default function PhaseTwo({ running }: { running: boolean }) {
       ))}
       <mesh
         name="phase2-cherry-blossoms"
+        // Thousands of merged, non-instanced petal quads (see
+        // createPhaseTwoTrees) — even more expensive to raycast against
+        // unaccelerated than the bark above, and not worth fading either.
+        userData={{ cameraOccluder: false }}
         geometry={assets.blossoms}
         castShadow={quality !== "low"}
         receiveShadow
@@ -390,7 +429,10 @@ export default function PhaseTwo({ running }: { running: boolean }) {
         />
       </mesh>
       {PHASE_TWO_VOLCANOES.map((v) => (
-        <group key={v.seed} position={[v.x, ground(v.x, v.z) + 0.6, v.z]}>
+        // A fixed clearance above the crater floor reads as a visible gap on
+        // the smaller volcanoes (proportionally larger relative to their own
+        // height) — keep it tiny so the glow always hugs the surface.
+        <group key={v.seed} position={[v.x, ground(v.x, v.z) + 0.08, v.z]}>
           <mesh rotation={[-Math.PI / 2, 0, 0]}>
             <circleGeometry args={[v.radius * 0.075, 20]} />
             <meshBasicMaterial color="#ff7026" toneMapped={false} />

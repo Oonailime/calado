@@ -7,12 +7,10 @@ import {
   Float32BufferAttribute,
   Euler,
   IcosahedronGeometry,
-  LatheGeometry,
   Matrix4,
   Quaternion,
   SphereGeometry,
   TorusGeometry,
-  Vector2,
   Vector3,
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -89,7 +87,7 @@ class Batch {
 }
 
 export function createPhaseTwoTerrain() {
-  const segments = 240,
+  const segments = 300,
     positions: number[] = [],
     colors: number[] = [],
     indices: number[] = [];
@@ -97,9 +95,9 @@ export function createPhaseTwoTerrain() {
     light = new Color("#69635e"),
     c = new Color();
   for (let row = 0; row <= segments; row++) {
-    const z = -170 + row;
+    const z = -260 + (row * 520) / segments;
     for (let col = 0; col <= segments; col++) {
-      const x = -140 + (col * 280) / segments,
+      const x = -220 + (col * 440) / segments,
         y = ground(x, z);
       const n = phaseTwoNoise(x * 0.63, z * 0.63);
       c.copy(dark).lerp(
@@ -125,10 +123,22 @@ export function createPhaseTwoTerrain() {
 
 export function createPhaseTwoRocks() {
   const batch = new Batch();
-  for (let i = 0; i < 760; i++) {
-    const x = (rand(i * 7 + 1) - 0.5) * 240,
-      z = rand(i * 7 + 2) * 205 - 145;
+  // The tallest volcano's own summit/crater rim reads oddly with a loose
+  // scattered rock perched on it — keep that small cap clear.
+  const tallest = PHASE_TWO_VOLCANOES.reduce((a, b) =>
+    b.height > a.height ? b : a,
+  );
+  // Scattered across the same enlarged, now-symmetric footprint as the
+  // terrain (see createPhaseTwoTerrain) so rocks keep covering ground in
+  // every direction out to the new boundary, not just in front of it — at a
+  // lower density than the original per-area count, which felt too dense
+  // once spread over this much bigger area.
+  for (let i = 0; i < 1200; i++) {
+    const x = (rand(i * 7 + 1) - 0.5) * 380,
+      z = (rand(i * 7 + 2) - 0.5) * 470;
     if (Math.hypot((x + 4) / 1.25, z - 5) < 11) continue;
+    if (Math.hypot(x - tallest.x, z - tallest.z) < tallest.radius * 0.25)
+      continue;
     const size = 0.3 + Math.pow(rand(i * 7 + 3), 3) * 4.8;
     const g = new IcosahedronGeometry(1, 1),
       pos = g.getAttribute("position");
@@ -388,9 +398,13 @@ export function createPhaseTwoTrees() {
   const petalSources = new BufferGeometry();
   petalSources.setAttribute("position", new Float32BufferAttribute(sources, 3));
   const dead = new Batch();
-  for (let i = 0; i < 145; i++) {
-    const x = 18 + rand(i * 6 + 1) * 43,
-      z = -34 + rand(i * 6 + 2) * 72;
+  // Spread over a larger patch than the original, reaching toward both the
+  // outer and the mirrored-behind volcano rings (see PHASE_TWO_VOLCANOES) so
+  // the dry grove keeps the valley floor dressed all the way out on every
+  // side instead of stopping well short of it.
+  for (let i = 0; i < 650; i++) {
+    const x = 18 + rand(i * 6 + 1) * 90,
+      z = -63 + rand(i * 6 + 2) * 260;
     if (ground(x, z) > 4) continue;
     const y = ground(x, z),
       h = 3 + rand(i * 6 + 3) * 7;
@@ -423,7 +437,61 @@ export function createPhaseTwoTrees() {
   };
 }
 
-export function createPhaseTwoChess() {
+export type ChessPieceKind =
+  | "pawn"
+  | "rook"
+  | "knight"
+  | "bishop"
+  | "queen"
+  | "king";
+
+// Base folder for the imported monkey-sculpted piece models — see
+// public/assets/models/chess-monkey/ (recentered + decimated from the
+// assets_referencia/chess_monkey .blend sources). Exported so PhaseTwo.tsx
+// can load them all with a single useLoader(GLTFLoader, [...]) call.
+export const PHASE_TWO_CHESS_PIECE_KINDS: ChessPieceKind[] = [
+  "pawn",
+  "rook",
+  "knight",
+  "bishop",
+  "queen",
+  "king",
+];
+export const PHASE_TWO_CHESS_PIECE_URL = (kind: ChessPieceKind) =>
+  `/assets/models/chess-monkey/${kind}.glb`;
+
+// Matches the previous procedural set's own height hierarchy exactly — only
+// the pawn and the king stood out from the rest — so swapping in the sculpted
+// monkey pieces keeps "the same proportion" the board already had.
+const PIECE_HEIGHT: Record<ChessPieceKind, number> = {
+  pawn: 0.28,
+  rook: 0.43,
+  knight: 0.43,
+  bishop: 0.43,
+  queen: 0.43,
+  king: 0.52,
+};
+// The sculpts are stockier than the old lathe-turned pieces (a monkey figure
+// rather than an abstract spindle), so scaling every one of them to hit its
+// target height outright would spill well past its own square at the board's
+// tight 0.3 spacing. Capping the horizontal scale — independent of the
+// vertical one — keeps every piece's footprint inside its square while still
+// hitting the full target height whenever the model's own proportions allow.
+const PIECE_FOOTPRINT_CAP = 0.26;
+
+function pieceFit(geometry: BufferGeometry, targetHeight: number) {
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox!;
+  const height = box.max.y - box.min.y;
+  const footprint = Math.max(box.max.x - box.min.x, box.max.z - box.min.z);
+  const vertical = targetHeight / height;
+  const horizontal = Math.min(vertical, PIECE_FOOTPRINT_CAP / footprint);
+  return { vertical, horizontal };
+}
+
+export function createPhaseTwoChess(
+  pieces: Record<ChessPieceKind, BufferGeometry>,
+) {
   const batch = new Batch();
   const x = 0,
     z = 0,
@@ -443,92 +511,31 @@ export function createPhaseTwoChess() {
       );
     }
   const order = PHASE_TWO_CHESS_BACK_RANK;
+  const fit = Object.fromEntries(
+    PHASE_TWO_CHESS_PIECE_KINDS.map((kind) => [
+      kind,
+      pieceFit(pieces[kind], PIECE_HEIGHT[kind]),
+    ]),
+  ) as Record<ChessPieceKind, { vertical: number; horizontal: number }>;
+  // The armies face one another across the board rather than both facing the
+  // same way the model happened to be sculpted in.
+  const facing = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI);
   for (let side = 0; side < 2; side++)
     for (let row = 0; row < 2; row++)
       for (let col = 0; col < 8; col++) {
         const px = x + (col - 3.5) * 0.3,
           pz = z + ((side ? 7 - row : row) - 3.5) * 0.3;
         const py = y + 1.415,
-          kind = row ? "pawn" : order[col],
-          color = side ? "#252125" : "#e7b967";
-        const height = kind === "pawn" ? 0.28 : kind === "king" ? 0.52 : 0.43;
-        const profile = [
-          [0, 0],
-          [0.1, 0],
-          [0.105, 0.035],
-          [0.075, 0.06],
-          [0.055, 0.09],
-          [0.031, height * 0.65],
-          [0.072, height * 0.73],
-          [0.062, height * 0.81],
-          [0.036, height * 0.85],
-          [0, height * 0.85],
-        ];
+          kind: ChessPieceKind = row ? "pawn" : order[col],
+          color = side ? "#4a2f1c" : "#f2ede2";
+        const { vertical, horizontal } = fit[kind];
         batch.add(
-          new LatheGeometry(
-            profile.map(([r, h]) => new Vector2(r, h)),
-            12,
-          ),
+          pieces[kind].clone(),
           color,
           [px, py, pz],
+          [horizontal, vertical, horizontal],
+          side ? facing : undefined,
         );
-        if (kind === "knight") {
-          batch.add(
-            new SphereGeometry(1, 8, 6),
-            color,
-            [px, py + height * 0.87, pz],
-            [0.055, 0.105, 0.05],
-          );
-          batch.box(
-            [px, py + height, pz + (side ? -0.04 : 0.04)],
-            [0.065, 0.07, 0.13],
-            color,
-          );
-          for (const dx of [-0.028, 0.028])
-            batch.box(
-              [px + dx, py + height + 0.05, pz - 0.015],
-              [0.018, 0.055, 0.025],
-              color,
-            );
-        } else if (kind === "rook") {
-          batch.add(new CylinderGeometry(0.082, 0.065, 0.065, 12), color, [
-            px,
-            py + height * 0.88,
-            pz,
-          ]);
-          for (let k = 0; k < 4; k++)
-            batch.box(
-              [
-                px + Math.cos((k * Math.PI) / 2) * 0.061,
-                py + height,
-                pz + Math.sin((k * Math.PI) / 2) * 0.061,
-              ],
-              [0.04, 0.07, 0.04],
-              color,
-            );
-        } else {
-          batch.add(
-            new SphereGeometry(1, 10, 8),
-            color,
-            [px, py + height * 0.94, pz],
-            [0.065, kind === "bishop" ? 0.1 : 0.061, 0.065],
-          );
-          if (kind === "king") {
-            batch.box([px, py + height + 0.1, pz], [0.03, 0.16, 0.03], color);
-            batch.box(
-              [px, py + height + 0.125, pz],
-              [0.105, 0.027, 0.03],
-              color,
-            );
-          }
-          if (kind === "queen")
-            for (let k = 0; k < 6; k++)
-              batch.add(new SphereGeometry(0.018, 6, 4), color, [
-                px + Math.cos(k) * 0.065,
-                py + height + 0.07,
-                pz + Math.sin(k) * 0.065,
-              ]);
-        }
       }
   for (const sz of [-2.35, 2.35]) {
     batch.add(new CylinderGeometry(0.61, 0.72, 0.78, 9), "#463b35", [

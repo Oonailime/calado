@@ -32,6 +32,19 @@ export const PHASE_TWO_VOLCANOES = [
   { x: -88, z: -39, radius: 22, height: 25, seed: 31 },
   { x: 67, z: -6, radius: 23, height: 30, seed: 41 },
   { x: 105, z: -127, radius: 32, height: 42, seed: 47 },
+  // A separate, deliberately sparser group behind the clearing, hand-spaced
+  // so no pair (and no pair with the front cluster above) ends up close
+  // enough to merge into one blob — fewer peaks, kept well clear of the
+  // others and of the clearing/spawn, reaching about as far back as the
+  // front cluster reaches forward so the range encircles the sanctuary.
+  { x: 0, z: 190, radius: 40, height: 66, seed: 101 },
+  { x: -90, z: 150, radius: 26, height: 34, seed: 103 },
+  { x: 90, z: 150, radius: 27, height: 36, seed: 107 },
+  { x: -150, z: 95, radius: 24, height: 30, seed: 109 },
+  { x: 150, z: 95, radius: 25, height: 32, seed: 113 },
+  { x: -55, z: 60, radius: 20, height: 26, seed: 127 },
+  { x: 60, z: 55, radius: 21, height: 27, seed: 131 },
+  { x: 0, z: 110, radius: 22, height: 28, seed: 137 },
 ] as const;
 
 export function phaseTwoRandom(seed: number) {
@@ -77,7 +90,17 @@ export function phaseTwoGroundHeight(x: number, z: number) {
       -4 + v.height * slope * crater + (t < 1 ? ridges + rough * t : 0),
     );
   }
-  // A flat sanctuary blends into a steep rocky escarpment, with a walkable rear approach.
+  // A flat sanctuary blends into a steep rocky escarpment on most sides, but
+  // a narrow lane south of it (around x=-4) is carved into a gentle ramp —
+  // one walkable route up from the valley floor instead of a sheer climb —
+  // fading out at both ends so it never flattens ground far from the climb.
+  const pathLength =
+    MathUtils.smoothstep(z, -44, -40) * (1 - MathUtils.smoothstep(z, -8, -4));
+  const pathWidth = 1 - MathUtils.smoothstep(Math.abs(x + 4), 3, 6);
+  const pathProgress = MathUtils.clamp((z + 40) / 36, 0, 1);
+  const pathEase = pathProgress * pathProgress * (3 - 2 * pathProgress);
+  const pathHeight = MathUtils.lerp(-4, 6, pathEase);
+  height = MathUtils.lerp(height, pathHeight, pathWidth * pathLength);
   const clearing =
     1 - MathUtils.smoothstep(Math.hypot((x + 4) / 1.25, z - 5), 9, 14);
   return MathUtils.lerp(height, 6 + Math.sin(x * 0.4) * 0.035, clearing);
@@ -92,8 +115,8 @@ export function phaseTwoCharacterSpawn(id: CharacterId): Vec3 {
 export function phaseTwoOutsideMap(position: Vec3) {
   return (
     position.y < -24 ||
-    Math.abs(position.x) > 132 ||
-    position.z < -158 ||
-    position.z > 62
+    Math.abs(position.x) > 207 ||
+    position.z < -242 ||
+    position.z > 242
   );
 }
