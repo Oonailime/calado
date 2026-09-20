@@ -217,6 +217,20 @@
   text-align: center;
   width: min(620px, calc(100vw - 40px));
 }
+.root[data-map="phase2"] .hint {
+  top: 25px;
+  bottom: auto;
+  left: 30px;
+  transform: none;
+  width: min(365px, calc(100vw - 310px));
+  text-align: left;
+  background: #242029d9;
+  border-color: #dcafbd40;
+}
+.root[data-map="phase2"] .portraits {
+  left: 30px;
+  transform: none;
+}
 .hint strong,
 .hint span {
   display: block;

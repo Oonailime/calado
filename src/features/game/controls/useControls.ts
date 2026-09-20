@@ -2,6 +2,14 @@ import { useEffect } from "react";
 import { runtime, useGame } from "../state/store";
 import { anchors, distance, LOCK_RANGE, nearCubeShrine } from "../state/rules";
 import { CHARACTER_KEY_BINDINGS } from "../types";
+// Multiplier range applied to each map's own base follow distance (see
+// FollowCamera.tsx) — comfortably closer/farther without letting the wheel
+// clip the camera into the character or lose it in the distance.
+// Exported so FollowCamera.tsx can blend the volcanic map's camera between
+// its own wide framing and the other maps' close one across this same range.
+export const ZOOM_MIN = 0.55;
+const ZOOM_MAX = 1.9;
+const ZOOM_SPEED = 0.0012;
 export function useControls(active: boolean, onExit: () => void) {
   const paused = useGame((s) => s.paused);
   const lockOpen = useGame((s) => s.lockOpen);
@@ -99,12 +107,14 @@ export function useControls(active: boolean, onExit: () => void) {
         // The gesture communicates who was invoked even when the character is
         // away from the checkpoint and the gameplay effect cannot activate.
         runtime.triggerPose(id);
+        if (state.map === "phase2") return;
         if (id === 2) {
           state.build(runtime.positions[id]);
         } else state.power(id, runtime.positions[id]);
       }
       if (e.code === "KeyE" || e.code === "Enter") {
         runtime.interact = true;
+        if (state.map === "phase2") return;
         const id = state.puzzle.selected;
         const position = runtime.positions[id];
         if (state.eat(id, position)) {
@@ -164,6 +174,24 @@ export function useControls(active: boolean, onExit: () => void) {
     };
     const wheel = (e: WheelEvent) => {
       e.preventDefault();
+      const state = useGame.getState();
+      // Left fixed while focusing the shrine's cube — that view already
+      // sits at a deliberately tight, consistent distance.
+      if (state.paused || state.cubePuzzleOpen) return;
+      runtime.zoom = Math.max(
+        ZOOM_MIN,
+        Math.min(ZOOM_MAX, runtime.zoom + e.deltaY * ZOOM_SPEED),
+      );
+    };
+    // Ctrl+W (and other tab-close paths) can't actually be blocked by a
+    // webpage — browsers deliberately don't allow that. This is the only
+    // thing the web platform permits: a native, non-customizable "leave
+    // site?" confirmation, shown only while a run is actually in progress
+    // (not while paused, where closing loses nothing unsaved).
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (useGame.getState().paused) return;
+      e.preventDefault();
+      e.returnValue = "";
     };
     // A click directly on the canvas engages pointer lock, after which
     // mousemove above drives the camera continuously — no more holding the
@@ -197,6 +225,7 @@ export function useControls(active: boolean, onExit: () => void) {
     window.addEventListener("mousemove", mouse);
     window.addEventListener("click", click);
     window.addEventListener("wheel", wheel, { passive: false });
+    window.addEventListener("beforeunload", beforeUnload);
     return () => {
       runtime.clear();
       window.removeEventListener("keydown", down);
@@ -206,6 +235,7 @@ export function useControls(active: boolean, onExit: () => void) {
       window.removeEventListener("mousemove", mouse);
       window.removeEventListener("click", click);
       window.removeEventListener("wheel", wheel);
+      window.removeEventListener("beforeunload", beforeUnload);
     };
   }, [active, onExit]);
 }

@@ -72,7 +72,14 @@ export default function Controls({
   ): Instruction =>
     pt ? { title: titlePt, body: bodyPt } : { title: titleEn, body: bodyEn };
   let hint: Instruction | null = null;
-  if (state.map === "phase4") {
+  if (state.map === "phase2") {
+    hint = instruction(
+      "Fase 2 · Jardim das cinzas",
+      "Explore a cerejeira e a mesa de xadrez diante do vale vulcânico. WASD: caminhar · Espaço: pular · Clique e mova o mouse: olhar ao redor · 1, 2, 3: trocar de macaco · R: voltar à clareira.",
+      "Phase 2 · Garden of ashes",
+      "Explore the cherry tree and chess table overlooking the volcanic valley. WASD: walk · Space: jump · Click and move the mouse: look around · 1, 2, 3: switch monkeys · R: return to the clearing.",
+    );
+  } else if (state.map === "phase4") {
     if (!p.cubePieces.every(Boolean)) {
       const missing = CUBE_PIECE_NAMES[p.selected];
       hint = p.cubePieces[p.selected]
@@ -120,10 +127,10 @@ export default function Controls({
               "Press 1 to control Kikazaru, the golden monkey. Take him to the golden circle in front of the bridge.",
             )
           : instruction(
-              "Ative o poder de Kikazaru",
-              `Posicione Kikazaru dentro do círculo dourado e pressione ${f}. O poder dele marcará as três madeiras escondidas.`,
-              "Activate Kikazaru's power",
-              `Place Kikazaru inside the golden circle and press ${f}. His power will mark the three hidden pieces of timber.`,
+              "Ative o poder de Kikazaru (1)",
+              `Posicione Kikazaru (1) dentro do círculo dourado e pressione ${f}. O poder dele marcará as três madeiras escondidas.`,
+              "Activate Kikazaru's power (1)",
+              `Place Kikazaru (1) inside the golden circle and press ${f}. His power will mark the three hidden pieces of timber.`,
             );
     else if (!p.logs.every(Boolean))
       hint =
@@ -136,9 +143,9 @@ export default function Controls({
             )
           : instruction(
               "Colete as três madeiras",
-              "Aproxime Iwazaru de cada palmeira marcada e pressione E ou Enter. O contador no inventário mostra quanto ainda falta.",
+              "Aproxime Iwazaru (3) de cada palmeira marcada e pressione E ou Enter. O contador no inventário mostra quanto ainda falta.",
               "Collect all three pieces",
-              "Take Iwazaru to each marked palm and press E or Enter. The inventory counter shows how many pieces remain.",
+              "Take Iwazaru (3) to each marked palm and press E or Enter. The inventory counter shows how many pieces remain.",
             );
     else
       hint =
@@ -151,9 +158,9 @@ export default function Controls({
             )
           : instruction(
               "Construa a ponte",
-              "Leve Iwazaru ao totem à direita da ponte e pressione E ou Enter para usar as madeiras.",
+              "Leve Iwazaru (3) ao totem à direita da ponte e pressione E ou Enter para usar as madeiras.",
               "Build the bridge",
-              "Take Iwazaru to the totem on the right of the bridge and press E or Enter to use the timber.",
+              "Take Iwazaru (3) to the totem on the right of the bridge and press E or Enter to use the timber.",
             );
   } else if (!p.unlocked && state.zone < 3)
     hint = instruction(
@@ -173,9 +180,9 @@ export default function Controls({
               "Press 2 to control Mizaru, the silver monkey, and take him to the silver symbol.",
             )
           : instruction(
-              "Ative o poder de Mizaru",
+              "Ative o poder de Mizaru (2)",
               `Fique sobre o símbolo prateado e pressione ${f}. Ao trocar de personagem, o poder continuará ativo.`,
-              "Activate Mizaru's power",
+              "Activate Mizaru's power (2)",
               `Stand on the silver symbol and press ${f}. His power will remain active when you switch characters.`,
             );
     else if (!p.powers[1])
@@ -183,15 +190,15 @@ export default function Controls({
         p.selected !== 1
           ? instruction(
               "Silencie a barreira",
-              "Mantenha o poder de Mizaru ativo e pressione 1 para controlar Kikazaru. Leve-o ao símbolo dourado.",
+              "Mantenha o poder de Mizaru (2) ativo e pressione 1 para controlar Kikazaru. Leve-o ao símbolo dourado.",
               "Silence the barrier",
-              "Keep Mizaru's power active and press 1 to control Kikazaru. Take him to the golden symbol.",
+              "Keep Mizaru (2)'s power active and press 1 to control Kikazaru. Take him to the golden symbol.",
             )
           : instruction(
-              "Ative o poder de Kikazaru",
-              `Fique sobre o símbolo dourado e pressione ${f}. Com os dois poderes ativos, Mizaru poderá perceber a sequência.`,
-              "Activate Kikazaru's power",
-              `Stand on the golden symbol and press ${f}. With both powers active, Mizaru will be able to perceive the sequence.`,
+              "Ative o poder de Kikazaru (1)",
+              `Fique sobre o símbolo dourado e pressione ${f}. Com os dois poderes ativos, Mizaru (2) poderá perceber a sequência.`,
+              "Activate Kikazaru's power (1)",
+              `Stand on the golden symbol and press ${f}. With both powers active, Mizaru (2) will be able to perceive the sequence.`,
             );
     else if (p.selected === 0)
       hint = instruction(
@@ -209,9 +216,9 @@ export default function Controls({
       );
     else
       hint = instruction(
-        "Observe a sequência com Mizaru",
+        "Observe a sequência com Mizaru (2)",
         "Pressione 2 para voltar a Mizaru. Somente ele consegue perceber as quatro ondas que formam cada algarismo.",
-        "Observe the sequence with Mizaru",
+        "Observe the sequence with Mizaru (2)",
         "Press 2 to return to Mizaru. Only he can perceive the four waves that form each digit.",
       );
   } else if (p.bridge && p.unlocked && !p.built && state.zone === 3)
@@ -225,9 +232,9 @@ export default function Controls({
           )
         : instruction(
             "Ative o mecanismo final",
-            `Leve Iwazaru ao mecanismo atrás do cadeado e pressione E, Enter ou ${f} para concluir.`,
+            `Leve Iwazaru (3) ao mecanismo atrás do cadeado e pressione E, Enter ou ${f} para concluir.`,
             "Activate the final mechanism",
-            `Take Iwazaru to the mechanism behind the padlock and press E, Enter, or ${f} to finish.`,
+            `Take Iwazaru (3) to the mechanism behind the padlock and press E, Enter, or ${f} to finish.`,
           );
   else if (p.built)
     hint = instruction(
@@ -238,7 +245,7 @@ export default function Controls({
     );
   return (
     <>
-      <Inventory locale={locale} />
+      {state.map !== "phase2" && <Inventory locale={locale} />}
       <div className={styles.bar}>
         <button
           className={styles.icon}

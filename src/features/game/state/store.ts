@@ -28,10 +28,10 @@ import {
   type PuzzleState,
 } from "./rules";
 export type Quality = "low" | "medium" | "high" | "ultra";
-export type GameMap = "islands" | "phase4";
+export type GameMap = "islands" | "phase2" | "phase4";
 
 export function gameMapFromQuery(value: string | null): GameMap | undefined {
-  if (value === "islands" || value === "phase4") return value;
+  if (value === "islands" || value === "phase2" || value === "phase4") return value;
   return undefined;
 }
 type Store = {
@@ -243,6 +243,10 @@ export const runtime = {
   keys: new Set<string>(),
   yaw: 0,
   pitch: 0.38,
+  // Mouse-wheel camera zoom — a multiplier applied to each map's own base
+  // follow distance (see FollowCamera.tsx), clamped in useControls.ts's
+  // wheel handler so it can't be scrolled past a comfortable in/out range.
+  zoom: 1,
   // Which raw direction is currently "Right/Up/Front" for the cube puzzle's
   // view-relative U/D/L/R/F/B notation (see world/rubiksCubeView.ts) —
   // updated instantly and persistently by RubiksCubePuzzle.tsx's D-pad

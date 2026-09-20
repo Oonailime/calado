@@ -19,6 +19,7 @@ import { PHYSICS_FIXED_DT, WORLD_GRAVITY } from "./characters/locomotionConfig";
 import FollowCamera from "./camera/FollowCamera";
 import World, { AtmosphereFog } from "./world/World";
 import PhaseFour from "./world/PhaseFour";
+import PhaseTwo from "./world/PhaseTwo";
 import Telemetry from "./world/Telemetry";
 import { SHADOW_FRUSTUM } from "./world/shadowFrustum";
 import { QUALITY_PROFILES } from "./quality";
@@ -99,15 +100,16 @@ export default function Game({ active, locale, onExit }: GameProps) {
   useEffect(() => {
     if (puzzle.unlocked) useGame.getState().configure({ lockOpen: false });
   }, [puzzle.unlocked]);
-  // `?map=phase4` skips directly to phase four without changing the normal
-  // story progression, for gameplay iteration.
+  // Direct map links bypass the story and mount their own playable world.
   useEffect(() => {
     if (!active) return;
     const requestedMap = gameMapFromQuery(
       new URLSearchParams(window.location.search).get("map"),
     );
-    if (requestedMap === "phase4")
-      useGame.getState().configure({ map: "phase4", paused: false });
+    if (requestedMap) {
+      useGame.getState().configure({ map: requestedMap, paused: false });
+      if (requestedMap === "phase2") { runtime.yaw = 0; runtime.pitch = 0.22; }
+    }
   }, [active]);
   useEffect(() => {
     const media = matchMedia("(prefers-reduced-motion: reduce)");
@@ -159,13 +161,13 @@ export default function Game({ active, locale, onExit }: GameProps) {
       <WorldBoundary fallback={failure}>
         <div
           className={`${styles.canvas} ${
-            puzzle.selected === 0 ? styles.blindVision : ""
+            puzzle.selected === 0 && map !== "phase2" ? styles.blindVision : ""
           }`}
         >
           <Canvas
             shadows={qualityProfile.shadow}
             dpr={qualityProfile.dpr}
-            camera={{ position: [0, 6, 12], fov: 48, near: 0.1, far: 160 }}
+            camera={{ position: [0, 6, 12], fov: 48, near: 0.1, far: map === "phase2" ? 420 : 160 }}
             frameloop={active && !paused ? "always" : "demand"}
             fallback={failure}
             gl={{
@@ -174,18 +176,18 @@ export default function Game({ active, locale, onExit }: GameProps) {
               stencil: false,
             }}
           >
-            <color attach="background" args={[map === "phase4" ? "#a4d6d1" : "#a9d9e8"]} />
-            {map === "phase4" ? <fog attach="fog" args={["#a4d6d1", 38, 115]} /> : <AtmosphereFog />}
-            <hemisphereLight args={["#f4e3ae", "#3a4933", map === "phase4" ? 1.65 : 2.1]} />
+            <color attach="background" args={[map === "phase2" ? "#48434a" : map === "phase4" ? "#a4d6d1" : "#a9d9e8"]} />
+            {map === "phase2" ? <fog attach="fog" args={["#48434a", 55, 240]} /> : map === "phase4" ? <fog attach="fog" args={["#a4d6d1", 38, 115]} /> : <AtmosphereFog />}
+            <hemisphereLight args={map === "phase2" ? ["#b9bbc9", "#403030", 1.4] : ["#f4e3ae", "#3a4933", map === "phase4" ? 1.65 : 2.1]} />
             <directionalLight
               key={quality}
-              position={map === "phase4" ? [24, 48, -12] : [10, 18, 8]}
-              color="#ffd8a0"
-              intensity={map === "phase4" ? 2.2 : 3.1}
+              position={map === "phase2" ? [-24, 48, 18] : map === "phase4" ? [24, 48, -12] : [10, 18, 8]}
+              color={map === "phase2" ? "#d3ccdf" : "#ffd8a0"}
+              intensity={map === "phase2" ? 1.5 : map === "phase4" ? 2.2 : 3.1}
               castShadow={quality !== "low"}
               shadow-mapSize={[
-                qualityProfile.shadowMapSize,
-                qualityProfile.shadowMapSize,
+                map === "phase2" ? Math.min(2048, qualityProfile.shadowMapSize) : qualityProfile.shadowMapSize,
+                map === "phase2" ? Math.min(2048, qualityProfile.shadowMapSize) : qualityProfile.shadowMapSize,
               ]}
               shadow-camera-left={SHADOW_FRUSTUM.left}
               shadow-camera-right={SHADOW_FRUSTUM.right}
@@ -209,7 +211,9 @@ export default function Game({ active, locale, onExit }: GameProps) {
                 gravity={[WORLD_GRAVITY.x, WORLD_GRAVITY.y, WORLD_GRAVITY.z]}
                 timeStep={PHYSICS_FIXED_DT}
               >
-                {map === "phase4" ? (
+                {map === "phase2" ? (
+                  <PhaseTwo running={running} />
+                ) : map === "phase4" ? (
                   <PhaseFour running={running} />
                 ) : (
                   <World running={running} onPortalEnter={onPortalEnter} />

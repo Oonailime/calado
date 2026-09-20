@@ -9,6 +9,7 @@ import {
   Vector3,
 } from "three";
 import { runtime, useGame } from "../state/store";
+import { ZOOM_MIN } from "../controls/useControls";
 import { PHASE_FOUR_PLATFORMS } from "../world/phaseFourLayout";
 import { occlusionRaycast } from "./occlusionRaycast";
 import { InstanceOcclusion } from "./instanceOcclusion";
@@ -16,6 +17,19 @@ import { InstanceOcclusion } from "./instanceOcclusion";
 const SHRINE_FOCUS = PHASE_FOUR_PLATFORMS.find(
   (deck) => deck.id === "summit-shrine",
 )!.center;
+
+// The volcanic map's camera fades between the standard close, character-
+// hugging framing every other map uses (at minimum zoom, so scrolling all
+// the way in reads the same as any other map) and its own wide, pulled-back
+// valley framing (at rest and beyond, where scrolling out already composes
+// the whole scene correctly and is left untouched).
+const STANDARD_HEIGHT = 0.55;
+const STANDARD_DISTANCE = 8;
+const STANDARD_RISE_BASE = 2.1;
+const PHASE2_HEIGHT = 6;
+const PHASE2_DISTANCE = 28;
+const PHASE2_RISE_BASE = 5;
+const PHASE2_PULL_BACK = 14;
 
 const OCCLUDER_OPACITY = 0.16;
 const PLAYER_CLEARANCE = 0.35;
@@ -168,16 +182,48 @@ export default function FollowCamera({ running }: { running: boolean }) {
     // While the shrine's puzzle overlay is open, frame the cube itself
     // instead of the selected character — same orbit math, tighter distance.
     const focusingCube = state.cubePuzzleOpen;
+    // Left at 1x while focusing the shrine — that view keeps its own fixed,
+    // deliberately tight distance regardless of the player's zoom setting.
+    const zoom = focusingCube ? 1 : runtime.zoom;
+    // 0 at minimum zoom (matches every other map's close framing exactly),
+    // 1 at rest and beyond (the volcanic map's own wide valley framing,
+    // scaled up further by `zoom` below exactly as before).
+    const phase2Blend =
+      state.map === "phase2"
+        ? Math.min(1, Math.max(0, (zoom - ZOOM_MIN) / (1 - ZOOM_MIN)))
+        : 0;
     const p = focusingCube
       ? { x: SHRINE_FOCUS[0], y: SHRINE_FOCUS[1] + 1.85, z: SHRINE_FOCUS[2] }
       : runtime.positions[state.puzzle.selected];
-    const height = focusingCube ? 0 : 0.55;
-    const distance = focusingCube ? 3.6 : state.map === "phase4" ? 10 : 8;
+    const height = focusingCube
+      ? 0
+      : state.map === "phase2"
+        ? STANDARD_HEIGHT + (PHASE2_HEIGHT - STANDARD_HEIGHT) * phase2Blend
+        : 0.55;
+    const distanceBase = focusingCube
+      ? 3.6
+      : state.map === "phase2"
+        ? STANDARD_DISTANCE + (PHASE2_DISTANCE - STANDARD_DISTANCE) * phase2Blend
+        : state.map === "phase4"
+          ? 10
+          : 8;
+    const distance = distanceBase * zoom;
     player.current.set(p.x, p.y + height, p.z);
+    if (state.map === "phase2") {
+      const pull = PHASE2_PULL_BACK * phase2Blend;
+      player.current.x -= Math.sin(runtime.yaw) * pull;
+      player.current.z -= Math.cos(runtime.yaw) * pull;
+    }
     look.current.lerp(player.current, 1 - Math.exp(-dt * 7));
+    const riseBase = focusingCube
+      ? 0.9
+      : state.map === "phase2"
+        ? STANDARD_RISE_BASE + (PHASE2_RISE_BASE - STANDARD_RISE_BASE) * phase2Blend
+        : 2.1;
+    const rise = (riseBase + pitch * (focusingCube ? 2 : 5)) * zoom;
     target.current.set(
       p.x + Math.sin(runtime.yaw) * distance,
-      p.y + height + (focusingCube ? 0.9 : 2.1) + pitch * (focusingCube ? 2 : 5),
+      p.y + height + rise,
       p.z + Math.cos(runtime.yaw) * distance,
     );
     camera.position.lerp(
@@ -185,6 +231,8 @@ export default function FollowCamera({ running }: { running: boolean }) {
       1 - Math.exp(-dt * (state.reduced ? 10 : 5)),
     );
     camera.lookAt(look.current);
+    // Occlusion still targets the character when the volcanic camera frames the valley.
+    if (state.map === "phase2") player.current.set(p.x, p.y + 0.55, p.z);
 
     // The occlusion system below fades anything between the camera and
     // `player.current` — meant for trees blocking the character. While

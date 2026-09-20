@@ -11,9 +11,10 @@ import {
 } from "@react-three/rapier";
 import { Group, Matrix4, Quaternion, Vector3 } from "three";
 import { runtime, useGame } from "../state/store";
-import { CHARACTERS, type CharacterId, type Vec3 } from "../types";
+import type { CharacterId, Vec3 } from "../types";
 import Monkey from "./Monkey";
 import MovementDebug from "./MovementDebug";
+import SelectionVine from "./SelectionVine";
 import {
   handoffShoulderTurn,
   pendulumBodyBasis,
@@ -28,6 +29,7 @@ import {
   characterSpawn,
 } from "../world/layout";
 import { safeGround, waterDepth } from "../world/terrain";
+import { phaseTwoCharacterSpawn, phaseTwoOutsideMap } from "../world/phaseTwoLayout";
 import { followerDelaySeconds, shouldFollowerJump } from "./followerNavigation";
 import type {
   HandLocomotion,
@@ -272,6 +274,7 @@ function easeInOut(progress: number) {
 }
 
 function sitesForMap(map: ReturnType<typeof useGame.getState>["map"]) {
+  if (map === "phase2") return [];
   if (map === "phase4") return PHASE_FOUR_SITES;
   return ARBOREAL_SITES;
 }
@@ -1011,7 +1014,9 @@ export default function Character({
   useEffect(() => {
     const puzzleState = useGame.getState().puzzle;
     const spawn =
-      map === "phase4"
+      map === "phase2"
+        ? phaseTwoCharacterSpawn(id)
+        : map === "phase4"
         ? phaseFourCharacterSpawn(id)
         : characterSpawn(id, puzzleState.bridge);
     const rigid = body.current;
@@ -1077,7 +1082,8 @@ export default function Character({
     const state = useGame.getState();
     const puzzle = state.puzzle;
     const inPhaseFour = state.map === "phase4";
-    locomotion.current.classicGroundMotion = inPhaseFour;
+    const inPhaseTwo = state.map === "phase2";
+    locomotion.current.classicGroundMotion = inPhaseFour || inPhaseTwo;
     // Match main's shorter ordinary jump without changing pendulum gravity.
     const gravityScale =
       !traversal.fromSwing && !traversal.reach ? 1.5 : 1;
@@ -1089,13 +1095,13 @@ export default function Character({
     copyVector(debug.position, position);
     copyVector(debug.velocity, velocity);
 
-    const depth = inPhaseFour
+    const depth = inPhaseFour || inPhaseTwo
       ? 0
       : waterDepth(position.x, position.z, puzzle.bridge);
-    const fellFromMap = position.y < (inPhaseFour ? PHASE_FOUR_FALL_Y : -7);
+    const fellFromMap = inPhaseTwo ? phaseTwoOutsideMap(position) : position.y < (inPhaseFour ? PHASE_FOUR_FALL_Y : -7);
     if (fellFromMap || depth > EDGE_DEEP) {
-      if (inPhaseFour) {
-        const spawn = phaseFourCharacterSpawn(id);
+      if (inPhaseFour || inPhaseTwo) {
+        const spawn = inPhaseTwo ? phaseTwoCharacterSpawn(id) : phaseFourCharacterSpawn(id);
         rigid.setBodyType(rapier.RigidBodyType.Dynamic, true);
         rigid.setTranslation(spawn, true);
         rigid.setLinvel(vector(), true);
@@ -1879,7 +1885,7 @@ export default function Character({
             (scratch.desired.z / inputLength) * LOCOMOTION_TUNING.groundSpeed;
           hasMovementTarget = true;
           state.learn("move");
-        } else if (!selected && !power && !inPhaseFour) {
+        } else if (!selected && !power && state.map === "islands") {
           const leader = runtime.positions[puzzle.selected];
           const northEnd = BRIDGE.z + BRIDGE.length / 2;
           const southEnd = BRIDGE.z - BRIDGE.length / 2;
@@ -2066,7 +2072,7 @@ export default function Character({
       }
     }
 
-    if (!inPhaseFour) {
+    if (state.map === "islands") {
       const zone =
         position.z > 0 ? 0 : position.z > -15 ? 1 : position.z > -21 ? 2 : 3;
       if (zone !== state.zone) state.configure({ zone });
@@ -2308,16 +2314,13 @@ export default function Character({
         <group ref={model} name={`Character_${id}`} rotation={[0, Math.PI, 0]}>
           <Monkey id={id} power={power} locomotion={locomotion} />
         </group>
-        {(selected || power) && (
-          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.53, 0]}>
-            <ringGeometry args={[0.52, 0.57, 32]} />
-            <meshBasicMaterial
-              color={CHARACTERS[id].light}
-              transparent
-              opacity={power ? 0.9 : 0.6}
-            />
-          </mesh>
-        )}
+        <SelectionVine
+          id={id}
+          power={power}
+          running={running}
+          locomotion={locomotion}
+          active={selected || power}
+        />
       </RigidBody>
       <MovementDebug id={id} visible={debugEnabled && selected} />
     </>
