@@ -176,9 +176,15 @@ type VerletArms = {
   handR: number;
   bonesMeasured: boolean;
 };
-const RIG_CACHE = new WeakMap<Group, Partial<Record<CharacterId, Rig>>>();
 type IdleTailCycle = { duration: number; frames: Vector3[][] };
-const IDLE_TAIL_CACHE = new WeakMap<Group, IdleTailCycle>();
+
+// This data is immutable after it is sampled and can safely be shared by all
+// monkey instances, including the story preview and the playable scene.
+const hotState = globalThis as typeof globalThis & {
+  __emilianoMonkeyIdleTailCache?: WeakMap<Group, IdleTailCycle>;
+};
+const IDLE_TAIL_CACHE =
+  hotState.__emilianoMonkeyIdleTailCache ??= new WeakMap<Group, IdleTailCycle>();
 
 function createMotionActions(
   mixer: AnimationMixer,
@@ -558,19 +564,6 @@ export function restoreNeutralPose(rig: Rig) {
   }
 }
 
-function getRig(template: Group, id: CharacterId): Rig {
-  let byId = RIG_CACHE.get(template);
-  if (!byId) {
-    byId = {};
-    RIG_CACHE.set(template, byId);
-  }
-  let rig = byId[id];
-  if (!rig) {
-    rig = buildRig(template, id);
-    byId[id] = rig;
-  }
-  return rig;
-}
 const WORLD_DOWN = new Vector3(
   WORLD_GRAVITY.x,
   WORLD_GRAVITY.y,
@@ -1944,9 +1937,55 @@ export default function Monkey({
     elapsed: number;
     pose?: NeutralBoneTransform[];
   }>({ active: false, elapsed: 0 });
+  // Each mounted Monkey needs its own Three.js object. The story preview and
+  // the playable scene can both contain the same character id while sharing
+  // the loader's template; sharing the rig would reparent the same model and
+  // make one of the two characters appear in the other's location.
+  const renderedRig = useMemo(() => buildRig(template, id), [template, id]);
+  renderedRig.model.traverse((object) => {
+    // The monkey has no intentionally hidden body parts. Keeping this repair
+    // local to the cached rig also avoids changing the visibility state of
+    // the eating banana or of the selection effects.
+    object.visible = true;
+  });
 
+  // Three.js rigs and animation actions are intentionally mutable in the render loop.
+  /* eslint-disable react-hooks/immutability */
   useFrame(({ clock }, delta) => {
-    const rig = getRig(template, id);
+    const rig = renderedRig;
+    if (runtime.phase2Seats.includes(id)) {
+      // Reuse the normal idle clip at the stool anchor, including its subtle
+      // breathing, instead of bending the rig into a different seated pose.
+      const idle = rig.actions.idle;
+      if (activeAction.current !== "idle") {
+        const previous = activeAction.current === "run"
+          ? (rig.actions.run ?? rig.actions.walk)
+          : rig.actions.motion[activeAction.current];
+        previous?.fadeOut(0.25);
+        idle?.reset().fadeIn(0.25).play();
+        activeAction.current = "idle";
+        switchCooldown.current = 0;
+      }
+      if (idle) rig.mixer.update(Math.min(delta, 0.05));
+      else restoreNeutralPose(rig);
+      if (rig.bones.root && rig.rootPosition) {
+        rig.bones.root.position.x = rig.rootPosition.x;
+        rig.bones.root.position.z = rig.rootPosition.z;
+      }
+      rig.model.position.copy(rig.modelPosition);
+      rig.model.rotation.x = 0;
+      rig.model.rotation.z = 0;
+      rig.model.scale.setScalar(rig.baseScale);
+      // The imported idle pose offsets the pelvis from the model origin.
+      // Center the body over the stump without moving its physics anchor.
+      if (rig.bones.spine && rig.model.parent) {
+        rig.bones.spine.getWorldPosition(IK.poseOffset);
+        rig.model.parent.worldToLocal(IK.poseOffset);
+        rig.model.position.x -= IK.poseOffset.x;
+        rig.model.position.z -= IK.poseOffset.z;
+      }
+      return;
+    }
     const dt = Math.min(delta, 0.05);
     const { speed, grounded, distance, metersPerStride, motionTime } =
       locomotion.current;
@@ -2137,9 +2176,10 @@ export default function Monkey({
     }
   });
 
+  /* eslint-enable react-hooks/immutability */
   return (
     <>
-      <primitive object={getRig(template, id).model} />
+      <primitive object={renderedRig.model} />
       <primitive ref={eatingBananaRef} object={eatingBanana} />
     </>
   );

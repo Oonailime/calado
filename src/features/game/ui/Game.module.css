@@ -3,14 +3,73 @@
   inset: 0;
   background: #1e3026;
 }
+.chessPanel {
+  position: absolute;
+  right: 28px;
+  bottom: 28px;
+  z-index: 5;
+  width: min(280px, calc(100vw - 56px));
+  padding: 15px 17px;
+  border: 1px solid #e8c98c66;
+  border-radius: 14px;
+  background: #15131ae8;
+  color: #f5ead2;
+  box-shadow: 0 12px 36px #09070b88;
+  font-size: 12px;
+}
+.chessTitle { font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.chessPanel p { margin: 8px 0; line-height: 1.4; }
+.chessPanel small { display: block; margin-top: 10px; color: #cfc3ae; line-height: 1.35; }
+.chessActions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chessPanel button { border: 1px solid #d7b77788; border-radius: 7px; padding: 7px 9px; background: #302b27; color: #ffefd0; cursor: pointer; }
+.chessPanel button:disabled { opacity: .42; cursor: not-allowed; }
+.chessStop { margin-top: 8px; }
+.portalButton { width: 100%; margin-top: 10px; background: #614d2b !important; }
+.chessTab {
+  position: absolute;
+  top: 6vh;
+  right: 2vw;
+  bottom: 6vh;
+  left: auto;
+  width: min(420px, 92vw);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e8c98c99;
+  border-radius: 16px;
+  background: #121018f5;
+  color: #f5ead2;
+  box-shadow: 0 24px 70px #050308cc;
+  overflow: hidden;
+}
+.chessTabHeader { flex-shrink: 0; display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 14px 18px; border-bottom: 1px solid #e8c98c44; }
+.chessTabHeader span { color: #cfc3ae; font-size: 12px; }
+.chessTabHeader button { border: 0; background: none; color: #f5ead2; font-size: 25px; cursor: pointer; }
+.chessTabBody { flex: 1; min-height: 0; overscroll-behavior: contain; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 18px; overflow: auto; }
+.chessBoardFrame { display: grid; grid-template-columns: 20px minmax(0, 1fr); grid-template-rows: 20px auto; width: 100%; max-width: 380px; flex-shrink: 0; padding: 0 5px 5px 0; background: #684a31; }
+.chessFiles, .chessRanks { display: grid; color: #ffefd0; font: 600 11px/1 sans-serif; text-align: center; }
+.chessFiles { grid-column: 2; grid-row: 1; grid-template-columns: repeat(8, 1fr); align-items: center; }
+.chessRanks { grid-column: 1; grid-row: 2; grid-template-rows: repeat(8, 1fr); align-items: center; }
+.chessUiBoard { grid-column: 2; grid-row: 2; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-template-rows: repeat(8, minmax(0, 1fr)); width: 100%; max-width: 380px; aspect-ratio: 1; flex-shrink: 0; }
+.chessSquare { position: relative; display: grid; place-items: center; padding: 0; border: 0; font-size: clamp(16px, 4vw, 32px); line-height: 1; cursor: pointer; }
+.chessSquare:disabled { cursor: default; }
+.chessLight { background: #e6c38b; }
+.chessDark { background: #99643e; }
+.chessWhitePiece { color: #fffdf5; text-shadow: 1px 0 #25201c, -1px 0 #25201c, 0 1px #25201c, 0 -1px #25201c; }
+.chessBlackPiece { color: #191510; text-shadow: 0 1px #fff9; }
+.chessSquare:focus-visible { outline: 3px solid white; outline-offset: -3px; z-index: 1; }
+.chessSelected { box-shadow: inset 0 0 0 4px #ffe082; }
+.chessLegal { box-shadow: inset 0 0 0 4px #76d6ff99; }
+.chessCapture { box-shadow: inset 0 0 0 4px #ed6b5dcc; }
+.chessTabSide { width: 100%; color: #cfc3ae; line-height: 1.45; }
+.chessTabSide button { margin-top: 10px; margin-right: 8px; border: 1px solid #d7b77788; border-radius: 7px; padding: 8px 10px; background: #302b27; color: #ffefd0; cursor: pointer; }
+.chessDone { color: #bfe8a0; }
+@media (max-width: 760px) { .chessTab { top: 3vh; right: 3vw; bottom: 3vh; width: min(360px, 94vw); } .chessTabBody { padding: 12px; gap: 10px; } }
 .canvas {
   position: absolute;
   inset: 0;
   filter: grayscale(0);
   transition: filter 0.6s ease;
-}
-.blindVision {
-  filter: grayscale(1);
 }
 .bar {
   position: absolute;
@@ -91,6 +150,9 @@
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
+.inventoryTrophy { color: #ffdf8d; grid-template-columns: 25px 1fr; }
+.root[data-map="phase2"] .inventory { top: auto; bottom: 132px; flex-direction: column; gap: 6px; }
+.root[data-map="phase2"] .pickupFeed { top: auto; bottom: 292px; }
 .inventoryBanana {
   color: #f2c94c;
 }
@@ -350,6 +412,24 @@
   background: transparent;
   border: 1px solid #a5b19155;
   color: #d9dcc9;
+}
+.credits {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #a5b19133;
+  text-align: left;
+}
+.credits summary {
+  cursor: pointer;
+  color: #bffaff;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+.credits p {
+  margin: 10px 0 0;
+  color: #b7c2b3;
+  font-size: 11px;
+  line-height: 1.6;
 }
 .loading {
   color: #d8d9c4;

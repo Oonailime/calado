@@ -1,6 +1,7 @@
 import { useRef, type RefObject } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { runtime, useGame } from "../state/store";
+import { Vector3 } from "three";
 // Observabilidade somente leitura, sem atalhos para alterar ou completar desafios.
 export default function Telemetry({
   element,
@@ -11,13 +12,30 @@ export default function Telemetry({
 }) {
   const gl = useThree((state) => state.gl);
   const sample = useRef({ elapsed: 0, positionElapsed: 0, frames: 0 });
-  useFrame((_, delta) => {
+  const chessPosition = useRef(new Vector3());
+  useFrame(({ scene }, delta) => {
     if (!running || !element.current) return;
     sample.current.elapsed += delta;
     sample.current.positionElapsed += delta;
     sample.current.frames++;
     const selected = useGame.getState().puzzle.selected;
     if (sample.current.positionElapsed >= 0.1) {
+      if (useGame.getState().map === "phase2") {
+        const board = scene.getObjectByName("phase2-chess-pieces");
+        element.current.setAttribute("data-chess-visual-fen", board?.userData.fen ?? "");
+        element.current.setAttribute("data-chess-seat-indicators", [0, 1].map(index =>
+          scene.getObjectByName(`phase2-seat-indicator-${index}`)?.visible === true,
+        ).join(","));
+        element.current.setAttribute("data-chess-seats", JSON.stringify(runtime.phase2Seats.map(id => {
+          if (id === null) return null;
+          const character = scene.getObjectByName(`Character_${id}`);
+          return character ? {
+            id,
+            position: character.getWorldPosition(chessPosition.current).toArray(),
+            pelvis: character.getObjectByName("Spine")?.getWorldPosition(chessPosition.current).toArray(),
+          } : null;
+        })));
+      }
       const p = runtime.positions[selected];
       element.current.setAttribute(
         "data-position",

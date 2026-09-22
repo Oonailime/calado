@@ -1,9 +1,11 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { MonkeyGlyph } from "@/features/story/SceneArt";
 import { runtime, useGame, type Quality } from "../state/store";
 import { CHARACTERS, CHARACTER_KEY_BINDINGS, type CharacterId } from "../types";
 import type { Locale } from "@/content/story";
 import Inventory from "./Inventory";
+import { phase2Chess } from "../world/phase2Chess";
+import { canopyInteractionHint, type CanopyInteractionHint } from "../state/rules";
 import styles from "./Game.module.css";
 
 type Instruction = { title: string; body: string };
@@ -86,6 +88,25 @@ export default function Controls({
   };
   const p = state.puzzle;
   const f = state.abilityKey.replace("Key", "");
+  // Player position lives in `runtime` (per-frame data, not React state — see
+  // store.ts), so a plain state subscription never notices proximity to a
+  // stump/harvest site. Poll it at a coarse, UI-appropriate rate instead of
+  // wiring this panel into the physics frame loop.
+  const [canopyNear, setCanopyNear] = useState<CanopyInteractionHint | null>(
+    null,
+  );
+  useEffect(() => {
+    if (state.map !== "phase3" || state.paused) return;
+    const timer = window.setInterval(() => {
+      setCanopyNear(
+        canopyInteractionHint(
+          useGame.getState().puzzle,
+          runtime.positions[useGame.getState().puzzle.selected],
+        ),
+      );
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, [state.map, state.paused]);
   const instruction = (
     titlePt: string,
     bodyPt: string,
@@ -97,33 +118,46 @@ export default function Controls({
   if (state.map === "phase2") {
     hint = instruction(
       "Fase 2 · Jardim das cinzas",
-      "Explore a cerejeira e a mesa de xadrez diante do vale vulcânico. WASD: caminhar · Espaço: pular · Clique e mova o mouse: olhar ao redor · 1, 2, 3: trocar de macaco · R: voltar à clareira.",
+      "Recolha as 3 peças de xadrez no caminho até a cerejeira e a lareira. Pule a lava: tocar nela leva você ao início. Seus companheiros seguem e pulam com você. Suba pela rampa circular e sente nas brancas com E. WASD: andar · Espaço: pular · 1/2/3: trocar · R: início.",
       "Phase 2 · Garden of ashes",
-      "Explore the cherry tree and chess table overlooking the volcanic valley. WASD: walk · Space: jump · Click and move the mouse: look around · 1, 2, 3: switch monkeys · R: return to the clearing.",
+      "Collect 3 chess pieces on the way to the cherry tree and fireplace. Jump over lava: touching it returns you to the start. Your companions follow and jump with you. Climb the circular ramp and sit on White’s stump with E. WASD: walk · Space: jump · 1/2/3: switch · R: start.",
     );
-  } else if (state.map === "phase4") {
-    if (!p.cubePieces.every(Boolean)) {
-      const missing = CUBE_PIECE_NAMES[p.selected];
-      hint = p.cubePieces[p.selected]
-        ? instruction(
-            "Fase 4 · Vale das copas",
-            "Sua peça do cubo mágico já foi coletada. Troque de macaco (1, 2 ou 3) para ajudar a encontrar as peças que faltam, ou siga os cipós até o cume atrás da cachoeira.",
-            "Phase 4 · Canopy valley",
-            "Your magic-cube piece is already collected. Switch monkeys (1, 2 or 3) to help find the remaining pieces, or follow the vines to the summit behind the waterfall.",
-          )
-        : instruction(
-            "Fase 4 · Vale das copas",
-            `Cada macaco carrega sua própria peça de um cubo mágico: procure a peça ${missing.pt} e pressione E para coletá-la. Aproxime-se do cipó que sai da clareira e pressione E para caminhar sobre ele até o platô alto; dali, siga os cipós até o cume atrás da cachoeira. E: agarrar qualquer trecho ao alcance por baixo; segure no ar para pegar o próximo · WASD: impulso/direção · Espaço: soltar · Shift/Ctrl: subir/descer no cipó · R: reiniciar.`,
-            "Phase 4 · Canopy valley",
-            `Each monkey carries their own piece of a magic cube: find the ${missing.en} piece and press E to collect it. Approach the vine leaving the clearing and press E to walk along it to the high plateau; from there, follow the vines to the summit behind the waterfall. E: grab any reachable section from below; hold in flight to catch the next vine · WASD: build momentum/steer · Space: release · Shift/Ctrl: climb up/down the vine · R: restart.`,
-          );
-    } else if (!p.cubeSolved)
-      hint = instruction(
-        "O santuário está aberto",
-        "As três peças foram reunidas. Siga além do cume, atrás da cachoeira, até o santuário no alto, e pressione E para abrir o cubo mágico.",
-        "The shrine is open",
-        "All three pieces have been gathered. Continue beyond the summit behind the waterfall to the shrine above, and press E to open the magic cube.",
-      );
+  } else if (state.map === "phase3") {
+    const missing = CUBE_PIECE_NAMES[p.selected];
+    const collected = p.canopyVines.filter(Boolean).length;
+    // Standing at a stump/harvest site gets the specific, proximity-aware
+    // reason (right monkey? right order? already done?) in place of the
+    // general progression summary below.
+    const taskPt = canopyNear
+      ? canopyNear.pt
+      : !p.canopyFocused
+        ? "Com o branco (2), suba pela escada de cipó junto à árvore central até o platô \"Copa alta\" e concentre-se lá com E ou sua habilidade."
+        : collected < 3
+          ? `Com o dourado (1), colha com E os cipós marcados junto aos galhos inferiores (${collected}/3).`
+          : !p.canopyGoldTied
+            ? "Com o dourado (1), pressione E no toco de baixo (perto da cachoeira) para amarrar o cipó."
+            : !p.canopyBridgeBuilt
+              ? "Com o marrom (3), pressione E no toco de cima (perto do cume) para construir a ponte de cipó."
+              : "A ponte está pronta: E em uma ponta e WASD para atravessar nos dois sentidos.";
+    const taskEn = canopyNear
+      ? canopyNear.en
+      : !p.canopyFocused
+        ? "With White (2), climb the vine ladder by the heart tree up to the \"High Canopy\" plateau and focus there with E or your ability."
+        : collected < 3 ? `Use Gold (1) to harvest the marked lower-branch vines with E (${collected}/3).`
+          : !p.canopyGoldTied ? "Use Gold (1) at the lower stump, near the waterfall: E ties the vine."
+            : !p.canopyBridgeBuilt ? "Use Brown (3) at the upper stump, near the summit: E builds the vine bridge."
+              : "Bridge ready: E at either end, then WASD to cross in either direction.";
+    const deliveryPt = p.cubeDelivered[p.selected] ? "Seu prisma já foi entregue."
+      : p.cubePieces[p.selected] ? "Leve seu prisma ao totem acima do cume e pressione E para entregá-lo."
+        : `Colete o prisma ${missing.pt} com E e entregue-o pessoalmente ao totem acima do cume.`;
+    const deliveryEn = p.cubeDelivered[p.selected] ? "Your prism has been delivered."
+      : p.cubePieces[p.selected] ? "Carry your prism to the totem above the summit and press E to deliver it."
+        : `Collect the ${missing.en} prism with E and bring it to the totem above the summit.`;
+    hint = p.cubeDelivered.every(Boolean)
+      ? instruction("Os três prismas foram entregues", "Pressione E no totem para abrir o cubo mágico.",
+          "All three prisms delivered", "Press E at the totem to open the magic cube.")
+      : instruction("Fase 3 · Vale das copas", `${deliveryPt} ${taskPt} E: agarrar cipó · Espaço: soltar · Shift/Ctrl: subir/descer · Cair no chão leva ao início.`,
+          "Phase 3 · Canopy valley", `${deliveryEn} ${taskEn} E: grab vine · Space: release · Shift/Ctrl: climb · Falling to the ground returns you to spawn.`);
   } else if (!state.learned.move || !state.learned.camera)
     hint = instruction(
       "Explore a ilha",
@@ -267,7 +301,7 @@ export default function Controls({
     );
   return (
     <>
-      {state.map !== "phase2" && <Inventory locale={locale} />}
+      <Inventory locale={locale} />
       <div className={styles.bar}>
         <button
           className={styles.icon}
@@ -289,6 +323,7 @@ export default function Controls({
           className={styles.icon}
           aria-label={pt ? "Reposicionar grupo" : "Reset group"}
           onClick={() => {
+            if (state.map === "phase2") { phase2Chess.stop(); runtime.phase2Restore.fill(null); }
             runtime.clear();
             state.reset();
           }}

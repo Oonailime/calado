@@ -23,7 +23,7 @@ const STRAND_RADIUS = 0.008;
 const STRAND_COUNT = 10;
 const LEAF_COUNT = 16;
 const BARK_TONES = ["#5c4327", "#6b4f2c", "#4a3620"];
-const SPIN_RADIANS_PER_SECOND = 0.05;
+const SPIN_RADIANS_PER_SECOND = 0.1;
 const STRAND_OPACITY = 0.5;
 const STRAND_OPACITY_POWER = 0.5;
 const LEAF_OPACITY = 0.5;
@@ -123,8 +123,10 @@ export default function SelectionVine({
   active: boolean;
 }) {
   const reduced = useGame((s) => s.reduced);
+  const rootGroup = useRef<Group>(null);
   const vineGroup = useRef<Group>(null);
   const spiralGroup = useRef<Group>(null);
+  const prewarmed = useRef(false);
   const leafRefs = useRef<(Mesh | null)[]>([]);
   const pebbleRefs = useRef<(Mesh | null)[]>([]);
 
@@ -183,6 +185,19 @@ export default function SelectionVine({
   const tint = useMemo(() => new Color(CHARACTERS[id].light), [id]);
 
   useFrame(({ clock }, delta) => {
+    // Hidden objects do not upload their buffers to WebGL. Without this one
+    // warm-up render, selecting a character for the first time uploads ten
+    // tube geometries and their leaves during the input event itself, causing
+    // a long synchronous frame. Render each wreath once while the scene is
+    // settling, then return to the normal selected-only visibility.
+    if (rootGroup.current) {
+      if (!prewarmed.current) {
+        rootGroup.current.visible = true;
+        prewarmed.current = true;
+      } else {
+        rootGroup.current.visible = active;
+      }
+    }
     if (!active) return;
     const jumping = locomotion.current?.state === "JUMP";
     const risingVelocity = locomotion.current?.velocity?.y ?? 0;
@@ -219,7 +234,7 @@ export default function SelectionVine({
   });
 
   return (
-    <group visible={active}>
+    <group ref={rootGroup} visible={active}>
       <group ref={vineGroup} position={[0, -0.53, 0]}>
         {strandGeometries.map((geometry, i) => (
           <mesh key={i} geometry={geometry}>

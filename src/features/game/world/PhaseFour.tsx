@@ -10,11 +10,8 @@ import {
   useBeforePhysicsStep,
 } from "@react-three/rapier";
 import {
-  BufferGeometry,
-  CatmullRomCurve3,
   Color,
   DoubleSide,
-  Float32BufferAttribute,
   Group,
   InstancedMesh,
   Mesh,
@@ -28,6 +25,7 @@ import { runtime, useGame } from "../state/store";
 import { type ArborealSite } from "./forestLayout";
 import {
   createPhaseFourEnvironment,
+  createCanopySupportColliders,
   createPhaseFourPathCollider,
   createPhaseFourVineTieGeometry,
   createPhaseFourVineLeafGeometry,
@@ -38,12 +36,12 @@ import { createPhaseFourGroundGeometry } from "./phaseFourTerrain";
 import {
   PHASE_FOUR_PATHS,
   PHASE_FOUR_PLATFORMS,
-  PHASE_FOUR_RIVER,
-  PHASE_FOUR_UPPER_RIVER,
   PHASE_FOUR_SWING_SITES,
   PHASE_FOUR_TREES,
-  PHASE_FOUR_WATERFALL,
 } from "./phaseFourLayout";
+import TreeEntrance from "./TreeEntrance";
+import CanopyCooperation from "./CanopyCooperation";
+import { createCanopyWaterGeometry } from "./phaseFourWater";
 import RubiksCube from "./RubiksCube";
 import {
   createSwingingVine,
@@ -53,14 +51,17 @@ import {
 
 const WATER_VERTEX = `
   uniform float uTime;
-  uniform float uFalls;
+  attribute float aFalling;
   varying vec2 vUv;
+  varying float vFalling;
   #include <fog_pars_vertex>
   void main() {
     vUv = uv;
+    vFalling = aFalling;
     vec3 p = position;
-    if (uFalls < 0.5) p.y += sin(p.x * 1.5 + uTime) * 0.04 + sin(p.z * 1.1 - uTime) * 0.06;
-    else p.z += sin(uv.x * 22.0 + uv.y * 13.0 - uTime * 4.0) * 0.10;
+    float ripple = sin(p.x * 1.5 + uTime) * 0.04 + sin(p.z * 1.1 - uTime) * 0.06;
+    p.y += ripple * (1.0 - aFalling);
+    p.z += sin(uv.x * 22.0 + uv.y * 13.0 - uTime * 4.0) * 0.07 * aFalling;
     vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     #include <fog_vertex>
@@ -68,127 +69,38 @@ const WATER_VERTEX = `
 `;
 const WATER_FRAGMENT = `
   uniform float uTime;
-  uniform float uFalls;
   varying vec2 vUv;
+  varying float vFalling;
   #include <fog_pars_fragment>
   void main() {
-    vec2 uv = vUv;
-    float stripe = sin(uv.x * 89.0 + sin(uv.y * 21.0 - uTime * 2.0) * 2.0);
-    float pulse = sin(uv.y * (uFalls > 0.5 ? 66.0 : 190.0) - uTime * (uFalls > 0.5 ? 12.0 : 2.0));
-    float foam = smoothstep(0.7, 0.98, stripe * 0.4 + pulse * 0.6);
-    vec3 color;
-    if (uFalls > 0.5) {
-      color = mix(vec3(0.22, 0.58, 0.56), vec3(0.85, 0.97, 0.9), 0.45 + stripe * 0.22 + foam * 0.4);
-      color = mix(color, vec3(0.88, 0.98, 0.95), smoothstep(0.84, 1.0, uv.y) * 0.5);
-    } else {
-      float bank = smoothstep(0.25, 0.49, abs(uv.x - 0.5));
-      color = mix(vec3(0.035, 0.26, 0.25), vec3(0.18, 0.58, 0.49), bank * 0.7 + pulse * 0.04);
-      color += foam * vec3(0.19, 0.32, 0.27) + bank * foam * 0.35;
-    }
-    gl_FragColor = vec4(color, 1.0);
+    float flow = vUv.y * 10.0 - uTime * 2.8;
+    float stripe = sin(vUv.x * 89.0 + sin(flow * 0.35) * 2.0);
+    float pulse = sin(flow);
+    float foam = smoothstep(0.65, 0.98, stripe * 0.4 + pulse * 0.6);
+    float bank = smoothstep(0.25, 0.49, abs(vUv.x - 0.5));
+    vec3 river = mix(vec3(0.035,0.26,0.25),vec3(0.18,0.58,0.49),bank*0.7+pulse*0.04);
+    river += foam * vec3(0.19,0.32,0.27);
+    vec3 falls = mix(vec3(0.22,0.58,0.56),vec3(0.85,0.97,0.9),0.45+stripe*0.22+foam*0.4);
+    gl_FragColor = vec4(mix(river, falls, vFalling), 1.0);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
     #include <fog_fragment>
   }
 `;
 
-function waterGeometry(falls: boolean, upstream: boolean) {
-  const vertices: number[] = [],
-    uvs: number[] = [],
-    indices: number[] = [];
-  const rows = falls ? 48 : 120,
-    cols = falls ? 18 : 8;
-  const curve = new CatmullRomCurve3(
-    (upstream ? PHASE_FOUR_UPPER_RIVER : PHASE_FOUR_RIVER).map(
-      (p) => new Vector3(...p),
-    ),
-  );
-  for (let row = 0; row <= rows; row++) {
-    const v = row / rows;
-    const center = curve.getPoint(v),
-      tangent = curve.getTangent(v);
-    for (let col = 0; col <= cols; col++) {
-      const u = col / cols;
-      if (falls)
-        vertices.push(
-          (u - 0.5) * PHASE_FOUR_WATERFALL.width * (1 + v * 0.12),
-          PHASE_FOUR_WATERFALL.height * (1 - v),
-          v * v * 1.5,
-        );
-      else {
-        const width = upstream
-          ? 6.5 + Math.sin(v * Math.PI) * 1.2
-          : 8.8 + Math.sin(v * 18) * 1.2;
-        vertices.push(
-          center.x + tangent.z * (u - 0.5) * width,
-          center.y,
-          center.z - tangent.x * (u - 0.5) * width,
-        );
-      }
-      uvs.push(u, v);
-      if (row < rows && col < cols) {
-        const a = row * (cols + 1) + col,
-          b = a + cols + 1;
-        indices.push(a, b, a + 1, a + 1, b, b + 1);
-      }
-    }
-  }
-  const geometry = new BufferGeometry();
-  geometry.setAttribute("position", new Float32BufferAttribute(vertices, 3));
-  geometry.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-function FlowingWater({
-  falls = false,
-  upstream = false,
-  running,
-}: {
-  falls?: boolean;
-  upstream?: boolean;
-  running: boolean;
-}) {
-  const geometry = useMemo(
-    () => waterGeometry(falls, upstream),
-    [falls, upstream],
-  );
+function FlowingWater({ running }: { running: boolean }) {
+  const geometry = useMemo(() => createCanopyWaterGeometry(), []);
   const material = useRef<ShaderMaterial>(null);
-  const reduced = useGame((state) => state.reduced);
-  const uniforms = useMemo(
-    () =>
-      UniformsUtils.merge([
-        UniformsLib.fog,
-        { uTime: { value: 0 }, uFalls: { value: falls ? 1 : 0 } },
-      ]),
-    [falls],
-  );
+  const reduced = useGame(state => state.reduced);
+  const uniforms = useMemo(() => UniformsUtils.merge([UniformsLib.fog, { uTime: { value: 0 } }]), []);
   useFrame((_, dt) => {
-    if (running && !reduced && material.current)
-      material.current.uniforms.uTime.value += Math.min(dt, 0.05);
+    if (running && !reduced && material.current) material.current.uniforms.uTime.value += Math.min(dt, 0.05);
   });
   useEffect(() => () => geometry.dispose(), [geometry]);
   return (
-    <mesh
-      name={
-        falls
-          ? "Phase4_Waterfall"
-          : upstream
-            ? "Phase4_UpperRiver"
-            : "Phase4_River"
-      }
-      geometry={geometry}
-      position={falls ? PHASE_FOUR_WATERFALL.position : [0, 0, 0]}
-    >
-      <shaderMaterial
-        ref={material}
-        uniforms={uniforms}
-        vertexShader={WATER_VERTEX}
-        fragmentShader={WATER_FRAGMENT}
-        side={DoubleSide}
-        fog
-      />
+    <mesh name="Phase4_ContinuousRiverAndFalls" geometry={geometry}>
+      <shaderMaterial ref={material} uniforms={uniforms} vertexShader={WATER_VERTEX}
+        fragmentShader={WATER_FRAGMENT} side={DoubleSide} fog />
     </mesh>
   );
 }
@@ -249,6 +161,7 @@ export function SwingingVine({
   const axis = useMemo(() => new Vector3(), []);
   const up = useMemo(() => new Vector3(0, 1, 0), []);
   const physics = useRef(createSwingingVine(site));
+  const selectionEpoch = useRef(runtime.canopySelectionEpoch);
   const leafGeometry = useMemo(() => createPhaseFourVineLeafGeometry(), []);
   const frontTie = useRef<Mesh>(null);
   const rearTie = useRef<Mesh>(null);
@@ -268,6 +181,14 @@ export function SwingingVine({
   }, [site, trees]);
   useBeforePhysicsStep(() => {
     if (!running) return;
+    if (selectionEpoch.current !== runtime.canopySelectionEpoch) {
+      runtime.swingingVines.set(site.id, createSwingingVine(site));
+      selectionEpoch.current = runtime.canopySelectionEpoch;
+      for (const hands of runtime.vineContacts) {
+        if (hands.left?.siteId === site.id) hands.left = null;
+        if (hands.right?.siteId === site.id) hands.right = null;
+      }
+    }
     const registered = runtime.swingingVines.get(site.id);
     if (registered) physics.current = registered;
     else {
@@ -348,7 +269,8 @@ export function SwingingVine({
   );
 }
 
-export default function PhaseFour({ running }: { running: boolean }) {
+export default function PhaseFour({ running, onPortalEnter }: { running: boolean; onPortalEnter: () => void }) {
+  const cubeSolved = useGame((state) => state.puzzle.cubeSolved);
   const scene = useMemo(() => createPhaseFourEnvironment(), []);
   const colliders = useMemo(
     () =>
@@ -364,6 +286,7 @@ export default function PhaseFour({ running }: { running: boolean }) {
       }),
     [],
   );
+  const supports = useMemo(() => createCanopySupportColliders(scene), [scene]);
   const ground = useMemo(() => {
     const geometry = createPhaseFourGroundGeometry();
     const data = {
@@ -391,8 +314,16 @@ export default function PhaseFour({ running }: { running: boolean }) {
     [scene],
   );
   return (
-    <group name="Phase4">
+    <group name="Phase3">
+      {/* Opens on arrival, then fades after 3s (lifetime) like phase 2's
+          arrival portal — until the shrine is solved, at which point it
+          drops the lifetime entirely and simply stays open (presence then
+          tracks `open` alone, see TreeEntrance), reusing the same doorway
+          as the way back to phase 2. */}
+      <TreeEntrance running={running} open lifetime={cubeSolved ? undefined : 3} onEnter={onPortalEnter}
+        anchor={{ x: -16.6, y: 8, z: 14, rotationY: Math.PI / 2, halfWidth: 0.95, halfDepth: 0.7, groundInset: 0 }} />
       <primitive object={scene} />
+      <CanopyCooperation scene={scene} running={running} />
       <RigidBody type="fixed" colliders={false} friction={0.9}>
         <TrimeshCollider args={[ground.vertices, ground.indices]} />
         {PHASE_FOUR_PLATFORMS.map((deck) => (
@@ -402,6 +333,7 @@ export default function PhaseFour({ running }: { running: boolean }) {
             position={[deck.center[0], deck.center[1] - 0.14, deck.center[2]]}
           />
         ))}
+        {supports.map(support => <TrimeshCollider key={support.name} args={[support.vertices, support.indices]} />)}
         {colliders.map((path) => (
           <TrimeshCollider key={path.id} args={[path.vertices, path.indices]} />
         ))}
@@ -418,8 +350,6 @@ export default function PhaseFour({ running }: { running: boolean }) {
         ))}
       </RigidBody>
       <FlowingWater running={running} />
-      <FlowingWater upstream running={running} />
-      <FlowingWater falls running={running} />
       <WaterfallSpray running={running} />
       {PHASE_FOUR_SWING_SITES.map((site) => (
         <SwingingVine key={site.id} site={site} running={running} />

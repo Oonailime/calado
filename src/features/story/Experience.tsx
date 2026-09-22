@@ -67,7 +67,7 @@ export default function Experience() {
     document.documentElement.lang = locale === "pt" ? "pt-BR" : "en";
   }, [locale]);
   useEffect(() => {
-    if (!["phase2", "phase4"].includes(new URLSearchParams(window.location.search).get("map") ?? "")) return;
+    if (!["phase2", "phase3", "phase4"].includes(new URLSearchParams(window.location.search).get("map") ?? "")) return;
     let cancelled = false;
     import("@/features/game/Game").then((module) => {
       if (cancelled) return;

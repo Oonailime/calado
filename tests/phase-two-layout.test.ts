@@ -34,6 +34,7 @@ import {
   PHASE_TWO_TABLE,
   PHASE_TWO_TREE,
 } from "../src/features/game/world/phaseTwoLayout";
+import { PHASE_TWO_LAVA_STRIPS } from "../src/features/game/world/phaseTwoLava";
 
 test("queens stand on their own color and kings face kings across the board", () => {
   const queen = PHASE_TWO_CHESS_BACK_RANK.indexOf("queen");
@@ -112,8 +113,9 @@ test("the enlarged cherry crown emits every falling petal from an actual flower"
 });
 
 test("phase2 is a distinct direct map route and preserves existing routes", () => {
-  for (const map of ["phase2", "phase4", "islands"] as const)
+  for (const map of ["phase2", "phase3", "islands"] as const)
     assert.equal(gameMapFromQuery(map), map);
+  assert.equal(gameMapFromQuery("phase4"), "phase3");
   assert.equal(gameMapFromQuery("invalid"), undefined);
   assert.equal(gameMapFromQuery(null), undefined);
 });
@@ -145,11 +147,36 @@ test("volcano craters are recessed and all lava vertices follow the terrain", ()
   }
   const g = createPhaseTwoLava(),
     p = g.getAttribute("position");
-  for (let i = 0; i < p.count; i++) {
-    assert.ok(
-      Math.abs(p.getY(i) - phaseTwoGroundHeight(p.getX(i), p.getZ(i)) - 0.13) <
-        0.001,
-    );
+  for (let i = 0; i < p.count; i++) assert.ok(Number.isFinite(p.getY(i)));
+  // Each edge's height is a ±3-sample moving average of the raw terrain
+  // along the curve (see createPhaseTwoLava's SMOOTH_RADIUS), not the exact
+  // value at that point — a ribbon crossing a steep crater wall can
+  // legitimately end up several units from the raw sample at one spot,
+  // that's the noise the smoothing exists to absorb. Recompute the same
+  // average independently here and check it matches, rather than asserting
+  // an absolute tolerance that steep terrain would fail either way.
+  const SMOOTH_RADIUS = 3;
+  let offset = 0;
+  for (const strip of PHASE_TWO_LAVA_STRIPS) {
+    for (const side of [0, 1]) {
+      const sections = strip.length / 2;
+      const raw = Array.from({ length: sections }, (_, s) => {
+        const point = strip[s * 2 + side];
+        return phaseTwoGroundHeight(point.x, point.z);
+      });
+      for (let s = 0; s < sections; s++) {
+        let sum = 0, count = 0;
+        for (let k = -SMOOTH_RADIUS; k <= SMOOTH_RADIUS; k++) {
+          const idx = s + k;
+          if (idx < 0 || idx >= sections) continue;
+          sum += raw[idx];
+          count++;
+        }
+        const expected = sum / count + 0.13;
+        assert.ok(Math.abs(p.getY(offset + s * 2 + side) - expected) < 0.001);
+      }
+    }
+    offset += strip.length;
   }
   g.dispose();
 });

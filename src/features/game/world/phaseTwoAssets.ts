@@ -1,3 +1,4 @@
+import { PHASE_TWO_LAVA_STRIPS } from "./phaseTwoLava";
 import {
   BoxGeometry,
   BufferGeometry,
@@ -15,9 +16,12 @@ import {
 } from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
+  phaseTwoRouteProjection,
+  PHASE_TWO_RAMP,
   PHASE_TWO_TABLE,
   PHASE_TWO_CHESS_SCALE,
   PHASE_TWO_CHESS_BACK_RANK,
+  PHASE_TWO_LAVA_SEA_LEVEL,
   PHASE_TWO_TREE,
   PHASE_TWO_VOLCANOES,
   phaseTwoGroundHeight as ground,
@@ -136,7 +140,7 @@ export function createPhaseTwoRocks() {
   for (let i = 0; i < 1200; i++) {
     const x = (rand(i * 7 + 1) - 0.5) * 380,
       z = (rand(i * 7 + 2) - 0.5) * 470;
-    if (Math.hypot((x + 4) / 1.25, z - 5) < 11) continue;
+    if (Math.hypot((x + 4) / 1.25, z - 5) < 11 || phaseTwoRouteProjection(x, z).distance < 5) continue;
     if (Math.hypot(x - tallest.x, z - tallest.z) < tallest.radius * 0.25)
       continue;
     const size = 0.3 + Math.pow(rand(i * 7 + 3), 3) * 4.8;
@@ -166,6 +170,7 @@ export function createPhaseTwoRocks() {
     const a = (i / 36) * Math.PI * 2,
       x = -4 + Math.cos(a) * 14,
       z = 5 + Math.sin(a) * 11;
+    if (phaseTwoRouteProjection(x, z).distance < 5) continue;
     batch.add(
       new CylinderGeometry(0.8, 1.2, 7 + rand(i) * 2, 5),
       "#353235",
@@ -393,6 +398,24 @@ export function createPhaseTwoTrees() {
       [size, size, size],
     );
   }
+  // The spiral ramp climbs all the way from the valley floor back up to this
+  // same tree's clearing — trail fallen petals from it along the way,
+  // scattered loosely around each waypoint rather than pinned to the exact
+  // centerline.
+  for (let i = 0; i < 900; i++) {
+    const waypoint = PHASE_TWO_RAMP[Math.floor(rand(i * 6) * PHASE_TWO_RAMP.length)];
+    const a = rand(i * 6 + 1) * Math.PI * 2,
+      r = Math.sqrt(rand(i * 6 + 2)) * 3;
+    const x = waypoint.x + Math.cos(a) * r,
+      z = waypoint.z + Math.sin(a) * r;
+    const size = 0.07 + rand(i * 6 + 3) * 0.045;
+    petals.add(
+      fallenPetal.clone(),
+      blossomColors[i % 5],
+      [x, ground(x, z) + 0.045, z],
+      [size, size, size],
+    );
+  }
   flower.dispose();
   fallenPetal.dispose();
   const petalSources = new BufferGeometry();
@@ -405,7 +428,7 @@ export function createPhaseTwoTrees() {
   for (let i = 0; i < 650; i++) {
     const x = 18 + rand(i * 6 + 1) * 90,
       z = -63 + rand(i * 6 + 2) * 260;
-    if (ground(x, z) > 4) continue;
+    if (ground(x, z) > 4 || Math.hypot(x + 4, z - 5) < 32 || phaseTwoRouteProjection(x, z).distance < 2.5) continue;
     const y = ground(x, z),
       h = 3 + rand(i * 6 + 3) * 7;
     dead.branch([x, y, z], [x + 0.2, y + h, z], 0.18, 0.018, "#242226", 6);
@@ -463,7 +486,7 @@ export const PHASE_TWO_CHESS_PIECE_URL = (kind: ChessPieceKind) =>
 // Matches the previous procedural set's own height hierarchy exactly — only
 // the pawn and the king stood out from the rest — so swapping in the sculpted
 // monkey pieces keeps "the same proportion" the board already had.
-const PIECE_HEIGHT: Record<ChessPieceKind, number> = {
+export const PHASE_TWO_PIECE_HEIGHT: Record<ChessPieceKind, number> = {
   pawn: 0.28,
   rook: 0.43,
   knight: 0.43,
@@ -479,18 +502,19 @@ const PIECE_HEIGHT: Record<ChessPieceKind, number> = {
 // hitting the full target height whenever the model's own proportions allow.
 const PIECE_FOOTPRINT_CAP = 0.26;
 
-function pieceFit(geometry: BufferGeometry, targetHeight: number) {
+export function phaseTwoPieceFit(geometry: BufferGeometry, kind: ChessPieceKind) {
   geometry.computeBoundingBox();
   const box = geometry.boundingBox!;
   const height = box.max.y - box.min.y;
   const footprint = Math.max(box.max.x - box.min.x, box.max.z - box.min.z);
-  const vertical = targetHeight / height;
+  const vertical = PHASE_TWO_PIECE_HEIGHT[kind] / height;
   const horizontal = Math.min(vertical, PIECE_FOOTPRINT_CAP / footprint);
   return { vertical, horizontal };
 }
 
 export function createPhaseTwoChess(
   pieces: Record<ChessPieceKind, BufferGeometry>,
+  includePieces = true,
 ) {
   const batch = new Batch();
   const x = 0,
@@ -514,13 +538,13 @@ export function createPhaseTwoChess(
   const fit = Object.fromEntries(
     PHASE_TWO_CHESS_PIECE_KINDS.map((kind) => [
       kind,
-      pieceFit(pieces[kind], PIECE_HEIGHT[kind]),
+      phaseTwoPieceFit(pieces[kind], kind),
     ]),
   ) as Record<ChessPieceKind, { vertical: number; horizontal: number }>;
   // The armies face one another across the board rather than both facing the
   // same way the model happened to be sculpted in.
   const facing = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI);
-  for (let side = 0; side < 2; side++)
+  for (let side = 0; side < 2 && includePieces; side++)
     for (let row = 0; row < 2; row++)
       for (let col = 0; col < 8; col++) {
         const px = x + (col - 3.5) * 0.3,
@@ -606,69 +630,58 @@ export function createPhaseTwoLantern() {
 }
 
 export function createPhaseTwoLava() {
-  const positions: number[] = [],
-    uvs: number[] = [],
-    indices: number[] = [];
-  function ribbon(points: Point[], width: number) {
-    const curve = new CatmullRomCurve3(points.map((p) => new Vector3(...p)));
-    const steps = 180,
-      base = positions.length / 3;
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps,
-        p = curve.getPoint(t),
-        tangent = curve.getTangent(t);
-      const w = width * (0.8 + Math.sin(t * 47) * 0.18);
-      for (let side = 0; side < 2; side++) {
-        const x = p.x + tangent.z * (side - 0.5) * w,
-          z = p.z - tangent.x * (side - 0.5) * w;
-        positions.push(x, ground(x, z) + 0.13, z);
-        uvs.push(side, t * 24);
+  const positions: number[] = [], uvs: number[] = [], indices: number[] = [];
+  // Each edge's height is already the smoothed terrain sample computed once
+  // in phaseTwoLava.ts's ribbon() — the same value the collision lookup
+  // (phaseTwoTouchesLava) compares a character's feet against, so the
+  // visible lava and what can actually kill you never drift apart.
+  for (const strip of PHASE_TWO_LAVA_STRIPS) {
+    const base = positions.length / 3;
+    strip.forEach((p, i) => {
+      positions.push(p.x, p.y + 0.13, p.z);
+      uvs.push(i % 2, (Math.floor(i / 2) / 180) * 24);
+      if (i % 2 === 0 && i < strip.length - 2) {
+        const a = base + i;
+        indices.push(a, a+2, a+1, a+1, a+2, a+3);
       }
-      if (i < steps) {
-        const a = base + i * 2;
-        indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
-      }
-    }
-  }
-  ribbon(
-    [
-      [45, 0, -117],
-      [39, 0, -89],
-      [50, 0, -64],
-      [22, 0, -36],
-      [31, 0, -18],
-      [19, 0, -3],
-      [30, 0, 14],
-      [45, 0, 37],
-      [57, 0, 63],
-    ],
-    2.5,
-  );
-  ribbon(
-    [
-      [18, 0, -34],
-      [6, 0, -22],
-      [13, 0, -14],
-      [19, 0, -3],
-    ],
-    0.8,
-  );
-  for (const v of PHASE_TWO_VOLCANOES) {
-    for (let j = 0; j < 4; j++) {
-      const a = j * 1.8 + v.seed;
-      const points: Point[] = [];
-      for (let k = 0; k < 8; k++) {
-        const r = v.radius * (0.11 + k * 0.105),
-          angle = a + Math.sin(k * 1.6 + v.seed) * 0.07;
-        points.push([v.x + Math.cos(angle) * r, 0, v.z + Math.sin(angle) * r]);
-      }
-      ribbon(points, j === 0 ? 0.85 : 0.24);
-    }
+    });
   }
   const g = new BufferGeometry();
   g.setAttribute("position", new Float32BufferAttribute(positions, 3));
   g.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
   g.setIndex(indices);
+  g.computeVertexNormals();
+  return g;
+}
+
+// A single flat quad spanning the whole map, well below every walkable area
+// (see PHASE_TWO_LAVA_SEA_LEVEL) — everywhere the terrain dips under it reads
+// as flooded, leaving the volcanoes, the ramp and the arrival shelf standing
+// as islands. UVs are scaled to world space (not the quad's own 0–1 range)
+// so the shader's lava pattern tiles at the same scale as the river ribbons
+// instead of stretching one huge smear across the whole plane.
+export function createPhaseTwoLavaSea() {
+  const halfX = 226,
+    minZ = -266,
+    maxZ = 266,
+    y = PHASE_TWO_LAVA_SEA_LEVEL,
+    tile = 9;
+  const positions = [
+    -halfX, y, minZ,
+    halfX, y, minZ,
+    halfX, y, maxZ,
+    -halfX, y, maxZ,
+  ];
+  const uvs = [
+    -halfX / tile, minZ / tile,
+    halfX / tile, minZ / tile,
+    halfX / tile, maxZ / tile,
+    -halfX / tile, maxZ / tile,
+  ];
+  const g = new BufferGeometry();
+  g.setAttribute("position", new Float32BufferAttribute(positions, 3));
+  g.setAttribute("uv", new Float32BufferAttribute(uvs, 2));
+  g.setIndex([0, 2, 1, 0, 3, 2]);
   g.computeVertexNormals();
   return g;
 }
@@ -686,8 +699,12 @@ export function createPhaseTwoMotes(
   for (let i = 0; i < count; i++) {
     const petal = i < count * 0.45;
     const flower = Math.floor(rand(i * 4) * flowers.count);
+    // The ambient (non-petal) motes used to reach up to y=32 — tall enough,
+    // from a distance, to read as a hazy patch sitting in the sky itself
+    // rather than drifting near the ground/canopy it's meant to dress.
+    // Keeping them below tree-crown height reads as ground mist instead.
     const x = petal ? flowers.getX(flower) : (rand(i * 4) - 0.5) * 100;
-    const y = petal ? flowers.getY(flower) : rand(i * 4 + 1) * 32;
+    const y = petal ? flowers.getY(flower) : rand(i * 4 + 1) * 14;
     const z = petal ? flowers.getZ(flower) : -35 + rand(i * 4 + 2) * 70;
     positions.push(x, y, z);
     seeds.push(rand(i * 4 + 3));

@@ -82,7 +82,7 @@ test("the entire giant root spread clears both rivers and bases stay embedded", 
 });
 
 test("phase4 resolves independently and all three spawns clear the arrival deck edges", () => {
-  assert.equal(gameMapFromQuery("phase4"), "phase4");
+  assert.equal(gameMapFromQuery("phase4"), "phase3");
   const deck = PHASE_FOUR_PLATFORMS[0];
   for (const id of [0, 1, 2] as const) {
     const p = phaseFourCharacterSpawn(id);
@@ -360,7 +360,7 @@ test("green ground covers the valley and the upper river continues into the wate
   const source = PHASE_FOUR_UPPER_RIVER.at(-1)!;
   assert.equal(source[0], 14);
   assert.equal(source[1], 12.7);
-  assert.equal(source[2], -39);
+  assert.equal(source[2], -44, "upper river meets the curved waterfall approach before the cliff");
   for (const p of PHASE_FOUR_UPPER_RIVER.slice(0, -1))
     assert.ok(phaseFourGroundHeight(p[0], p[2]) < p[1]);
   geometry.dispose();

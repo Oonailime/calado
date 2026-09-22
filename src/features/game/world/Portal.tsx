@@ -15,6 +15,7 @@ import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { runtime, useGame } from "../state/store";
 import { PORTAL } from "./layout";
 import { isInsideOpenPortal } from "./portalEntry";
+import type { PortalAnchor } from "./portalEntry";
 import {
   advancePortalConstruction,
   isOriginalPortalRune,
@@ -165,12 +166,16 @@ export default function Portal({
   running,
   reduced,
   onEnter,
+  anchor = PORTAL,
+  closing = false,
 }: {
   gltf: GLTF;
   built: boolean;
   running: boolean;
   reduced: boolean;
   onEnter: () => void;
+  anchor?: PortalAnchor;
+  closing?: boolean;
 }) {
   const model = useMemo(() => preparePortal(gltf), [gltf]);
   const pieces = useRef<(Group | null)[]>([]);
@@ -195,7 +200,7 @@ export default function Portal({
   }, [built, reduced]);
 
   useFrame(({ clock }, delta) => {
-    construction.current = advancePortalConstruction(
+    construction.current = closing ? Math.max(0, construction.current - (running ? delta * 0.8 : 0)) : advancePortalConstruction(
       construction.current,
       delta,
       built,
@@ -245,7 +250,12 @@ export default function Portal({
     if (glow.current) glow.current.intensity = activation * 2.4;
     if (aura.current) {
       const material = aura.current.material as MeshBasicMaterial;
-      const constructing = built && progress < 1;
+      // progress > 0 too, not just < 1 — a portal that closes all the way
+      // down to 0 (see `closing`, used for a portal that tears itself down
+      // rather than one still being built) stays at rest there forever, and
+      // "progress < 1" alone stayed true the whole time, leaving this ring
+      // glowing on the ground permanently instead of only mid-transition.
+      const constructing = built && progress > 0 && progress < 1;
       aura.current.visible = constructing;
       aura.current.rotation.z = clock.elapsedTime * 0.7;
       aura.current.scale.setScalar(0.85 + progress * 0.35);
@@ -254,18 +264,19 @@ export default function Portal({
     const selected = useGame.getState().puzzle.selected;
     const inside = isInsideOpenPortal(
       runtime.positions[selected],
-      built && progress >= 1,
+      running && !closing && built && progress >= 1,
+      anchor,
     );
     if (inside && !wasInside.current) onEnter();
     wasInside.current = inside;
   });
 
   return (
-    <group position={[PORTAL.x, -PORTAL.groundInset, PORTAL.z]}>
-      {built && (
+    <group name="map-portal" position={[anchor.x, anchor.y ?? -anchor.groundInset, anchor.z]} rotation={[0, anchor.rotationY ?? 0, 0]}>
+      {built && !closing && (
         <RigidBody type="fixed" colliders={false}>
           <CuboidCollider
-            args={[PORTAL.halfWidth, 0.22, PORTAL.halfDepth]}
+            args={[anchor.halfWidth, 0.22, anchor.halfDepth]}
             position={[0, 0.22, 0]}
           />
           <CuboidCollider
@@ -346,7 +357,7 @@ export default function Portal({
       <mesh
         ref={aura}
         rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, PORTAL.groundInset + 0.025, 0]}
+        position={[0, anchor.groundInset + 0.025, 0]}
         visible={false}
       >
         <ringGeometry args={[2.45, 2.62, 64]} />

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { runtime, useGame } from "../state/store";
 import { anchors, distance, LOCK_RANGE, nearCubeShrine } from "../state/rules";
 import { CHARACTER_KEY_BINDINGS } from "../types";
+import { phase2Chess } from "../world/phase2Chess";
 // Multiplier range applied to each map's own base follow distance (see
 // FollowCamera.tsx) — comfortably closer/farther without letting the wheel
 // clip the camera into the character or lose it in the distance.
@@ -29,6 +30,13 @@ export function useControls(active: boolean, onExit: () => void) {
       !!target.closest("input,select,textarea");
     const down = (e: KeyboardEvent) => {
       const state = useGame.getState();
+      if (state.map === "phase2" && phase2Chess.getSnapshot().tabOpen && e.code === "Escape") {
+        e.preventDefault(); phase2Chess.stop(); return;
+      }
+      if (runtime.chessActive) {
+        if (e.code === "Escape") { e.preventDefault(); phase2Chess.stop(); }
+        return;
+      }
       // The lock dial and the cube shrine's overlay each own the keyboard
       // entirely while open — see Lock.tsx / RubiksCubePuzzle.tsx.
       if (state.lockOpen || state.cubePuzzleOpen) return;
@@ -97,6 +105,7 @@ export function useControls(active: boolean, onExit: () => void) {
         );
       }
       if (e.code === "KeyR") {
+        if (state.map === "phase2") { phase2Chess.stop(); runtime.phase2Restore.fill(null); }
         runtime.clear();
         state.reset();
       }
@@ -108,15 +117,30 @@ export function useControls(active: boolean, onExit: () => void) {
         // away from the checkpoint and the gameplay effect cannot activate.
         runtime.triggerPose(id);
         if (state.map === "phase2") return;
+        if (state.map === "phase3") { state.canopyInteract(runtime.positions[id]); return; }
         if (id === 2) {
           state.build(runtime.positions[id]);
         } else state.power(id, runtime.positions[id]);
       }
       if (e.code === "KeyE" || e.code === "Enter") {
         runtime.interact = true;
-        if (state.map === "phase2") return;
+        if (state.map === "phase2") { phase2Chess.interact(); return; }
         const id = state.puzzle.selected;
         const position = runtime.positions[id];
+        if (state.map === "phase3") {
+          const collected = state.collectCube(id, position);
+          const cooperated = state.canopyInteract(position);
+          if (collected || cooperated) {
+            runtime.interact = false;
+            runtime.triggerPose(id);
+            return;
+          }
+          if (state.puzzle.cubeDelivered.every(Boolean) && !state.puzzle.cubeSolved && nearCubeShrine(position)) {
+            runtime.clear();
+            state.configure({ cubePuzzleOpen: true });
+          }
+          return;
+        }
         if (state.eat(id, position)) {
           runtime.triggerEating(id);
           return;
@@ -133,7 +157,7 @@ export function useControls(active: boolean, onExit: () => void) {
           runtime.clear();
           state.configure({ lockOpen: true });
         } else if (
-          state.puzzle.cubePieces.every(Boolean) &&
+          state.puzzle.cubeDelivered.every(Boolean) &&
           !state.puzzle.cubeSolved &&
           nearCubeShrine(position)
         ) {
@@ -157,7 +181,7 @@ export function useControls(active: boolean, onExit: () => void) {
     };
     const mouse = (e: MouseEvent) => {
       const state = useGame.getState();
-      if (state.paused) return;
+      if (state.paused || runtime.chessActive) return;
       if ((e.target as HTMLElement)?.closest("button,input,select")) return;
       // While the cube puzzle is open, the camera holds a fixed angle so
       // "Front" (facing the camera) is a stable reference for U/D/L/R/F/B —
@@ -173,11 +197,12 @@ export function useControls(active: boolean, onExit: () => void) {
       state.learn("camera");
     };
     const wheel = (e: WheelEvent) => {
+      if ((e.target as HTMLElement)?.closest?.("[data-chess-tab]")) return;
       e.preventDefault();
       const state = useGame.getState();
       // Left fixed while focusing the shrine's cube — that view already
       // sits at a deliberately tight, consistent distance.
-      if (state.paused || state.cubePuzzleOpen) return;
+      if (state.paused || state.cubePuzzleOpen || runtime.chessActive) return;
       runtime.zoom = Math.max(
         ZOOM_MIN,
         Math.min(ZOOM_MAX, runtime.zoom + e.deltaY * ZOOM_SPEED),
@@ -199,7 +224,7 @@ export function useControls(active: boolean, onExit: () => void) {
     // not trigger this, so it's scoped to the canvas itself as the target.
     const click = (e: MouseEvent) => {
       const state = useGame.getState();
-      if (state.paused || state.lockOpen || state.cubePuzzleOpen || state.puzzle.cubeSolved)
+      if (state.paused || (state.map === "phase2" && phase2Chess.getSnapshot().tabOpen) || runtime.chessActive || state.lockOpen || state.cubePuzzleOpen || state.puzzle.cubeSolved)
         return;
       if (document.pointerLockElement) return;
       if (e.target !== runtime.canvasElement) return;

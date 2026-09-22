@@ -134,7 +134,7 @@ export default function RubiksCube({ running }: { running: boolean }) {
   // world-Y rotation) from fighting with faceBasis's own quaternion math.
   const spinRoot = useRef<Group>(null);
   const orientRoot = useRef<Group>(null);
-  const unlocked = useGame((s) => s.puzzle.cubePieces.every(Boolean));
+  const unlocked = useGame((s) => s.puzzle.cubeDelivered.every(Boolean));
   const cubePuzzleOpen = useGame((s) => s.cubePuzzleOpen);
   const reduced = useGame((s) => s.reduced);
   const revealStartedAt = useRef<number | null>(null);

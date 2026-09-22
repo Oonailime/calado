@@ -10,5 +10,6 @@ export default defineConfig([
     "test-results/**",
     "playwright-report/**",
     "assets/**",
+    "public/assets/stockfish/**",
   ]),
 ]);

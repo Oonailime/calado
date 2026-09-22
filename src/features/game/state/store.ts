@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { CHESS_TROPHIES, CHESS_TROPHIES_STORAGE_KEY, readChessTrophies, type ChessTrophyId } from "./chessTrophies";
 import type { CharacterId, Vec3 } from "../types";
 import type { LocomotionState } from "../characters/monkeyMotion";
 import { LOCOMOTION_TUNING } from "../characters/locomotionConfig";
@@ -21,20 +22,49 @@ import {
   eatBanana,
   finishCubeTurn,
   initialPuzzle,
+  interactCanopy,
   recover,
+  restoreKikazaruHearing,
+  restoreMizaruSight,
   selectCharacter,
   startPower,
   submitCodeDigit,
   type PuzzleState,
 } from "./rules";
 export type Quality = "low" | "medium" | "high" | "ultra";
-export type GameMap = "islands" | "phase2" | "phase4";
+export type GameMap = "islands" | "phase2" | "phase3";
 
 export function gameMapFromQuery(value: string | null): GameMap | undefined {
-  if (value === "islands" || value === "phase2" || value === "phase4") return value;
+  if (value === "phase4") return "phase3";
+  if (value === "islands" || value === "phase2" || value === "phase3") return value;
   return undefined;
 }
+
+function initialGameMap(): GameMap {
+  if (typeof window === "undefined") return "islands";
+  return (
+    gameMapFromQuery(new URLSearchParams(window.location.search).get("map")) ??
+    "islands"
+  );
+}
+
+// A URL-only dev shortcut: ?map=phase2&skip spawns at the clearing (the
+// same spot arriving back from phase3 already uses) with all three chess
+// pieces already in hand, instead of the long walk in from the arrival
+// portal — for quickly testing the chess table/tree portal without
+// replaying the route each time. Doesn't touch historicalSolved; the puzzle
+// itself still has to be solved normally.
+export function phase2SkipWalk(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).has("skip");
+}
 type Store = {
+  phase2FromCanopy: boolean;
+  phase2Pieces: [boolean, boolean, boolean];
+  collectChessPiece: (index: number) => void;
+  chessTrophies: ChessTrophyId[];
+  hydrateChessTrophies: () => void;
+  awardChessTrophy: (opponent: CharacterId) => boolean;
   puzzle: PuzzleState;
   paused: boolean;
   muted: boolean;
@@ -59,6 +89,9 @@ type Store = {
   power: (id: CharacterId, position: Vec3) => void;
   build: (position: Vec3) => void;
   eat: (id: CharacterId, position: Vec3) => boolean;
+  canopyInteract: (position: Vec3) => boolean;
+  restoreMizaruSight: () => void;
+  restoreKikazaruHearing: () => void;
   collectCube: (id: CharacterId, position: Vec3) => boolean;
   turnCubeFace: (axis: Axis, layer: Layer, direction: Direction) => void;
   completeCubeTurn: () => void;
@@ -69,6 +102,7 @@ type Store = {
     patch: Partial<
       Pick<
         Store,
+        | "phase2FromCanopy"
         | "paused"
         | "muted"
         | "quality"
@@ -87,6 +121,34 @@ type Store = {
   ) => void;
 };
 export const useGame = create<Store>((set) => ({
+  phase2FromCanopy: phase2SkipWalk(),
+  phase2Pieces: phase2SkipWalk() ? [true, true, true] : [false, false, false],
+  collectChessPiece: (index) => set(s => {
+    if (index < 0 || index > 2 || s.phase2Pieces[index]) return s;
+    const pieces = [...s.phase2Pieces] as [boolean, boolean, boolean];
+    pieces[index] = true;
+    try { localStorage.setItem("phase2ChessPieces", JSON.stringify(pieces)); } catch {}
+    return { phase2Pieces: pieces };
+  }),
+  chessTrophies: [],
+  hydrateChessTrophies: () => set(s => {
+    const saved = readChessTrophies();
+    const merged = [...new Set([...s.chessTrophies, ...saved])];
+    return merged.length === s.chessTrophies.length ? s : { chessTrophies: merged };
+  }),
+  awardChessTrophy: (opponent) => {
+    let awarded = false;
+    set(s => {
+      const id = CHESS_TROPHIES[opponent].id;
+      if (s.chessTrophies.includes(id)) return s;
+      const saved = readChessTrophies();
+      awarded = !saved.includes(id);
+      const chessTrophies = [...new Set([...s.chessTrophies, ...saved, id])];
+      try { localStorage.setItem(CHESS_TROPHIES_STORAGE_KEY, JSON.stringify(chessTrophies)); } catch {}
+      return { chessTrophies };
+    });
+    return awarded;
+  },
   puzzle: initialPuzzle(),
   paused: false,
   muted: false,
@@ -101,16 +163,18 @@ export const useGame = create<Store>((set) => ({
   zone: 0,
   lockOpen: false,
   cubePuzzleOpen: false,
-  map: "islands",
+  map: initialGameMap(),
   select: (id) =>
-    set((s) => ({
-      puzzle: selectCharacter(s.puzzle, id),
+    set((s) => {
+      if (!runtime.chessActive && s.map === "phase3" && id !== s.puzzle.selected) runtime.canopySelectionEpoch++;
+      return {
+      puzzle: runtime.chessActive ? s.puzzle : selectCharacter(s.puzzle, id),
       learned: {
         ...s.learned,
         switch: true,
         hold: s.learned.hold || s.puzzle.powers[s.puzzle.selected],
       },
-    })),
+    }; }),
   power: (id, p) => set((s) => ({ puzzle: startPower(s.puzzle, id, p) })),
   build: (p) =>
     set((s) => {
@@ -127,9 +191,22 @@ export const useGame = create<Store>((set) => ({
     });
     return ate;
   },
+  canopyInteract: (position) => {
+    let changed = false;
+    set(state => {
+      if (state.map !== "phase3") return state;
+      const puzzle = interactCanopy(state.puzzle, position);
+      changed = puzzle !== state.puzzle;
+      return changed ? { puzzle } : state;
+    });
+    return changed;
+  },
+  restoreMizaruSight: () => set((s) => ({ puzzle: restoreMizaruSight(s.puzzle) })),
+  restoreKikazaruHearing: () => set((s) => ({ puzzle: restoreKikazaruHearing(s.puzzle) })),
   collectCube: (id, position) => {
     let collected = false;
     set((state) => {
+      if (state.map !== "phase3") return state;
       const puzzle = collectCubePiece(state.puzzle, id, position);
       collected = puzzle !== state.puzzle;
       return collected ? { puzzle } : state;
@@ -163,6 +240,7 @@ export const useGame = create<Store>((set) => ({
   reset: () =>
     set((s) => ({
       puzzle: recover(s.puzzle),
+      phase2FromCanopy: false,
       lockOpen: false,
       cubePuzzleOpen: false,
     })),
@@ -230,6 +308,14 @@ function movementDebugFrame() {
 
 // Positions/frame data intentionally live outside React's render state.
 export const runtime = {
+  canopySelectionEpoch: 0,
+  // Live 0..1 progress crossing the cooperative vine bridge, ratcheting up
+  // only — read by Game.tsx (sight) and useSound.ts (hearing) to ease the
+  // blind/muffled filters off. Once either reaches 1, the corresponding
+  // puzzle.*Restored flag makes the payoff permanent regardless of this
+  // value, which itself resets to 0 like any other per-frame runtime data.
+  mizaruVineSight: 0,
+  kikazaruVineHearing: 0,
   positions: [
     characterSpawn(0),
     characterSpawn(1),
@@ -327,8 +413,13 @@ export const runtime = {
       contacts.left = null;
       contacts.right = null;
     }
+    this.mizaruVineSight = 0;
+    this.kikazaruVineHearing = 0;
     this.stopBinarySequence();
   },
+  chessActive: false,
+  phase2Restore: [null, null, null] as (Vec3 | null)[],
+  phase2Seats: [null, null] as [number | null, number | null],
 };
 
 // TEMP-VERIFY: live inspection hook for Playwright, removed before finishing.

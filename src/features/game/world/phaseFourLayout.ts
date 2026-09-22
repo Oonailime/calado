@@ -106,13 +106,13 @@ function cubePieceSpawn(deckId: string, offsetX: number, offsetZ: number): Point
 }
 
 // Each monkey's own piece: white (Mizaru) on the highest plateau reachable
-// before the first vine climb, brown (Iwazaru) by the waterfall, yellow
-// (Kikazaru) on the last platform after the swing-vine sequence. Indexed
+// before the first vine climb, yellow (Kikazaru) by the waterfall, brown
+// (Iwazaru) on the last platform after the swing-vine sequence. Indexed
 // like CHARACTERS/CharacterId.
 export const PHASE_FOUR_CUBE_PIECE_SPAWNS: Record<CharacterId, Point3> = {
   0: cubePieceSpawn("crown", 0, -2.5),
-  1: cubePieceSpawn("waterfall-summit", -2, 2),
-  2: cubePieceSpawn("falls", 0, -2),
+  1: cubePieceSpawn("falls", 0, -2),
+  2: cubePieceSpawn("waterfall-summit", -2, 2),
 };
 
 export type CanopyPath = {
@@ -434,7 +434,7 @@ export function phaseFourAdjacentSite(
 }
 
 export const PHASE_FOUR_RIVER: Point3[] = [
-  [14, -4.8, -39],
+  [13, -4.8, -34],
   [11, -4.8, -30],
   [7, -4.8, -20],
   [10, -4.8, -9],
@@ -442,6 +442,8 @@ export const PHASE_FOUR_RIVER: Point3[] = [
   [3, -4.8, 19],
   [10, -4.8, 38],
   [6, -4.8, 64],
+  [9, -4.8, 120],
+  [3, -4.8, 200],
 ];
 export const PHASE_FOUR_WATERFALL = {
   position: [14, -4.8, -39] as Point3,
@@ -449,11 +451,13 @@ export const PHASE_FOUR_WATERFALL = {
   width: 6.5,
 };
 export const PHASE_FOUR_UPPER_RIVER: Point3[] = [
+  [12, 12.7, -200],
+  [20, 12.7, -145],
   [18, 12.7, -104],
   [6, 12.7, -88],
   [4, 12.7, -75],
   [12, 12.7, -63],
   [18, 12.7, -54],
   [14, 12.7, -44],
-  [14, 12.7, -39],
+
 ];

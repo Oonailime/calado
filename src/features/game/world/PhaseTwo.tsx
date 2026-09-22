@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
 import {
   CuboidCollider,
   CylinderCollider,
@@ -20,12 +22,12 @@ import {
   UniformsLib,
   UniformsUtils,
 } from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { useGame } from "../state/store";
+import { runtime, useGame, type GameMap } from "../state/store";
 import {
   createPhaseTwoChess,
   createPhaseTwoLantern,
   createPhaseTwoLava,
+  createPhaseTwoLavaSea,
   createPhaseTwoRocks,
   createPhaseTwoTerrain,
   createPhaseTwoTrees,
@@ -33,15 +35,29 @@ import {
   PHASE_TWO_CHESS_PIECE_KINDS,
   PHASE_TWO_CHESS_PIECE_URL,
   type ChessPieceKind,
+  phaseTwoPieceFit,
 } from "./phaseTwoAssets";
 import {
   PHASE_TWO_TABLE,
+  PHASE_TWO_TREE,
+  PHASE_TWO_ARRIVAL_PORTAL,
+  PHASE_TWO_PICKUPS,
   PHASE_TWO_CHESS_SCALE,
   PHASE_TWO_STOOLS,
   PHASE_TWO_VOLCANOES,
   phaseTwoGroundHeight as ground,
   phaseTwoRandom as rand,
 } from "./phaseTwoLayout";
+import ChessBoard3D from "./ChessBoard3D";
+import { phase2Chess } from "./phase2Chess";
+import TreeEntrance from "./TreeEntrance";
+import { createTreePortalFit } from "./treePortalFit";
+import Portal, { PORTAL_MODEL_URL } from "./Portal";
+
+// Doorway center and outward normal; depth is fitted to the actual bark at every height.
+const TREE_PORTAL_OFFSET_X = -0.48;
+const TREE_PORTAL_OFFSET_Z = 0.87;
+const TREE_PORTAL_ROTATION_Y = 0.013;
 
 const NOISE = `
 float hash(vec3 p) { return fract(sin(dot(p, vec3(127.1,311.7,74.7))) * 43758.5453); }
@@ -163,10 +179,10 @@ function VolcanicAtmosphere({
           side={BackSide}
           depthWrite={false}
           uniforms={skyUniforms}
-          vertexShader={`varying vec3 vDirection;void main(){vDirection=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`}
+          vertexShader={`varying vec3 vDirection;void main(){vDirection=position;vec4 p=projectionMatrix*mat4(mat3(viewMatrix))*vec4(position,1.0);gl_Position=p.xyww;}`}
           fragmentShader={`uniform float uTime;varying vec3 vDirection;${NOISE}
           void main(){vec3 d=normalize(vDirection);vec3 p=d*5.0+vec3(uTime*0.007,0,0);
-          float n=fbm(p+fbm(p*1.7)*2.0);float horizon=1.0-smoothstep(0.0,0.48,d.y);
+          float n=fbm(p+fbm(p*1.7)*2.0);float horizon=1.0-smoothstep(-0.18,0.28,d.y+0.06*(n-0.5));
           vec3 color=mix(vec3(0.022,0.026,0.035),vec3(0.12,0.12,0.13),smoothstep(0.2,0.73,n));
           color=mix(color,vec3(0.10,0.092,0.10),horizon*0.55);gl_FragColor=vec4(color,1.0);
           #include <tonemapping_fragment>
@@ -241,11 +257,14 @@ function VolcanicAtmosphere({
   );
 }
 
-export default function PhaseTwo({ running }: { running: boolean }) {
+export default function PhaseTwo({ running, onPortalEnter }: { running: boolean; onPortalEnter: (next?: GameMap) => void }) {
   const pieceModels = useLoader(
     GLTFLoader,
     PHASE_TWO_CHESS_PIECE_KINDS.map(PHASE_TWO_CHESS_PIECE_URL),
   );
+  const arrivalPortalModel = useLoader(GLTFLoader, PORTAL_MODEL_URL);
+  const historicalSolved = useSyncExternalStore(phase2Chess.subscribe, () => phase2Chess.getSnapshot().historicalSolved, () => false);
+  useEffect(() => { phase2Chess.hydrate(); return () => phase2Chess.stop(); }, []);
   // Each model is a single recentered, decimated mesh (see
   // public/assets/models/chess-monkey/ and phaseTwoAssets.ts's Batch-based
   // pieceFit) — pull the raw geometry back out so createPhaseTwoChess can
@@ -267,12 +286,32 @@ export default function PhaseTwo({ running }: { running: boolean }) {
       terrain: createPhaseTwoTerrain(),
       rocks: createPhaseTwoRocks(),
       ...createPhaseTwoTrees(),
-      chess: createPhaseTwoChess(pieceGeometries),
+      chess: createPhaseTwoChess(pieceGeometries, false),
       lantern: createPhaseTwoLantern(),
       lava: createPhaseTwoLava(),
+      lavaSea: createPhaseTwoLavaSea(),
     }),
     [pieceGeometries],
   );
+  // Stable typed arrays avoid rebuilding Rapier colliders and keep React's
+  // development performance trace from serializing millions of index entries.
+  const treePortalAnchor = useMemo(() => ({
+    x: PHASE_TWO_TREE[0] + TREE_PORTAL_OFFSET_X,
+    y: ground(...PHASE_TWO_TREE) + 0.08,
+    z: PHASE_TWO_TREE[1] + TREE_PORTAL_OFFSET_Z,
+    rotationY: TREE_PORTAL_ROTATION_Y,
+    halfWidth: 0.8, halfDepth: 0.7, groundInset: 0,
+  }), []);
+  const treePortalFit = useMemo(() => createTreePortalFit(assets.bark, treePortalAnchor), [assets.bark, treePortalAnchor]);
+  const colliderArgs = useMemo(() => {
+    const args = (geometry: BufferGeometry): [Float32Array, Uint32Array] => [
+      geometry.getAttribute("position").array as Float32Array,
+      geometry.index
+        ? geometry.index.array as Uint32Array
+        : Uint32Array.from({ length: geometry.getAttribute("position").count }, (_, i) => i),
+    ];
+    return { terrain: args(assets.terrain), rocks: args(assets.rocks), bark: args(assets.bark) };
+  }, [assets]);
   const lava = useRef<ShaderMaterial>(null),
     light = useRef<PointLight>(null),
     elapsed = useRef(0);
@@ -315,21 +354,8 @@ export default function PhaseTwo({ running }: { running: boolean }) {
             onBeforeCompile={basaltShader}
           />
         </mesh>
-        <TrimeshCollider
-          args={[
-            assets.terrain.getAttribute("position").array as Float32Array,
-            assets.terrain.index!.array as Uint32Array,
-          ]}
-        />
-        <TrimeshCollider
-          args={[
-            assets.rocks.getAttribute("position").array as Float32Array,
-            Uint32Array.from(
-              { length: assets.rocks.getAttribute("position").count },
-              (_, i) => i,
-            ),
-          ]}
-        />
+        <TrimeshCollider args={colliderArgs.terrain} />
+        <TrimeshCollider args={colliderArgs.rocks} />
         <CuboidCollider
           args={[
             1.4 * PHASE_TWO_CHESS_SCALE,
@@ -353,15 +379,7 @@ export default function PhaseTwo({ running }: { running: boolean }) {
             ]}
           />
         ))}
-        <TrimeshCollider
-          args={[
-            assets.bark.getAttribute("position").array as Float32Array,
-            Uint32Array.from(
-              { length: assets.bark.getAttribute("position").count },
-              (_, i) => i,
-            ),
-          ]}
-        />
+        <TrimeshCollider args={colliderArgs.bark} />
         <CuboidCollider
           args={[0.4, 0.8, 0.4]}
           position={[2.3, ground(2.3, 3) + 0.8, 3]}
@@ -396,6 +414,18 @@ export default function PhaseTwo({ running }: { running: boolean }) {
           />
         </mesh>
       ))}
+      <ChessBoard3D pieces={pieceGeometries} />
+      {/* Fit the whole doorway to the real trunk and root flare at every height. */}
+      <TreeEntrance
+        anchor={treePortalAnchor}
+        surfaceFit={treePortalFit}
+        open={historicalSolved}
+        running={running}
+        onEnter={onPortalEnter}
+      />
+      <ArrivalEntrance running={running} portalModel={arrivalPortalModel} onPortalEnter={onPortalEnter} />
+      <ChessPickups pieces={pieceGeometries} running={running} />
+      <SeatIndicators />
       <mesh
         name="phase2-cherry-blossoms"
         // Thousands of merged, non-instanced petal quads (see
@@ -421,6 +451,22 @@ export default function PhaseTwo({ running }: { running: boolean }) {
       >
         <shaderMaterial
           ref={lava}
+          uniforms={uniforms}
+          vertexShader={LAVA_VERTEX}
+          fragmentShader={LAVA_FRAGMENT}
+          side={DoubleSide}
+          fog
+        />
+      </mesh>
+      {/* Shares `uniforms` (the same object, not just the same values) with
+          the river material above so the one uTime update in useFrame
+          animates both in lockstep. */}
+      <mesh
+        name="phase2-lava-sea"
+        geometry={assets.lavaSea}
+        userData={{ cameraOccluder: false }}
+      >
+        <shaderMaterial
           uniforms={uniforms}
           vertexShader={LAVA_VERTEX}
           fragmentShader={LAVA_FRAGMENT}
@@ -466,7 +512,7 @@ export default function PhaseTwo({ running }: { running: boolean }) {
         />
       </group>
       <pointLight
-        position={[22, 1, -4]}
+        position={[33.95, -3.45, -18]}
         color="#ff4c10"
         intensity={35}
         distance={18}
@@ -481,4 +527,114 @@ export default function PhaseTwo({ running }: { running: boolean }) {
       />
     </group>
   );
+}
+
+
+function SeatIndicators() {
+  const indicators = useRef<Array<Mesh | null>>([]);
+  useFrame(() => {
+    const id = useGame.getState().puzzle.selected;
+    indicators.current.forEach((mesh, index) => {
+      if (mesh) mesh.visible = !runtime.chessActive && phase2Chess.canSeat(id, index);
+    });
+  });
+  return <group name="phase2-seat-indicators" userData={{ cameraOccluder: false }}>
+    {PHASE_TWO_STOOLS.map((seat, index) => (
+      <mesh
+        key={index}
+        ref={(mesh) => { indicators.current[index] = mesh; }}
+        name={`phase2-seat-indicator-${index}`}
+        visible={false}
+        position={[seat.x, ground(seat.x, seat.z) + 0.88 * PHASE_TWO_CHESS_SCALE, seat.z]}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+          const id = useGame.getState().puzzle.selected;
+          if (phase2Chess.canSeat(id, index)) phase2Chess.seat(id, index === 0 ? "w" : "b");
+        }}
+      >
+        <cylinderGeometry args={[seat.radius, seat.radius, 0.16, 20]} />
+        <meshBasicMaterial color={index === 0 ? "#e8d29a" : "#8e7460"} transparent opacity={0.72} />
+      </mesh>
+    ))}
+  </group>;
+}
+
+
+// TreeEntrance's dark capsule is meant to read as a hollow carved into an
+// actual tree trunk (see the cherry tree / phase3 starting tree uses) —
+// Same portal used at the end of phase 1 (built, then torn down) rather than
+// a tree-hollow opening — this spot isn't a tree, there's nothing for that
+// shape to read as being carved into. It starts already fully assembled
+// (built from the first frame) and disassembles itself automatically a few
+// seconds after arrival, rather than waiting for the player to look back at
+// it or approach it.
+const ARRIVAL_PORTAL_LIFETIME_SECONDS = 3;
+
+function ArrivalEntrance({
+  running,
+  portalModel,
+  onPortalEnter,
+}: {
+  running: boolean;
+  portalModel: GLTF;
+  onPortalEnter: (next?: GameMap) => void;
+}) {
+  const [closing, setClosing] = useState(false);
+  const fromCanopy = useGame((s) => s.phase2FromCanopy);
+  const cubeSolved = useGame((s) => s.puzzle.cubeSolved);
+  const reduced = useGame((s) => s.reduced);
+  const elapsed = useRef(0);
+  useFrame((_, delta) => {
+    // Once the game is beaten this same portal becomes the real way back to
+    // islands, so it must stop auto-closing — it was already open (or still
+    // closing) from the original arrival by then; either way, stay open.
+    if (!running || closing || fromCanopy || cubeSolved) return;
+    elapsed.current += delta;
+    if (elapsed.current >= ARRIVAL_PORTAL_LIFETIME_SECONDS) setClosing(true);
+  });
+  // A canopy-return skips the "you just arrived" portal entirely — unless
+  // the game's been beaten, in which case this is the only way back to
+  // islands and needs to render regardless of how the player got here.
+  if (fromCanopy && !cubeSolved) return null;
+  return (
+    <Portal
+      gltf={portalModel}
+      built
+      running={running}
+      reduced={reduced}
+      closing={cubeSolved ? false : closing}
+      anchor={PHASE_TWO_ARRIVAL_PORTAL}
+      // Entering it only matters once it's the real return trip — during the
+      // initial arrival window this used to also trigger `closing` just from
+      // looking at/walking toward it, which read as "the portal vanished for
+      // no reason." It's a no-op until the game is solved.
+      onEnter={() => { if (cubeSolved) onPortalEnter("islands"); }}
+    />
+  );
+}
+
+function ChessPickups({ pieces, running }: { pieces: Record<ChessPieceKind, BufferGeometry>; running: boolean }) {
+  const collected = useGame(s => s.phase2Pieces);
+  const refs = useRef<Array<Mesh | null>>([]);
+  const fits = useMemo(() => PHASE_TWO_PICKUPS.map(p => phaseTwoPieceFit(pieces[p.kind], p.kind)), [pieces]);
+  useFrame(({ clock }) => {
+    if (!running) return;
+    PHASE_TWO_PICKUPS.forEach((pickup, index) => {
+      const mesh = refs.current[index];
+      if (!mesh || useGame.getState().phase2Pieces[index]) return;
+      mesh.rotation.y = clock.elapsedTime * 0.65;
+      const y = ground(pickup.x, pickup.z);
+      mesh.position.y = y + 0.3 + Math.sin(clock.elapsedTime*2+index)*0.1;
+      if (runtime.positions.some(p => Math.hypot(p.x-pickup.x,p.z-pickup.z) < 1.4 && Math.abs(p.y-y) < 2)) {
+        useGame.getState().collectChessPiece(index);
+      }
+    });
+  });
+  return <group name="phase2-chess-pickups">
+    {PHASE_TWO_PICKUPS.map((p, i) => !collected[i] && <mesh key={p.id} ref={mesh => { refs.current[i] = mesh; }}
+      position={[p.x, ground(p.x,p.z)+0.3,p.z]} geometry={pieces[p.kind]}
+      scale={[fits[i].horizontal*3, fits[i].vertical*3, fits[i].horizontal*3]}>
+      <meshStandardMaterial color="#ffe4a3" emissive="#bd7b26" emissiveIntensity={0.6} roughness={0.4} />
+    </mesh>)}
+  </group>;
 }

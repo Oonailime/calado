@@ -5,6 +5,7 @@ import {
   Material,
   Mesh,
   Object3D,
+  PerspectiveCamera,
   Raycaster,
   Vector3,
 } from "three";
@@ -13,6 +14,8 @@ import { ZOOM_MIN } from "../controls/useControls";
 import { PHASE_FOUR_PLATFORMS } from "../world/phaseFourLayout";
 import { occlusionRaycast } from "./occlusionRaycast";
 import { InstanceOcclusion } from "./instanceOcclusion";
+import { PHASE_TWO_TABLE, phaseTwoGroundHeight } from "../world/phaseTwoLayout";
+import { phase2Chess } from "../world/phase2Chess";
 
 const SHRINE_FOCUS = PHASE_FOUR_PLATFORMS.find(
   (deck) => deck.id === "summit-shrine",
@@ -174,17 +177,25 @@ export default function FollowCamera({ running }: { running: boolean }) {
     [],
   );
 
-  useFrame(({ camera, scene }, delta) => {
+  useFrame(({ camera, scene, size }, delta) => {
     if (!running) return;
     const state = useGame.getState();
     const dt = Math.min(delta, 0.04);
-    const pitch = state.reduced ? 0.43 : runtime.pitch;
+    const pitch = runtime.chessActive ? 0.5 : state.reduced ? 0.43 : runtime.pitch;
     // While the shrine's puzzle overlay is open, frame the cube itself
     // instead of the selected character — same orbit math, tighter distance.
     const focusingCube = state.cubePuzzleOpen;
+    const focusingChess = state.map === "phase2" && phase2Chess.getSnapshot().mode !== "idle";
+    if (camera instanceof PerspectiveCamera) {
+      // Leave the right-hand tab clear while retaining the animated board
+      // in the visible portion of the map. Clear the offset on exit.
+      if (focusingChess && size.width > 760)
+        camera.setViewOffset(size.width, size.height, Math.min(420, size.width * 0.92) / 2, 0, size.width, size.height);
+      else if (camera.view?.enabled) camera.clearViewOffset();
+    }
     // Left at 1x while focusing the shrine — that view keeps its own fixed,
     // deliberately tight distance regardless of the player's zoom setting.
-    const zoom = focusingCube ? 1 : runtime.zoom;
+    const zoom = focusingCube || focusingChess ? 1 : runtime.zoom;
     // 0 at minimum zoom (matches every other map's close framing exactly),
     // 1 at rest and beyond (the volcanic map's own wide valley framing,
     // scaled up further by `zoom` below exactly as before).
@@ -194,22 +205,28 @@ export default function FollowCamera({ running }: { running: boolean }) {
         : 0;
     const p = focusingCube
       ? { x: SHRINE_FOCUS[0], y: SHRINE_FOCUS[1] + 1.85, z: SHRINE_FOCUS[2] }
+      : focusingChess
+        ? { x: PHASE_TWO_TABLE[0], y: phaseTwoGroundHeight(...PHASE_TWO_TABLE) + 0.69, z: PHASE_TWO_TABLE[1] }
       : runtime.positions[state.puzzle.selected];
     const height = focusingCube
       ? 0
+      : focusingChess
+        ? 0
       : state.map === "phase2"
         ? STANDARD_HEIGHT + (PHASE2_HEIGHT - STANDARD_HEIGHT) * phase2Blend
         : 0.55;
     const distanceBase = focusingCube
       ? 3.6
+      : focusingChess
+        ? 1.25
       : state.map === "phase2"
         ? STANDARD_DISTANCE + (PHASE2_DISTANCE - STANDARD_DISTANCE) * phase2Blend
-        : state.map === "phase4"
+        : state.map === "phase3"
           ? 10
           : 8;
     const distance = distanceBase * zoom;
     player.current.set(p.x, p.y + height, p.z);
-    if (state.map === "phase2") {
+    if (state.map === "phase2" && !focusingChess) {
       const pull = PHASE2_PULL_BACK * phase2Blend;
       player.current.x -= Math.sin(runtime.yaw) * pull;
       player.current.z -= Math.cos(runtime.yaw) * pull;
@@ -217,6 +234,8 @@ export default function FollowCamera({ running }: { running: boolean }) {
     look.current.lerp(player.current, 1 - Math.exp(-dt * 7));
     const riseBase = focusingCube
       ? 0.9
+      : focusingChess
+        ? 0.25
       : state.map === "phase2"
         ? STANDARD_RISE_BASE + (PHASE2_RISE_BASE - STANDARD_RISE_BASE) * phase2Blend
         : 2.1;
@@ -226,6 +245,7 @@ export default function FollowCamera({ running }: { running: boolean }) {
       p.y + height + rise,
       p.z + Math.cos(runtime.yaw) * distance,
     );
+    if (focusingChess) target.current.set(p.x, p.y + 2.6, p.z + (phase2Chess.getSnapshot().playerColor === "w" ? -1.25 : 1.25));
     camera.position.lerp(
       target.current,
       1 - Math.exp(-dt * (state.reduced ? 10 : 5)),
@@ -245,6 +265,23 @@ export default function FollowCamera({ running }: { running: boolean }) {
         if (entry.active) restoreMesh(mesh, entry, true);
       faded.current.clear();
       blocked.current.clear();
+      return;
+    }
+
+    // Phase 2 uses a pulled-back valley camera and deliberately excludes its
+    // large merged terrain/tree meshes from camera occlusion. Keeping the
+    // remaining chess/lantern meshes in the raycast path still makes every
+    // character switch resample the scene and can synchronously compile a
+    // transparent material when one of them is hit. There is no useful
+    // character-sized foliage to fade on this map, so skip the whole pass and
+    // release state left by another map before returning.
+    if (state.map === "phase2") {
+      for (const [mesh, entry] of faded.current)
+        if (entry.active) restoreMesh(mesh, entry, true);
+      faded.current.clear();
+      blocked.current.clear();
+      for (const proxy of instances.current.proxies.keys())
+        instances.current.restore(proxy);
       return;
     }
 

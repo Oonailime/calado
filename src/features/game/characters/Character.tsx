@@ -1,3 +1,4 @@
+import { phaseTwoTouchesLava, phaseTwoFollowerJump, phaseTwoLavaAt } from "../world/phaseTwoLava";
 import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import {
@@ -28,8 +29,10 @@ import {
   CHARACTER_SPAWN_Y,
   characterSpawn,
 } from "../world/layout";
+import { CANOPY_BRIDGE_CURVE, CANOPY_BRIDGE_SITE } from "../world/canopyCooperationLayout";
+import { phaseFourTouchesGround } from "../world/phaseFourTerrain";
 import { safeGround, waterDepth } from "../world/terrain";
-import { phaseTwoCharacterSpawn, phaseTwoOutsideMap } from "../world/phaseTwoLayout";
+import { phaseTwoCharacterSpawn, phaseTwoFollowTarget, PHASE_TWO_START_YAW, phaseTwoOutsideMap, PHASE_TWO_STOOLS, phaseTwoGroundHeight } from "../world/phaseTwoLayout";
 import { followerDelaySeconds, shouldFollowerJump } from "./followerNavigation";
 import type {
   HandLocomotion,
@@ -171,6 +174,45 @@ function vector(x = 0, y = 0, z = 0): MutableVec3 {
   return { x, y, z };
 }
 
+// Vine-walk entry/exit used to hand the body's facing straight from
+// walk.basis (or straight back to undefined/grounded on arrival) with no
+// transition at all — a same-frame snap right at the two moments the vine
+// starts and ends, reading as the body flipping the wrong way there. This
+// eases the *displayed* forward between the two over VINE_FACING_BLEND_SECONDS
+// and rebuilds right/up from it fresh each frame (independently lerping all
+// three axes would drift them out of orthogonality).
+const VINE_FACING_BLEND_SECONDS = 0.35;
+const facingScratch = {
+  to: new Vector3(),
+  blended: new Vector3(),
+  right: new Vector3(),
+  up: new Vector3(),
+};
+function blendFacingBasis(
+  out: LocalBasis,
+  from: Readonly<Vec3>,
+  to: Readonly<Vec3>,
+  t: number,
+) {
+  const blended = facingScratch.blended.set(from.x, from.y, from.z);
+  blended.lerp(facingScratch.to.set(to.x, to.y, to.z), t);
+  if (blended.lengthSq() < 1e-8) blended.copy(facingScratch.to);
+  blended.normalize();
+  const right = facingScratch.right.set(-blended.z, 0, blended.x);
+  if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
+  else right.normalize();
+  const up = facingScratch.up.crossVectors(right, blended).normalize();
+  out.forward.x = blended.x;
+  out.forward.y = blended.y;
+  out.forward.z = blended.z;
+  out.right.x = right.x;
+  out.right.y = right.y;
+  out.right.z = right.z;
+  out.up.x = up.x;
+  out.up.y = up.y;
+  out.up.z = up.z;
+}
+
 function createHand(side: HandSide): HandAttachment {
   const support = vector();
   return {
@@ -275,7 +317,7 @@ function easeInOut(progress: number) {
 
 function sitesForMap(map: ReturnType<typeof useGame.getState>["map"]) {
   if (map === "phase2") return [];
-  if (map === "phase4") return PHASE_FOUR_SITES;
+  if (map === "phase3") return useGame.getState().puzzle.canopyBridgeBuilt ? [...PHASE_FOUR_SITES, CANOPY_BRIDGE_SITE] : PHASE_FOUR_SITES;
   return ARBOREAL_SITES;
 }
 
@@ -338,7 +380,11 @@ function siteHandTarget(
   out: MutableVec3,
   position?: Readonly<Vec3>,
 ) {
-  const swinging = !site.vine.directGrip && runtime.swingingVines.get(site.id);
+  let swinging = !site.vine.directGrip && runtime.swingingVines.get(site.id);
+  if (!swinging && site.vine.twoPoint) {
+    swinging = createSwingingVine(site);
+    runtime.swingingVines.set(site.id, swinging);
+  }
   if (swinging) {
     if (position) {
       closestSwingingVineGrip(swinging, position, out);
@@ -787,7 +833,7 @@ function locomotionMotion(controller: Controller): MonkeyMotion | undefined {
   if (state === "RUN") return "biped-walk";
   if (state === "CLIMB") {
     // The fixed rope has its own quadrupedal walking pose.
-    if (controller.tree?.site.id === PHASE_FOUR_LADDER_SITE.id)
+    if (controller.tree?.vineWalk)
       return "vine-walk";
     return controller.tree?.kind === "tree-descend"
       ? "tree-descend"
@@ -926,8 +972,8 @@ function startTreeActivity(
     kind: "tree-climb",
     site,
     elapsed: 0,
-    vineWalk: site.id === PHASE_FOUR_LADDER_SITE.id
-      ? createVineWalk(position, Math.abs(position.y - site.climb.topY) < 1.5)
+    vineWalk: site.id === PHASE_FOUR_LADDER_SITE.id || site.id === CANOPY_BRIDGE_SITE.id
+      ? createVineWalk(position, Math.abs(position.y - site.climb.topY) < 1.5, site.id === CANOPY_BRIDGE_SITE.id ? CANOPY_BRIDGE_CURVE : undefined)
       : undefined,
   };
   setState(controller, "CLIMB");
@@ -979,12 +1025,25 @@ export default function Character({
   const map = useGame((state) => state.map);
   const debugEnabled = useGame((state) => state.movementDebug);
   const { world, rapier } = useRapier();
+  const spawn =
+    map === "phase2"
+      ? phaseTwoCharacterSpawn(id, useGame.getState().phase2FromCanopy)
+      : map === "phase3"
+        ? phaseFourCharacterSpawn(id)
+        : characterSpawn(id, useGame.getState().puzzle.bridge);
 
   const basisRef = useRef<LocalBasis>({
     forward: vector(0, 0, -1),
     right: vector(1, 0, 0),
     up: vector(0, 1, 0),
   });
+  const vineDisplayBasis = useRef<LocalBasis>({
+    forward: vector(0, 0, -1),
+    right: vector(1, 0, 0),
+    up: vector(0, 1, 0),
+  });
+  const vineExitStartForward = useRef<MutableVec3>(vector(0, 0, -1));
+  const vineExitBlendRemaining = useRef(0);
   const scratchRef = useRef({
     desired: vector(),
     candidate: vector(),
@@ -1012,14 +1071,9 @@ export default function Character({
   }, [id]);
 
   useEffect(() => {
-    const puzzleState = useGame.getState().puzzle;
-    const spawn =
-      map === "phase2"
-        ? phaseTwoCharacterSpawn(id)
-        : map === "phase4"
-        ? phaseFourCharacterSpawn(id)
-        : characterSpawn(id, puzzleState.bridge);
     const rigid = body.current;
+    const testing = window as unknown as { __canopyBodies?: unknown[] };
+    (testing.__canopyBodies ??= [])[id] = rigid;
     if (rigid) {
       rigid.setBodyType(rapier.RigidBodyType.Dynamic, true);
       // Direct translation is reserved for explicit spawn/reset recovery only.
@@ -1027,6 +1081,13 @@ export default function Character({
       rigid.setLinvel(vector(), true);
     }
     runtime.positions[id] = spawn;
+    if (map === "phase2") {
+      const yaw = useGame.getState().phase2FromCanopy ? Math.PI : PHASE_TWO_START_YAW;
+      Object.assign(basisRef.current.forward, { x: -Math.sin(yaw), y: 0, z: -Math.cos(yaw) });
+      Object.assign(basisRef.current.right, { x: Math.cos(yaw), y: 0, z: -Math.sin(yaw) });
+    }
+    previous.current.x = spawn.x;
+    previous.current.z = spawn.z;
     runtime.grounded[id] = true;
     runtime.motions[id] = null;
     if (runtime.activeVine?.monkeyId === id) runtime.activeVine = null;
@@ -1046,6 +1107,8 @@ export default function Character({
     body.current?.setBodyType(rapier.RigidBodyType.Dynamic, true);
     capsule.current?.setSensor(false);
     clearTraversal(traversal);
+    runtime.vineContacts[id].left = null;
+    runtime.vineContacts[id].right = null;
     if (runtime.activeVine?.monkeyId === id) runtime.activeVine = null;
   }, [selectedId, id, rapier]);
 
@@ -1081,8 +1144,34 @@ export default function Character({
     const velocity = rigid.linvel();
     const state = useGame.getState();
     const puzzle = state.puzzle;
-    const inPhaseFour = state.map === "phase4";
+    const inPhaseFour = state.map === "phase3";
     const inPhaseTwo = state.map === "phase2";
+    const restore = runtime.phase2Restore[id];
+    if (restore && inPhaseTwo) {
+      rigid.setBodyType(rapier.RigidBodyType.Dynamic, true);
+      rigid.setTranslation(restore, true);
+      rigid.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      capsule.current?.setSensor(false);
+      runtime.positions[id] = { ...restore };
+      runtime.phase2Restore[id] = null;
+      return;
+    }
+    if (!inPhaseTwo) runtime.phase2Restore[id] = null;
+    const phase2Seat = inPhaseTwo ? runtime.phase2Seats.findIndex((value) => value === id) : -1;
+    if (phase2Seat >= 0) {
+      const seat = PHASE_TWO_STOOLS[phase2Seat];
+      const seated = { x: seat.x, y: phaseTwoGroundHeight(seat.x, seat.z) + seat.seatedHeight, z: seat.z };
+      clearTraversal(traversal);
+      rigid.setBodyType(rapier.RigidBodyType.KinematicPositionBased, true);
+      rigid.setNextKinematicTranslation(seated);
+      capsule.current?.setSensor(true);
+      runtime.positions[id] = seated;
+      runtime.motions[id] = null;
+      runtime.grounded[id] = true;
+      locomotion.current.speed = 0;
+      return;
+    }
+    if (inPhaseTwo && runtime.chessActive) { rigid.setLinvel({ x: 0, y: 0, z: 0 }, true); return; }
     locomotion.current.classicGroundMotion = inPhaseFour || inPhaseTwo;
     // Match main's shorter ordinary jump without changing pendulum gravity.
     const gravityScale =
@@ -1098,8 +1187,8 @@ export default function Character({
     const depth = inPhaseFour || inPhaseTwo
       ? 0
       : waterDepth(position.x, position.z, puzzle.bridge);
-    const fellFromMap = inPhaseTwo ? phaseTwoOutsideMap(position) : position.y < (inPhaseFour ? PHASE_FOUR_FALL_Y : -7);
-    if (fellFromMap || depth > EDGE_DEEP) {
+    const fellFromMap = inPhaseTwo ? phaseTwoOutsideMap(position) : position.y < (inPhaseFour ? PHASE_FOUR_FALL_Y : -7) || (inPhaseFour && phaseFourTouchesGround(position));
+    if (fellFromMap || depth > EDGE_DEEP || (inPhaseTwo && phaseTwoTouchesLava(position))) {
       if (inPhaseFour || inPhaseTwo) {
         const spawn = inPhaseTwo ? phaseTwoCharacterSpawn(id) : phaseFourCharacterSpawn(id);
         rigid.setBodyType(rapier.RigidBodyType.Dynamic, true);
@@ -1107,7 +1196,10 @@ export default function Character({
         rigid.setLinvel(vector(), true);
         capsule.current?.setSensor(false);
         clearTraversal(traversal);
+        runtime.vineContacts[id].left = null;
+        runtime.vineContacts[id].right = null;
         runtime.positions[id] = spawn;
+        if (inPhaseTwo && selected) { runtime.yaw = PHASE_TWO_START_YAW; runtime.keys.clear(); runtime.jump = false; }
         runtime.motions[id] = null;
         if (runtime.activeVine?.monkeyId === id) runtime.activeVine = null;
       } else {
@@ -1217,7 +1309,18 @@ export default function Character({
       traversal.state === "RUN" ||
       traversal.state === "CLIMB"
     ) {
-      locomotion.current.bodyBasis = undefined;
+      if (vineExitBlendRemaining.current > 0) {
+        // Continue easing the facing back to normal after letting go of a
+        // walked vine (see VINE_FACING_BLEND_SECONDS) instead of snapping
+        // straight to the grounded basis the instant the walk ends.
+        vineExitBlendRemaining.current = Math.max(0, vineExitBlendRemaining.current - dt);
+        const eased = 1 - vineExitBlendRemaining.current / VINE_FACING_BLEND_SECONDS;
+        const smooth = eased * eased * (3 - 2 * eased);
+        blendFacingBasis(vineDisplayBasis.current, vineExitStartForward.current, basis.forward, smooth);
+        locomotion.current.bodyBasis = vineDisplayBasis.current;
+      } else {
+        locomotion.current.bodyBasis = undefined;
+      }
     }
     const physicalBasis = locomotion.current.bodyBasis ?? basis;
     const leftShoulderOffset = shoulderOffset(locomotion.current, "left");
@@ -1282,7 +1385,7 @@ export default function Character({
     let interactionRequested =
       selected &&
       (runtime.interact ||
-        (traversal.fromSwing &&
+        (!traversal.tree &&
           grabbedCount(traversal) === 0 &&
           runtime.keys.has("KeyE")));
     if (interactionRequested) runtime.interact = false;
@@ -1292,9 +1395,25 @@ export default function Character({
       tree.elapsed += dt;
       if (tree.vineWalk) {
         const walk = tree.vineWalk;
-        const input = vineWalkInput(walk.distance, runtime.yaw, inputForward, inputRight);
+        const input = vineWalkInput(walk.distance, runtime.yaw, inputForward, inputRight, walk);
         const arrived = stepVineWalk(walk, input, dt);
         runtime.jump = false;
+        if (tree.site.id === CANOPY_BRIDGE_SITE.id) {
+          // Mizaru's sight / Kikazaru's hearing clear as they cross the vine
+          // they cooperated to build — ratchets up only (walking backward
+          // partway across doesn't undo progress already made), and latches
+          // permanently once either reaches the far end.
+          const senseProgress = Math.max(0, Math.min(1, walk.distance / walk.length));
+          if (id === 0 && senseProgress > runtime.mizaruVineSight)
+            runtime.mizaruVineSight = senseProgress;
+          if (id === 1 && senseProgress > runtime.kikazaruVineHearing)
+            runtime.kikazaruVineHearing = senseProgress;
+          const puzzleState = useGame.getState().puzzle;
+          if (id === 0 && senseProgress >= 1 && !puzzleState.mizaruSightRestored)
+            useGame.getState().restoreMizaruSight();
+          if (id === 1 && senseProgress >= 1 && !puzzleState.kikazaruHearingRestored)
+            useGame.getState().restoreKikazaruHearing();
+        }
         if (arrived) {
           // Finish the kinematic step before restoring collision, above the
           // deck. No gravity frame can strand the capsule under its edge.
@@ -1304,13 +1423,31 @@ export default function Character({
           traversal.tree = null;
           capsule.current?.setSensor(false);
           setState(traversal, "LANDING");
+          // Hand off to the exit blend (picked up below, once traversal.tree
+          // is gone) instead of snapping bodyBasis to undefined this frame.
+          // The start snapshot is fixed for the whole exit window — the
+          // display basis itself keeps changing every frame, so blending
+          // *from* that instead would re-lerp from an already-part-way point
+          // each frame and converge faster than intended.
+          vineExitStartForward.current.x = walk.basis.forward.x;
+          vineExitStartForward.current.y = walk.basis.forward.y;
+          vineExitStartForward.current.z = walk.basis.forward.z;
+          vineExitBlendRemaining.current = VINE_FACING_BLEND_SECONDS;
+          blendFacingBasis(vineDisplayBasis.current, walk.basis.forward, walk.basis.forward, 1);
         } else {
           rigid.setNextKinematicTranslation(walk.position);
           capsule.current?.setSensor(true);
           setState(traversal, "CLIMB");
+          // Ease the displayed facing in from wherever the body was already
+          // pointed (last frame's basis, since this early return skips the
+          // normal buildLocalBasis call below) toward the vine's own
+          // direction, over the same window the position eases in over.
+          const entryBlend = Math.min(1, walk.entryTime / VINE_FACING_BLEND_SECONDS);
+          const entryEase = entryBlend * entryBlend * (3 - 2 * entryBlend);
+          blendFacingBasis(vineDisplayBasis.current, basis.forward, walk.basis.forward, entryEase);
         }
         updateLocomotion(traversal, locomotion.current, position, velocity, false);
-        locomotion.current.bodyBasis = arrived ? undefined : walk.basis;
+        locomotion.current.bodyBasis = vineDisplayBasis.current;
         locomotion.current.speed = Math.abs(walk.speed);
         runtime.grounded[id] = false;
         runtime.speeds[id] = locomotion.current.speed;
@@ -1849,9 +1986,9 @@ export default function Character({
           canCapture(
             position,
             hand.target,
-            hand.maxLength,
+            hand.maxLength + (reach.site.vine.grabRadius ?? 0),
             hasPhysicalShoulder ? shoulder : undefined,
-            armLength(locomotion.current, reach.hand),
+            armLength(locomotion.current, reach.hand) + (reach.site.vine.grabRadius ?? 0),
             !traversal.fromSwing && !reach.handoffFrom,
           )
         ) {
@@ -1885,6 +2022,22 @@ export default function Character({
             (scratch.desired.z / inputLength) * LOCOMOTION_TUNING.groundSpeed;
           hasMovementTarget = true;
           state.learn("move");
+        } else if (!selected && inPhaseTwo) {
+          const leader = runtime.positions[puzzle.selected];
+          const target = phaseTwoFollowTarget(position, leader);
+          const dx = target.x-position.x, dz = target.z-position.z, distance = Math.hypot(dx,dz);
+          const leaderDistance = Math.hypot(leader.x-position.x,leader.z-position.z);
+          if (leaderDistance > 2 && distance > 0.15) {
+            followWait.current = Math.max(0, followWait.current-dt);
+            if (followWait.current <= 0) {
+              targetX = dx/distance*4; targetZ = dz/distance*4; hasMovementTarget = true;
+              followerWantsJump = grounded && jumpCooldown.current <= 0 && phaseTwoFollowerJump(position,dx,dz);
+              // Wait at an unsafe landing rather than walking into a river.
+              if (grounded && !followerWantsJump && phaseTwoLavaAt(position.x+dx/distance*0.4,position.z+dz/distance*0.4)) {
+                targetX = 0; targetZ = 0; hasMovementTarget = false;
+              }
+            }
+          } else followWait.current = 0.25;
         } else if (!selected && !power && state.map === "islands") {
           const leader = runtime.positions[puzzle.selected];
           const northEnd = BRIDGE.z + BRIDGE.length / 2;
@@ -2168,7 +2321,7 @@ export default function Character({
     const collider = capsule.current;
     const previousSurface = locomotion.current.swingSurface;
     locomotion.current.swingSurface = undefined;
-    if (map === "phase4" && collider && grabbedCount(controller.current) > 0) {
+    if (map === "phase3" && collider && grabbedCount(controller.current) > 0) {
       let found = false;
       const surface = surfaceRef.current;
       world.contactPairsWith(collider, (other) => {
@@ -2255,9 +2408,11 @@ export default function Character({
     runtime.movementDebug[id].renderDelta = delta;
     const visual = model.current;
     if (!running || !visual) return;
+    const seatIndex = map === "phase2" ? runtime.phase2Seats.indexOf(id) : -1;
+    if (seatIndex >= 0) { visual.rotation.set(0, PHASE_TWO_STOOLS[seatIndex].rotationY, 0); return; }
     const basis = locomotion.current.bodyBasis ?? basisRef.current;
     const scratch = scratchRef.current;
-    if (map === "phase4" && !locomotion.current.bodyBasis) {
+    if (map === "phase3" && !locomotion.current.bodyBasis) {
       const velocity = body.current?.linvel();
       if (velocity && Math.hypot(velocity.x, velocity.z) > 0.12) {
         scratch.targetQuaternion.setFromAxisAngle(
@@ -2297,7 +2452,7 @@ export default function Character({
     <>
       <RigidBody
         ref={body}
-        position={[(id - 1) * 1.45, CHARACTER_SPAWN_Y, characterSpawn(id).z]}
+        position={[spawn.x, spawn.y, spawn.z]}
         colliders={false}
         enabledRotations={[false, false, false]}
         friction={0}

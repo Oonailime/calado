@@ -4,12 +4,78 @@ import type { CharacterId, Vec3 } from "../types";
 export const PHASE_TWO_TREE = [-6, 2] as const;
 export const PHASE_TWO_TABLE = [0, 5] as const;
 export const PHASE_TWO_CHESS_SCALE = 0.48;
+export const PHASE_TWO_PORTAL = { x: -8.5, y: 6, z: 6, halfWidth: 2.55, halfDepth: 1.36, groundInset: 0.04 } as const;
+export const PHASE_TWO_START = { x: 123, y: -3, z: -28 } as const;
+export const PHASE_TWO_START_YAW = Math.atan2(123 + 4, -28 - 5);
+export const PHASE_TWO_ARRIVAL_PORTAL = {
+  x: 127.2, y: -3.65, z: -29.1, rotationY: PHASE_TWO_START_YAW,
+  halfWidth: 2.55, halfDepth: 1.36, groundInset: 0,
+} as const;
+// A flat sea the whole map's low ground floods into, turning the volcanoes,
+// the ramp and the arrival shelf into islands/routes rising above it. Kept
+// safely below the arrival shelf (-3.65) and the walkable route so neither
+// is ever submerged.
+export const PHASE_TWO_LAVA_SEA_LEVEL = -4.5;
+
+// The approach is the sightline from the arrival to the clearing. Once past
+// the dry grove it climbs counter-clockwise (seen from above), at the same pace.
+const rampStartAngle = Math.atan2(PHASE_TWO_START.z - 5, PHASE_TWO_START.x + 4);
+const approachZ = (x: number) => 5 + (x + 4) * (PHASE_TWO_START.z - 5) / (PHASE_TWO_START.x + 4);
+export const PHASE_TWO_RAMP = Array.from({ length: 81 }, (_, i) => {
+  const t = i / 80, angle = rampStartAngle - t * Math.PI * 1.5, radius = 30 - 20 * t;
+  return { x: -4 + Math.cos(angle) * radius, z: 5 + Math.sin(angle) * radius, y: -3.65 + 9.65 * t };
+});
+export const PHASE_TWO_APPROACH = [
+  ...[130, 123, 104, 84, 62, 40].map(x => [x, approachZ(x)] as const),
+  [PHASE_TWO_RAMP[0].x, PHASE_TWO_RAMP[0].z] as const,
+];
+export const PHASE_TWO_ROUTE = [
+  ...PHASE_TWO_APPROACH.map(([x, z]) => ({ x, z, y: -3.65 })),
+  ...PHASE_TWO_RAMP.slice(1), { x: -4, z: 5, y: 6 }, { x: 0, z: 5, y: 6 },
+];
+export const PHASE_TWO_PICKUPS = [
+  // Right at the first waypoint past the arrival portal — the first thing
+  // in view on leaving it, not lost somewhere along a long open stretch.
+  { id: 0, kind: "pawn", x: 130, z: approachZ(130), label: "Peão" },
+  // x=62 sat almost on top of one of the volcanoes (see PHASE_TWO_VOLCANOES'
+  // x67,z-6 entry) — phaseTwoGroundHeight deliberately doesn't carve the
+  // walkable path through a volcano's own slope (that would cut the volcano
+  // in half), so the piece ended up stranded on real, steep volcanic
+  // terrain. x=40 is another existing approach waypoint, safely clear of
+  // every volcano's radius.
+  { id: 1, kind: "knight", x: 40, z: approachZ(40), label: "Cavalo" },
+  { id: 2, kind: "rook", x: PHASE_TWO_RAMP[24].x, z: PHASE_TWO_RAMP[24].z, label: "Torre" },
+] as const;
+
+export function phaseTwoRouteProjection(x: number, z: number) {
+  let distance = Infinity, height = -3.65, index = 0, progress = 0;
+  for (let i = 0; i < PHASE_TWO_ROUTE.length - 1; i++) {
+    const a = PHASE_TWO_ROUTE[i], b = PHASE_TWO_ROUTE[i + 1];
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const t = MathUtils.clamp(((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz), 0, 1);
+    const d = Math.hypot(x - a.x - t * dx, z - a.z - t * dz);
+    if (d < distance) { distance = d; height = MathUtils.lerp(a.y, b.y, t); index = i; progress = t; }
+  }
+  return { distance, height, index, progress };
+}
+
+export function phaseTwoFollowTarget(position: Vec3, leader: Vec3) {
+  const from = phaseTwoRouteProjection(position.x, position.z);
+  const to = phaseTwoRouteProjection(leader.x, leader.z);
+  if (from.distance < 6 && to.distance < 6 && Math.abs(to.index - from.index) > 1) {
+    return PHASE_TWO_ROUTE[to.index > from.index ? Math.min(PHASE_TWO_ROUTE.length-1, from.index + (from.progress > 0.8 ? 2 : 1)) : Math.max(0, from.index - (from.progress < 0.2 ? 1 : 0))];
+  }
+  return leader;
+}
 // The armies face one another along Z; the seats belong behind their back ranks.
 export const PHASE_TWO_STOOLS = [-1, 1].map((side) => ({
   x: PHASE_TWO_TABLE[0],
   z: PHASE_TWO_TABLE[1] + side * 2.35 * PHASE_TWO_CHESS_SCALE,
   radius: 0.67 * PHASE_TWO_CHESS_SCALE,
   halfHeight: 0.44 * PHASE_TWO_CHESS_SCALE,
+  rotationY: side < 0 ? 0 : Math.PI,
+  // The idle model's feet are 0.44 below its rigid-body origin.
+  seatedHeight: 0.88 * PHASE_TWO_CHESS_SCALE + 0.44,
 }));
 // Viewed from the light army (negative Z), files run from +X to -X.
 // The queen occupies her own color: light at (column 4, row 0), dark at (4, 7).
@@ -90,25 +156,39 @@ export function phaseTwoGroundHeight(x: number, z: number) {
       -4 + v.height * slope * crater + (t < 1 ? ridges + rough * t : 0),
     );
   }
-  // A flat sanctuary blends into a steep rocky escarpment on most sides, but
-  // a narrow lane south of it (around x=-4) is carved into a gentle ramp —
-  // one walkable route up from the valley floor instead of a sheer climb —
-  // fading out at both ends so it never flattens ground far from the climb.
-  const pathLength =
-    MathUtils.smoothstep(z, -44, -40) * (1 - MathUtils.smoothstep(z, -8, -4));
-  const pathWidth = 1 - MathUtils.smoothstep(Math.abs(x + 4), 3, 6);
-  const pathProgress = MathUtils.clamp((z + 40) / 36, 0, 1);
-  const pathEase = pathProgress * pathProgress * (3 - 2 * pathProgress);
-  const pathHeight = MathUtils.lerp(-4, 6, pathEase);
-  height = MathUtils.lerp(height, pathHeight, pathWidth * pathLength);
-  const clearing =
-    1 - MathUtils.smoothstep(Math.hypot((x + 4) / 1.25, z - 5), 9, 14);
-  return MathUtils.lerp(height, 6 + Math.sin(x * 0.4) * 0.035, clearing);
+  // How much a volcano (rather than plain rough ground) is responsible for
+  // the current height — the approach line happens to graze one volcano's
+  // slope, and blending the path in there flattened a groove straight
+  // through it. Fading the path out wherever a volcano actually dominates
+  // keeps every volcano's shape intact; the path only needs to carve plain
+  // ground and the ramp's own spiral, not slopes that were already there.
+  const volcanic = MathUtils.smoothstep(height - (-4 + rough), 1, 6);
+  const clearing = 1 - MathUtils.smoothstep(Math.hypot((x + 4) / 1.25, z - 5), 9, 14);
+  height = MathUtils.lerp(height, 6 + Math.sin(x * 0.4) * 0.035, clearing);
+  // Small arrival shelf only; the surrounding volcanic relief remains intact.
+  const arrival = 1 - MathUtils.smoothstep(
+    Math.hypot(x - PHASE_TWO_START.x, z - PHASE_TWO_START.z),
+    5,
+    11,
+  );
+  height = MathUtils.lerp(height, -3.65, arrival);
+  // PHASE_TWO_ROUTE (the approach + the spiral PHASE_TWO_RAMP up to the
+  // clearing) previously only steered followers — nothing actually carved it
+  // into the ground, so there was no real ramp to walk up, just a sheer drop
+  // between the arrival shelf (-3.65) and the clearing (6). Blend the
+  // terrain toward the route's own height near the path so it becomes an
+  // actual walkable trail, fading out a few units to either side.
+  const route = phaseTwoRouteProjection(x, z);
+  const pathWidth = (1 - MathUtils.smoothstep(route.distance, 3.5, 7)) * (1 - volcanic);
+  height = MathUtils.lerp(height, route.height, pathWidth);
+  return height;
 }
 
-export function phaseTwoCharacterSpawn(id: CharacterId): Vec3 {
-  const x = (id - 1) * 2;
-  const z = 11 + (id === 0 ? 0.5 : 0);
+export function phaseTwoCharacterSpawn(id: CharacterId, fromCanopy = false): Vec3 {
+  if (fromCanopy) return { x: -8.5 + (id - 1) * 1.1, y: 6.65, z: 9 };
+  const offset = (id - 1) * 1.1;
+  const x = PHASE_TWO_START.x + Math.cos(PHASE_TWO_START_YAW) * offset;
+  const z = PHASE_TWO_START.z - Math.sin(PHASE_TWO_START_YAW) * offset;
   return { x, y: phaseTwoGroundHeight(x, z) + 0.65, z };
 }
 
