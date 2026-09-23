@@ -16,6 +16,7 @@ import {
   TubeGeometry,
   Vector3,
 } from "three";
+import { accelerateStaticRaycast } from "../camera/staticRaycast";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import {
   PHASE_FOUR_PATHS,
@@ -308,6 +309,7 @@ class AssetBuilder {
         !batch.layers.has("glow") &&
         batch.namespace !== "distant";
       mesh.userData.canopySupport = /^(support-|swing-support-|bough-)/.test(batch.namespace);
+      if (mesh.userData.cameraOccluder) accelerateStaticRaycast(mesh);
       mesh.castShadow = hasSolid;
       mesh.receiveShadow = true;
       if (batch.namespace) mesh.userData.cameraOcclusionGroup = parent.uuid;
@@ -486,6 +488,29 @@ const HARVESTABLE_TREE_VINES = [
   { seed: 62, vine: 0, id: "tree-vine-b" },
   { seed: 18, vine: 1, id: "tree-vine-c" },
 ] as const;
+
+export function canopyHarvestCurve(id: string) {
+  const harvest = HARVESTABLE_TREE_VINES.find(vine => vine.id === id)!;
+  const tree = PHASE_FOUR_TREES.find(tree => tree.seed === harvest.seed)!;
+  return new CatmullRomCurve3(treeVineCurvePoints(
+    tree.position, tree.radius, tree.height, tree.seed, harvest.vine,
+  ).map(point));
+}
+
+export function createCanopyHarvestMarkerGeometry(id: string, position: Point3) {
+  const curve = canopyHarvestCurve(id);
+  // Use the same rings and frames as the harvested mesh. The cuff's surface
+  // clears its bark by 0.015, with no scale/rotation animation to cut into it.
+  const geometry = new TubeGeometry(curve, 20, 0.125, 6, false);
+  const target = point(position);
+  let nearest = 0, distance = Infinity;
+  for (let segment = 0; segment < 20; segment++) {
+    const d = curve.getPointAt((segment + 0.5) / 20).distanceToSquared(target);
+    if (d < distance) { distance = d; nearest = segment; }
+  }
+  geometry.setDrawRange(nearest * 6 * 6, 6 * 6);
+  return geometry;
+}
 
 function giantTree(
   builder: AssetBuilder,

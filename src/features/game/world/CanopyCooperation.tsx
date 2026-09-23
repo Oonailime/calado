@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CylinderCollider, RigidBody } from "@react-three/rapier";
-import { CatmullRomCurve3, Group, Mesh, MeshStandardMaterial, PointLight, TubeGeometry, Vector3 } from "three";
+import { Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PointLight, TubeGeometry } from "three";
 import { runtime, useGame } from "../state/store";
-import { createPhaseFourVineLeafGeometry, PHASE_FOUR_VINE_LEAF_COLORS } from "./phaseFourAssets";
+import { createCanopyHarvestMarkerGeometry, createPhaseFourVineLeafGeometry, PHASE_FOUR_VINE_LEAF_COLORS } from "./phaseFourAssets";
 import { PHASE_FOUR_CUBE_PIECE_SPAWNS, PHASE_FOUR_PLATFORMS } from "./phaseFourLayout";
-import { CANOPY_BRIDGE_CURVE, CANOPY_HARVESTS, CANOPY_STUMPS } from "./canopyCooperationLayout";
+import { CANOPY_BRIDGE_CURVE, CANOPY_BRIDGE_ENDPOINTS, CANOPY_HARVESTS, CANOPY_PRISM_SOCKETS, CANOPY_STUMPS } from "./canopyCooperationLayout";
 
 const COLORS = ["#e5efeb", "#f2c653", "#b77c45"];
 const SHRINE = PHASE_FOUR_PLATFORMS.find(deck => deck.id === "summit-shrine")!.center;
@@ -16,13 +16,7 @@ const BRIDGE_LEAF_COUNT = 20;
 export default function CanopyCooperation({ scene, running }: { scene: Group; running: boolean }) {
   const puzzle = useGame(state => state.puzzle);
   const rope = useMemo(() => new TubeGeometry(CANOPY_BRIDGE_CURVE, 180, 0.1, 8, false), []);
-  // ties[0] connects the lower end (near CANOPY_STUMPS.lower, where gold now
-  // ties); ties[1] connects the upper end (near CANOPY_STUMPS.upper, where
-  // brown now builds) — see their visibility below.
-  const ties = useMemo(() => [
-    new TubeGeometry(new CatmullRomCurve3([new Vector3(16.6, 14.7, -25.5), new Vector3(16.1, 14.35, -25.2), CANOPY_BRIDGE_CURVE.getPoint(0)]), 16, 0.09, 7, false),
-    new TubeGeometry(new CatmullRomCurve3([new Vector3(15, 31.7, -47), new Vector3(14.5, 31.35, -47), CANOPY_BRIDGE_CURVE.getPoint(1)]), 16, 0.09, 7, false),
-  ], []);
+  const harvestMarkers = useMemo(() => CANOPY_HARVESTS.map(site => createCanopyHarvestMarkerGeometry(site.id, site.position)), []);
   const leafGeometry = useMemo(() => createPhaseFourVineLeafGeometry(), []);
   const leafPoints = useMemo(
     () =>
@@ -35,6 +29,7 @@ export default function CanopyCooperation({ scene, running }: { scene: Group; ru
   );
   const leaves = useRef<(Mesh | null)[]>([]);
   const progress = useRef(0);
+  const growingTip = useRef<Mesh>(null);
   const carried = useRef<(Mesh | null)[]>([]);
   const glow = useRef<Group>(null);
   const focusRingMaterial = useRef<MeshStandardMaterial>(null);
@@ -47,8 +42,8 @@ export default function CanopyCooperation({ scene, running }: { scene: Group; ru
   const burst = useRef(-1);
   const wasFocused = useRef(false);
   const harvestGlows = useRef<(Mesh | null)[]>([]);
-  const harvestLights = useRef<(PointLight | null)[]>([]);
-  useEffect(() => () => { rope.dispose(); ties.forEach(tie => tie.dispose()); leafGeometry.dispose(); }, [rope, ties, leafGeometry]);
+
+  useEffect(() => () => { rope.dispose(); harvestMarkers.forEach(marker => marker.dispose()); leafGeometry.dispose(); }, [rope, harvestMarkers, leafGeometry]);
   useEffect(() => {
     CANOPY_HARVESTS.forEach((site, i) => {
       // AssetBuilder prefixes scopes with the environment's exported name.
@@ -61,6 +56,7 @@ export default function CanopyCooperation({ scene, running }: { scene: Group; ru
     if (!running) return;
     progress.current = puzzle.canopyBridgeBuilt ? Math.min(1, progress.current + delta / 1.8) : 0;
     rope.setDrawRange(0, Math.floor(progress.current * 180) * 8 * 6);
+    if (growingTip.current) CANOPY_BRIDGE_CURVE.getPoint(progress.current, growingTip.current.position);
     leaves.current.forEach((leaf, i) => {
       if (leaf) leaf.visible = leafPoints[i].t <= progress.current;
     });
@@ -92,11 +88,8 @@ export default function CanopyCooperation({ scene, running }: { scene: Group; ru
     const pulse = 0.75 + Math.sin(clock.elapsedTime * 2.4) * 0.25;
     harvestGlows.current.forEach((mesh) => {
       if (!mesh) return;
-      mesh.scale.setScalar(pulse);
-      mesh.rotation.y += delta * 0.8;
-    });
-    harvestLights.current.forEach((light) => {
-      if (light) light.intensity = 1.4 + pulse * 1.1;
+      // Pulse the colour only: the cuff stays fitted to the actual vine.
+      (mesh.material as MeshBasicMaterial).color.setRGB(0.55 + pulse * 0.35, 1, 0.25 + pulse * 0.25);
     });
   });
   const white = PHASE_FOUR_CUBE_PIECE_SPAWNS[0];
@@ -141,27 +134,11 @@ export default function CanopyCooperation({ scene, running }: { scene: Group; ru
         </group>
       )}
       {CANOPY_HARVESTS.map((site, i) => !puzzle.canopyVines[i] && puzzle.canopyFocused && (
-        <group key={site.id} position={site.position}>
-          <mesh
-            ref={(node) => { harvestGlows.current[i] = node; }}
-            rotation={[-Math.PI / 2, 0, 0]}
-          >
-            <torusGeometry args={[0.34, 0.09, 10, 20]} />
-            <meshStandardMaterial
-              color="#c4ef89"
-              emissive="#9dff5c"
-              emissiveIntensity={1.6}
-              roughness={0.4}
-            />
-          </mesh>
-          <pointLight
-            ref={(node) => { harvestLights.current[i] = node; }}
-            color="#b8ff8a"
-            intensity={1.8}
-            distance={4.5}
-            decay={2}
-          />
-        </group>
+        <mesh key={site.id} name={`harvest-marker-${site.id}`}
+          ref={node => { harvestGlows.current[i] = node; }}
+          geometry={harvestMarkers[i]} userData={{ cameraOccluder: false }}>
+          <meshBasicMaterial color="#c4ef89" />
+        </mesh>
       ))}
       {Object.entries(CANOPY_STUMPS).map(([name, position]) => (
         <RigidBody key={name} type="fixed" colliders={false} position={position}>
@@ -174,6 +151,12 @@ export default function CanopyCooperation({ scene, running }: { scene: Group; ru
             <circleGeometry args={[0.23, 16]} />
             <meshStandardMaterial color="#c5a272" />
           </mesh>
+          {(name === "lower" ? puzzle.canopyGoldTied : puzzle.canopyBridgeBuilt) && (
+            <mesh position={[0, 1.06, 0]} rotation={[Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[0.19, 0.09, 8, 24]} />
+              <meshStandardMaterial color="#536d2e" roughness={1} />
+            </mesh>
+          )}
           {Array.from({ length: 5 }, (_, i) => (
             <mesh key={i} position={[0, 0.48 + i * 0.09, 0]} rotation={[Math.PI / 2, 0, i * 0.08]}>
               <torusGeometry args={[0.275, 0.048, 6, 20]} />
@@ -182,18 +165,19 @@ export default function CanopyCooperation({ scene, running }: { scene: Group; ru
           ))}
         </RigidBody>
       ))}
-      {puzzle.canopyGoldTied && !puzzle.canopyBridgeBuilt && (
-        <mesh position={[16.6, 14.2, -25.5]} rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[0.5, 0.09, 8, 32]} />
-          <meshStandardMaterial color="#536d2e" />
-        </mesh>
-      )}
-      {ties.map((geometry, i) => <mesh key={i} geometry={geometry} visible={i === 0 ? puzzle.canopyGoldTied : puzzle.canopyBridgeBuilt} castShadow>
-        <meshStandardMaterial color="#536d2e" roughness={1} />
-      </mesh>)}
-      <mesh geometry={rope} visible={puzzle.canopyBridgeBuilt} castShadow>
+      <mesh name="canopy-built-vine" geometry={rope} visible={puzzle.canopyBridgeBuilt} castShadow>
         <meshStandardMaterial color="#536d2e" roughness={1} />
       </mesh>
+      <group visible={puzzle.canopyBridgeBuilt}>
+        <mesh position={CANOPY_BRIDGE_ENDPOINTS[0]}>
+          <sphereGeometry args={[0.1, 8, 6]} />
+          <meshStandardMaterial color="#536d2e" roughness={1} />
+        </mesh>
+        <mesh ref={growingTip}>
+          <sphereGeometry args={[0.1, 8, 6]} />
+          <meshStandardMaterial color="#536d2e" roughness={1} />
+        </mesh>
+      </group>
       {leafPoints.map(({ position }, i) => (
         <mesh
           key={i}
@@ -215,7 +199,7 @@ export default function CanopyCooperation({ scene, running }: { scene: Group; ru
             <octahedronGeometry args={[0.19]} />
             <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.4} />
           </mesh>
-          <mesh position={[SHRINE[0] + (id - 1) * 0.68, SHRINE[1] + 0.5, SHRINE[2] + 1.2]}>
+          <mesh name={`shrine-prism-${id}`} position={CANOPY_PRISM_SOCKETS[id].position.map((v, axis) => v + SHRINE[axis]) as [number, number, number]} rotation={[0, CANOPY_PRISM_SOCKETS[id].angle, 0]}>
             <octahedronGeometry args={[0.24]} />
             <meshStandardMaterial color={color} wireframe={!puzzle.cubeDelivered[id]} emissive={color} emissiveIntensity={puzzle.cubeDelivered[id] ? 0.7 : 0} />
           </mesh>

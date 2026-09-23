@@ -149,8 +149,8 @@ export default function Experience() {
             <div className={styles.eyebrow}>
               {scene === 0
                 ? pt
-                  ? "Uma história em construção"
-                  : "A story in the making"
+                  ? "O Templo dos Três"
+                  : "The Temple of Three"
                 : scene < 6
                   ? pt
                     ? "Minha história"

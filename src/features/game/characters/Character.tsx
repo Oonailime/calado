@@ -23,7 +23,6 @@ import {
   suspensionBasis,
 } from "./brachiationPose";
 import {
-  BRIDGE,
   CHARACTER_CAPSULE_HALF_HEIGHT,
   CHARACTER_CAPSULE_RADIUS,
   CHARACTER_SPAWN_Y,
@@ -33,7 +32,7 @@ import { CANOPY_BRIDGE_CURVE, CANOPY_BRIDGE_SITE } from "../world/canopyCooperat
 import { phaseFourTouchesGround } from "../world/phaseFourTerrain";
 import { safeGround, waterDepth } from "../world/terrain";
 import { phaseTwoCharacterSpawn, phaseTwoFollowTarget, PHASE_TWO_START_YAW, phaseTwoOutsideMap, PHASE_TWO_STOOLS, phaseTwoGroundHeight } from "../world/phaseTwoLayout";
-import { followerDelaySeconds, shouldFollowerJump } from "./followerNavigation";
+import { followerDelaySeconds, islandFollowerTarget, shouldFollowerJump } from "./followerNavigation";
 import type {
   HandLocomotion,
   LocomotionState,
@@ -1005,8 +1004,6 @@ export default function Character({
     },
   });
   const controller = useRef(createController());
-  const trapped = useRef(0);
-  const previous = useRef({ x: 0, z: 0 });
   const followDelay = useRef(1);
   const followWait = useRef(1);
   const jumpCooldown = useRef(0);
@@ -1086,8 +1083,6 @@ export default function Character({
       Object.assign(basisRef.current.forward, { x: -Math.sin(yaw), y: 0, z: -Math.cos(yaw) });
       Object.assign(basisRef.current.right, { x: Math.cos(yaw), y: 0, z: -Math.sin(yaw) });
     }
-    previous.current.x = spawn.x;
-    previous.current.z = spawn.z;
     runtime.grounded[id] = true;
     runtime.motions[id] = null;
     if (runtime.activeVine?.monkeyId === id) runtime.activeVine = null;
@@ -1099,7 +1094,6 @@ export default function Character({
 
   useEffect(() => {
     followWait.current = followDelay.current;
-    trapped.current = 0;
     if (selectedId === id) return;
     const traversal = controller.current;
     if (!traversal.tree && grabbedCount(traversal) === 0 && !traversal.reach)
@@ -1453,8 +1447,6 @@ export default function Character({
         runtime.speeds[id] = locomotion.current.speed;
         runtime.motions[id] = locomotion.current.motion ?? null;
         debug.state = traversal.state;
-        previous.current.x = position.x;
-        previous.current.z = position.z;
         return;
       }
       if (interactionRequested && tree.kind === "tree-hold") {
@@ -1516,8 +1508,6 @@ export default function Character({
         runtime.speeds[id] = locomotion.current.speed;
         runtime.motions[id] = locomotion.current.motion ?? null;
         debug.state = traversal.state;
-        previous.current.x = position.x;
-        previous.current.z = position.z;
         return;
       }
     }
@@ -2040,22 +2030,11 @@ export default function Character({
           } else followWait.current = 0.25;
         } else if (!selected && !power && state.map === "islands") {
           const leader = runtime.positions[puzzle.selected];
-          const northEnd = BRIDGE.z + BRIDGE.length / 2;
-          const southEnd = BRIDGE.z - BRIDGE.length / 2;
-          const gap =
-            position.z < northEnd + 0.6 && position.z > southEnd - 0.6;
-          const crossing =
-            (position.z > northEnd && leader.z < northEnd) ||
-            (position.z < southEnd && leader.z > southEnd) ||
-            gap;
-          const followX = crossing
-            ? 0
-            : Math.max(-5, Math.min(5, leader.x + [-1.3, 1.3, 0][id]));
-          const followZ = leader.z + (crossing ? 0.2 : 1.3);
+          const { x: followX, z: followZ, stopDistance } = islandFollowerTarget(position, leader, id);
           const dx = followX - position.x;
           const dz = followZ - position.z;
           const distance = Math.hypot(dx, dz);
-          const wantsToFollow = distance > 1.1;
+          const wantsToFollow = distance > stopDistance;
           if (!wantsToFollow) followWait.current = followDelay.current;
           else if (followWait.current > 0)
             followWait.current = Math.max(0, followWait.current - dt);
@@ -2118,30 +2097,7 @@ export default function Character({
               cooldown: jumpCooldown.current,
             });
           }
-          const displacement = Math.hypot(
-            position.x - previous.current.x,
-            position.z - previous.current.z,
-          );
-          trapped.current =
-            followWait.current <= 0 && distance > 3 && displacement < dt * 0.2
-              ? trapped.current + dt
-              : 0;
-          if (
-            (distance > 22 || trapped.current > 6) &&
-            safeGround(followX, followZ, puzzle.bridge)
-          ) {
-            rigid.setTranslation(
-              {
-                x: followX,
-                y: Math.max(CHARACTER_SPAWN_Y, leader.y + 0.3),
-                z: followZ,
-              },
-              true,
-            );
-            trapped.current = 0;
-          }
         }
-
 
         const verticalSpeed =
           velocity.x * basis.up.x +
@@ -2309,8 +2265,6 @@ export default function Character({
         (index * LOCOMOTION_TUNING.landingPredictionTime) /
           (debug.trajectory.length - 1),
       );
-    previous.current.x = position.x;
-    previous.current.z = position.z;
   });
 
   useAfterPhysicsStep(() => {

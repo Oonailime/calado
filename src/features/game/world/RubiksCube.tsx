@@ -5,6 +5,7 @@ import { useFrame, useLoader } from "@react-three/fiber";
 import { CylinderCollider, RigidBody } from "@react-three/rapier";
 import { Group, Matrix4, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from "three";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { CANOPY_PEDESTAL_ROTATION } from "./canopyCooperationLayout";
 import { runtime, useGame } from "../state/store";
 import { CHARACTERS, type CharacterId } from "../types";
 import { PHASE_FOUR_CUBE_PIECE_SPAWNS, PHASE_FOUR_PLATFORMS } from "./phaseFourLayout";
@@ -83,7 +84,7 @@ function CubeShrinePedestal({ unlocked }: { unlocked: boolean }) {
       <RigidBody type="fixed" colliders={false}>
         <CylinderCollider args={[0.42, 1.4]} position={[0, 0.42, 0]} />
       </RigidBody>
-      <mesh position={[0, 0.35, 0]} castShadow receiveShadow>
+      <mesh position={[0, 0.35, 0]} rotation={[0, CANOPY_PEDESTAL_ROTATION, 0]} castShadow receiveShadow>
         <cylinderGeometry args={[1.3, 1.55, 0.7, 8]} />
         <meshStandardMaterial color="#5f6a5e" roughness={1} flatShading />
       </mesh>
