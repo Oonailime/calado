@@ -1022,12 +1022,6 @@ export default function Character({
   const map = useGame((state) => state.map);
   const debugEnabled = useGame((state) => state.movementDebug);
   const { world, rapier } = useRapier();
-  const spawn =
-    map === "phase2"
-      ? phaseTwoCharacterSpawn(id, useGame.getState().phase2FromCanopy)
-      : map === "phase3"
-        ? phaseFourCharacterSpawn(id)
-        : characterSpawn(id, useGame.getState().puzzle.bridge);
 
   const basisRef = useRef<LocalBasis>({
     forward: vector(0, 0, -1),
@@ -1069,6 +1063,14 @@ export default function Character({
 
   useEffect(() => {
     const rigid = body.current;
+    // Spawn/checkpoint coordinates are applied only on mount, reset or map
+    // transition. Passing them as a RigidBody position prop also moved gold
+    // when construction switched off his power and re-rendered the body.
+    const state = useGame.getState();
+    const spawn = map === "phase2"
+      ? phaseTwoCharacterSpawn(id, state.phase2FromCanopy)
+      : map === "phase3" ? phaseFourCharacterSpawn(id)
+      : characterSpawn(id, state.puzzle.bridge);
     const testing = window as unknown as { __canopyBodies?: unknown[] };
     (testing.__canopyBodies ??= [])[id] = rigid;
     if (rigid) {
@@ -2406,7 +2408,6 @@ export default function Character({
     <>
       <RigidBody
         ref={body}
-        position={[spawn.x, spawn.y, spawn.z]}
         colliders={false}
         enabledRotations={[false, false, false]}
         friction={0}

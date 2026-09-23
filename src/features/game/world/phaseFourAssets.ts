@@ -1405,17 +1405,15 @@ export function createPhaseFourEnvironment() {
       canopyPath(builder, path, i * 17 + 4),
     ),
   );
+  builder.scoped("pull-vine-start-anchor", () => {
+    vineAttachment(builder, PHASE_FOUR_TREES[0],
+      PHASE_FOUR_PULL_VINE_CURVE.getPoint(0).toArray() as Point3, true);
+  });
+  builder.scoped("pull-vine-end-anchor", () => {
+    vineAttachment(builder, PHASE_FOUR_TREES[1],
+      PHASE_FOUR_PULL_VINE_CURVE.getPoint(1).toArray() as Point3, true);
+  });
   builder.scoped("pull-vine", () => {
-    // The liana must read as tied off, not floating free - anchor its top
-    // end to the nearest trunk (tree 1, already the "plateau" span's rear
-    // support) with the same grown-branch + wrapped-coil visual used for the
-    // swing spans, so the whole thing looks load-bearing.
-    vineAttachment(
-      builder,
-      PHASE_FOUR_TREES[1],
-      PHASE_FOUR_PULL_VINE_CURVE.getPointAt(1).toArray() as Point3,
-      true,
-    );
     builder.add(
       new TubeGeometry(PHASE_FOUR_PULL_VINE_CURVE, 160, 0.1, 7, false),
       "#536d2e",

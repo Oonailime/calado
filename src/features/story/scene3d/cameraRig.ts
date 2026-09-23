@@ -40,6 +40,7 @@ export const FAR_OFFSET = 9;
 // well short of the sand-colored clearing rather than touching it. Shared
 // by RockPath.tsx (to place tiles) and Grass.tsx (to scatter alongside it).
 const HOUSE_CLEARANCE = 1.8;
+export const WORK_PATH_CLEARANCE = 3.1;
 // Kept short enough that the segment's own endpoint lands outside
 // CLEARING_RADIUS around CONVERGENCE_POINT — it was previously 0.55, which
 // put the endpoint ~6.6 units from the clearing's center, well inside its
@@ -52,8 +53,8 @@ export function pathSegments(): [Point, Point][] {
     const a = PATH_POINTS[i];
     const b = PATH_POINTS[i + 1];
     const length = Math.hypot(b.x - a.x, b.z - a.z);
-    const startT = HOUSE_CLEARANCE / length;
-    const endT = 1 - HOUSE_CLEARANCE / length;
+    const startT = (i === 4 ? WORK_PATH_CLEARANCE : HOUSE_CLEARANCE) / length;
+    const endT = 1 - (i + 1 === 4 ? WORK_PATH_CLEARANCE : HOUSE_CLEARANCE) / length;
     if (endT > startT)
       segments.push([lerpPoint(a, b, startT), lerpPoint(a, b, endT)]);
   }
@@ -232,20 +233,18 @@ export function cameraForProgress(progress: number, reduced = false): Pose {
   };
 }
 
-// How open house `index`'s door should be (0 closed, 1 open), peaking exactly
-// when the character reaches it and easing shut again as he moves away —
-// driven by progress rather than live 3D distance, since the two are
-// deterministically the same thing in this scroll-only scene.
-const DOOR_OPEN_WINDOW = 0.7;
-export function houseDoorOpenness(
-  index: number,
-  progress: number,
-  reduced = false,
-) {
-  const clamped = Math.max(0, Math.min(1, progress));
-  const distance = Math.abs(clamped * 8 - index);
-  if (reduced) return distance < 0.5 ? 1 : 0;
-  return smoothstep(1 - Math.min(1, distance / DOOR_OPEN_WINDOW));
+// Distances in world units: increase OPEN_DISTANCE to start opening sooner.
+// The door is fully open before the monkey reaches the facade, and stays
+// open while he enters. The same spatial timing works when scrolling back.
+export const STORY_DOOR_OPEN_DISTANCE = 6;
+export const STORY_DOOR_FULL_OPEN_DISTANCE = 2.4;
+export function houseDoorOpenness(index: number, progress: number, reduced = false) {
+  const position = walkPoint(progress, reduced);
+  const house = PATH_POINTS[index];
+  const distance = Math.hypot(position.x - house.x, position.z - house.z);
+  if (reduced) return distance < STORY_DOOR_OPEN_DISTANCE ? 1 : 0;
+  return smoothstep((STORY_DOOR_OPEN_DISTANCE - distance) /
+    (STORY_DOOR_OPEN_DISTANCE - STORY_DOOR_FULL_OPEN_DISTANCE));
 }
 
 // Calado walks the whole path and stops in the clearing; he never doubles

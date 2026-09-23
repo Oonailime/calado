@@ -103,7 +103,7 @@ function Buildings({
             />
           );
         if (kind === "business")
-          return <BusinessBuilding key={id} id={id} locale={locale} />;
+          return <BusinessBuilding key={id} id={id} progress={progress} reduced={reduced} locale={locale} />;
         return (
           <Building
             key={id}
@@ -188,6 +188,7 @@ export default function StoryScene({
   }, [progress]);
   return (
     <Canvas
+      onCreated={state => { if (process.env.NODE_ENV !== "production") (window as unknown as { __storyTest: unknown }).__storyTest = state; }}
       shadows={false}
       dpr={[1, 1.5]}
       camera={{ position: [0, 3.6, 9], fov: 48, near: 0.1, far: 160 }}

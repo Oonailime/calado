@@ -1,0 +1,199 @@
+.portfolio {
+  position: absolute;
+  z-index: 4;
+  top: 16%;
+  right: 5vw;
+  width: min(49vw, 720px);
+  max-height: calc(100svh - 225px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #a38e62 transparent;
+  padding: 0 10px 10px;
+}
+.heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  border-radius: 5px;
+  background: #14291ff2;
+  color: #dfcc9f;
+}
+.heading h2 {
+  font:
+    400 22px Georgia,
+    serif;
+  margin: 0;
+}
+.heading > span {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.card {
+  border: 1px solid #c8b78944;
+  border-radius: 5px;
+  background: #14291ff2;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+  overflow: hidden;
+}
+.card:hover,
+.card:focus-within {
+  border-color: #e2c484;
+  background: #20392bf5;
+}
+.projectLink {
+  display: block;
+  color: #f4e9cf;
+  text-decoration: none;
+  padding: 16px;
+}
+.art {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #d2b57d;
+  margin-bottom: 10px;
+}
+.art svg {
+  width: 30px;
+  height: 30px;
+}
+.art span {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  opacity: 0.75;
+}
+.art .arrow {
+  margin-left: auto;
+  font-size: 20px;
+  opacity: 1;
+}
+.card h3 {
+  font:
+    400 19px/1.2 Georgia,
+    serif;
+  margin: 0 0 8px;
+}
+.card p {
+  font-size: 12px;
+  line-height: 1.65;
+  margin: 0 0 10px;
+  color: #c4ccbd;
+}
+.tags {
+  font-size: 9px;
+  letter-spacing: 0.035em;
+  line-height: 1.5;
+  color: #b6c3a2;
+}
+.visit {
+  display: block;
+  margin-top: 12px;
+  font-size: 10px;
+  color: #e6c98f;
+}
+.postButton {
+  margin: 0 16px 14px;
+  padding: 0 0 3px;
+  border: 0;
+  border-bottom: 1px solid #c8b78966;
+  background: transparent;
+  color: #e6c98f;
+  font-size: 11px;
+  cursor: pointer;
+}
+.projectLink:focus-visible,
+.postButton:focus-visible,
+.dialog button:focus-visible,
+.dialog a:focus-visible {
+  outline: 2px solid #f1d49c;
+  outline-offset: -3px;
+}
+.dialog {
+  border: 1px solid #a99467;
+  border-radius: 8px;
+  padding: 22px;
+  width: min(570px, 90vw);
+  max-height: 88svh;
+  background: #17291f;
+  color: #ede1c5;
+  overflow: auto;
+}
+.dialog::backdrop {
+  background: #06110ee6;
+}
+.dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.dialog h2 {
+  font:
+    400 24px Georgia,
+    serif;
+  margin: 0;
+}
+.dialog header button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-size: 30px;
+  cursor: pointer;
+}
+.dialog p {
+  font-size: 13px;
+  line-height: 1.7;
+}
+.dialog iframe {
+  display: block;
+  width: 100%;
+  max-width: 504px;
+  border: 0;
+  border-radius: 4px;
+  background: #fff;
+}
+.dialog > a {
+  display: inline-block;
+  color: #dfc285;
+  margin-top: 15px;
+  font-size: 12px;
+}
+@media (max-height: 760px) {
+  .portfolio {
+    top: 15%;
+    max-height: calc(100svh - 185px);
+  }
+  .projectLink {
+    padding: 12px;
+  }
+  .art {
+    margin-bottom: 6px;
+  }
+  .card p {
+    font-size: 11px;
+  }
+}
+@media (max-width: 1000px) {
+  .portfolio {
+    right: 3vw;
+    width: 53vw;
+  }
+  .card h3 {
+    font-size: 17px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}

@@ -11,6 +11,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { story, type Locale } from "@/content/story";
 import { MonkeyGlyph } from "./SceneArt";
 import styles from "./Experience.module.css";
+import WorkPortfolio from "./WorkPortfolio";
 import type { GameProps } from "@/features/game/types";
 import type { StorySceneProps } from "./scene3d/StoryScene";
 
@@ -145,7 +146,7 @@ export default function Experience() {
               </button>
             </div>
           </header>
-          <div className={styles.copy}>
+          <div className={`${styles.copy} ${scene === 4 ? styles.workCopy : ""}`}>
             <div className={styles.eyebrow}>
               {scene === 0
                 ? pt
@@ -173,6 +174,7 @@ export default function Experience() {
               <p>{pt ? "Desenvolvedor de Software" : "Software Developer"}</p>
             )}
           </div>
+          {scene === 4 && <WorkPortfolio locale={locale} />}
           <div className={styles.preview}>
             0{scene + 1} · {pt ? story[scene].title : story[scene].titleEn}
           </div>
@@ -208,10 +210,10 @@ export default function Experience() {
             </div>
           )}
           <footer className={styles.bottom}>
-            <div className={styles.scroll}>
+            {progress < 0.995 && <div className={styles.scroll}>
               <span>↓</span>
               {pt ? "Role para descobrir" : "Scroll to discover"}
-            </div>
+            </div>}
             <div className={styles.steps}>
               {story.map((s, i) => (
                 <span

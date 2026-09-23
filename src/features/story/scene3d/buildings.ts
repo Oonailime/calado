@@ -9,7 +9,7 @@ export type BuildingId =
 export const BUILDING_DIR = "/assets/models/buildings/";
 export const PLANTER_URL = `${BUILDING_DIR}PlanterBox_Pink01.glb`;
 export const SCHOOL_URL = "/assets/models/school/schoolhouse.glb";
-export const BUSINESS_URL = "/assets/models/business/business-building.glb";
+export const BUSINESS_URL = "/assets/models/business/business-building-animated.glb";
 
 export const BUILDING_ORDER: readonly BuildingId[] = [
   "birth",

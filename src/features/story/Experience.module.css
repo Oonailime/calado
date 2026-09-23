@@ -232,3 +232,7 @@
     line-height: 1.8;
   }
 }
+
+.workCopy { top: 30%; width: 32%; }
+.workCopy h1 { font-size: clamp(30px, 3.8vw, 60px); }
+.steps { margin-left: auto; }
