@@ -67,7 +67,7 @@ export default function Experience() {
     document.documentElement.lang = locale === "pt" ? "pt-BR" : "en";
   }, [locale]);
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get("map") !== "phase4") return;
+    if (!["phase2", "phase3", "phase4"].includes(new URLSearchParams(window.location.search).get("map") ?? "")) return;
     let cancelled = false;
     import("@/features/game/Game").then((module) => {
       if (cancelled) return;
@@ -149,8 +149,8 @@ export default function Experience() {
             <div className={styles.eyebrow}>
               {scene === 0
                 ? pt
-                  ? "Uma história em construção"
-                  : "A story in the making"
+                  ? "O Templo dos Três"
+                  : "The Temple of Three"
                 : scene < 6
                   ? pt
                     ? "Minha história"

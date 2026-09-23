@@ -16,6 +16,7 @@ import {
   TubeGeometry,
   Vector3,
 } from "three";
+import { accelerateStaticRaycast } from "../camera/staticRaycast";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import {
   PHASE_FOUR_PATHS,
@@ -99,6 +100,18 @@ function nearestPolylinePoint(x: number, z: number, points: readonly Point3[]) {
     }
   }
   return { distance: best, x: bestX, z: bestZ };
+}
+
+// The shrine sits high and its own platform is small; a nearby background
+// tree's canopy can visually swallow it. Generous horizontal clearance around
+// its (x, z) keeps any tall decorative tree's crown out of that airspace.
+const SUMMIT_SHRINE_XZ: [number, number] = [
+  PHASE_FOUR_PLATFORMS.find((deck) => deck.id === "summit-shrine")!.center[0],
+  PHASE_FOUR_PLATFORMS.find((deck) => deck.id === "summit-shrine")!.center[2],
+];
+const SUMMIT_SHRINE_CLEARANCE = 25;
+function clearsSummitShrine(x: number, z: number) {
+  return Math.hypot(x - SUMMIT_SHRINE_XZ[0], z - SUMMIT_SHRINE_XZ[1]) >= SUMMIT_SHRINE_CLEARANCE;
 }
 
 /** Keep the entire root spread beyond the widest water edge, plus a dry margin. */
@@ -295,6 +308,8 @@ class AssetBuilder {
         !!batch.namespace &&
         !batch.layers.has("glow") &&
         batch.namespace !== "distant";
+      mesh.userData.canopySupport = /^(support-|swing-support-|bough-)/.test(batch.namespace);
+      if (mesh.userData.cameraOccluder) accelerateStaticRaycast(mesh);
       mesh.castShadow = hasSolid;
       mesh.receiveShadow = true;
       if (batch.namespace) mesh.userData.cameraOcclusionGroup = parent.uuid;
@@ -435,6 +450,68 @@ export function createGiantTreeRootGeometry(radius: number) {
   return geometry;
 }
 
+// A detailed tree's i-th hanging vine (see the loop inside giantTree below) —
+// pulled out so a handful of these can be rebuilt as their own toggleable
+// objects (see HARVESTABLE_TREE_VINES) instead of only ever existing fused
+// into the tree's own static decoration batch.
+function treeVineCurvePoints(
+  p: Point3,
+  radius: number,
+  height: number,
+  seed: number,
+  index: number,
+): Point3[] {
+  const angle = index * 1.8 + seed;
+  const r = radius * 0.83;
+  const start: Point3 = [
+    p[0] + Math.sin(angle) * r,
+    p[1] + height * 0.7,
+    p[2] + Math.cos(angle) * r,
+  ];
+  return [
+    start,
+    [start[0] + 1.2, start[1] - 5, start[2] + 0.6],
+    [start[0] - 0.6, start[1] - 11, start[2] + 1.1],
+    [start[0] - 0.8, start[1] - 16, start[2] + 0.8],
+  ];
+}
+
+// Three of each detailed tree's four hanging vines are pure scenery; these
+// three (picked to match what a player can actually reach while walking the
+// paths near trees seed 62 and seed 18) are instead harvestable — built as
+// their own scoped, individually-hideable objects below rather than fused
+// into the tree's static batch. See CANOPY_HARVESTS in
+// canopyCooperationLayout.ts for the matching grab positions (kept in sync
+// by hand: both were measured against this same curve).
+const HARVESTABLE_TREE_VINES = [
+  { seed: 62, vine: 3, id: "tree-vine-a" },
+  { seed: 62, vine: 0, id: "tree-vine-b" },
+  { seed: 18, vine: 1, id: "tree-vine-c" },
+] as const;
+
+export function canopyHarvestCurve(id: string) {
+  const harvest = HARVESTABLE_TREE_VINES.find(vine => vine.id === id)!;
+  const tree = PHASE_FOUR_TREES.find(tree => tree.seed === harvest.seed)!;
+  return new CatmullRomCurve3(treeVineCurvePoints(
+    tree.position, tree.radius, tree.height, tree.seed, harvest.vine,
+  ).map(point));
+}
+
+export function createCanopyHarvestMarkerGeometry(id: string, position: Point3) {
+  const curve = canopyHarvestCurve(id);
+  // Use the same rings and frames as the harvested mesh. The cuff's surface
+  // clears its bark by 0.015, with no scale/rotation animation to cut into it.
+  const geometry = new TubeGeometry(curve, 20, 0.125, 6, false);
+  const target = point(position);
+  let nearest = 0, distance = Infinity;
+  for (let segment = 0; segment < 20; segment++) {
+    const d = curve.getPointAt((segment + 0.5) / 20).distanceToSquared(target);
+    if (d < distance) { distance = d; nearest = segment; }
+  }
+  geometry.setDrawRange(nearest * 6 * 6, 6 * 6);
+  return geometry;
+}
+
 function giantTree(
   builder: AssetBuilder,
   p: Point3,
@@ -538,20 +615,10 @@ function giantTree(
   }
   if (detailed) {
     for (let i = 0; i < 4; i++) {
-      const angle = i * 1.8 + seed;
-      const r = radius * 0.83;
-      const start: Point3 = [
-        p[0] + Math.sin(angle) * r,
-        p[1] + height * 0.7,
-        p[2] + Math.cos(angle) * r,
-      ];
+      if (HARVESTABLE_TREE_VINES.some((hv) => hv.seed === seed && hv.vine === i))
+        continue;
       builder.tube(
-        [
-          start,
-          [start[0] + 1.2, start[1] - 5, start[2] + 0.6],
-          [start[0] - 0.6, start[1] - 11, start[2] + 1.1],
-          [start[0] - 0.8, start[1] - 16, start[2] + 0.8],
-        ],
+        treeVineCurvePoints(p, radius, height, seed, i),
         0.11,
         "#4c6b2b",
         20,
@@ -936,7 +1003,7 @@ function canopyPath(builder: AssetBuilder, path: CanopyPath, seed: number) {
   const segments = Math.ceil(length / (path.kind === "ladder" ? 0.42 : 0.62));
   const radius = path.width * 0.58;
   if (path.kind === "branch") {
-    builder.add(createPhaseFourBranchGeometry(path), null);
+    builder.scoped(`bough-${path.id}`, () => builder.add(createPhaseFourBranchGeometry(path), null));
   }
   for (let i = 0; i <= segments; i++) {
     const t = i / segments,
@@ -1310,9 +1377,21 @@ export function createPhaseFourEnvironment() {
       giantTree(builder, tree.position, tree.radius, tree.height, tree.seed),
     ),
   );
+  HARVESTABLE_TREE_VINES.forEach((hv) => {
+    const tree = PHASE_FOUR_TREES.find((t) => t.seed === hv.seed)!;
+    builder.scoped(`liana-${hv.id}`, () =>
+      builder.tube(
+        treeVineCurvePoints(tree.position, tree.radius, tree.height, tree.seed, hv.vine),
+        0.11,
+        "#4c6b2b",
+        20,
+        "foliage",
+      ),
+    );
+  });
   PHASE_FOUR_PLATFORMS.forEach((deck, i) =>
     builder.scoped(`platform-${deck.id}`, () => {
-      connectDeckToTree(builder, deck);
+      builder.scoped(`support-${deck.id}`, () => connectDeckToTree(builder, deck));
       platform(builder, deck.center, deck.width, deck.depth, i * 7 + 3);
       torch(builder, [
         deck.center[0] - deck.width / 2 + 0.4,
@@ -1414,6 +1493,7 @@ export function createPhaseFourEnvironment() {
         radius,
         PHASE_FOUR_UPPER_RIVER,
       );
+      if (!clearsSummitShrine(x, z)) continue;
       giantTree(
         builder,
         [x, phaseFourGroundHeight(x, z) - ROOT_EMBED_DEPTH, z],
@@ -1434,6 +1514,7 @@ export function createPhaseFourEnvironment() {
         radius,
         PHASE_FOUR_UPPER_RIVER,
       );
+      if (!clearsSummitShrine(x, z)) continue;
       giantTree(
         builder,
         [x, phaseFourGroundHeight(x, z) - ROOT_EMBED_DEPTH, z],
@@ -1624,4 +1705,21 @@ export function createPhaseFourAssetLibrary(): Record<string, Group> {
         );
     }),
   };
+}
+
+/** Physics uses the complete visible bough, including the roots under each deck. */
+export function createCanopySupportColliders(scene: Group) {
+  const result: { name: string; vertices: Float32Array; indices: Uint32Array }[] = [];
+  scene.updateMatrixWorld(true);
+  scene.traverse(object => {
+    if (!(object instanceof Mesh) || !object.userData.canopySupport) return;
+    const geometry = object.geometry.clone().applyMatrix4(object.matrixWorld);
+    result.push({ name: object.name,
+      vertices: Float32Array.from(geometry.getAttribute("position").array),
+      indices: geometry.index ? Uint32Array.from(geometry.index.array)
+        : Uint32Array.from({ length: geometry.getAttribute("position").count }, (_, i) => i),
+    });
+    geometry.dispose();
+  });
+  return result;
 }

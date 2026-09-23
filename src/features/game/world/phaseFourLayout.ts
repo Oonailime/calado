@@ -83,7 +83,37 @@ export const PHASE_FOUR_PLATFORMS = [
     width: 9,
     depth: 8,
   },
+  {
+    id: "summit-shrine",
+    name: "Santuário do cume",
+    // Tucked above and beyond the summit, reached only once the shrine
+    // unlocks (see PHASE_FOUR_PATHS below) — not part of the base walking or
+    // swing routes. Kept well clear of waterfall-summit's own footprint so
+    // the connecting path's onDeck transition has real room to blend in.
+    center: [0, 41, -68] as Point3,
+    width: 8,
+    depth: 7,
+  },
 ] as const;
+
+function deckCenter(id: string): Point3 {
+  return PHASE_FOUR_PLATFORMS.find((deck) => deck.id === id)!.center;
+}
+
+function cubePieceSpawn(deckId: string, offsetX: number, offsetZ: number): Point3 {
+  const [x, y, z] = deckCenter(deckId);
+  return [x + offsetX, y + PHASE_FOUR_FEET_OFFSET + 0.05, z + offsetZ];
+}
+
+// Each monkey's own piece: white (Mizaru) on the highest plateau reachable
+// before the first vine climb, yellow (Kikazaru) by the waterfall, brown
+// (Iwazaru) on the last platform after the swing-vine sequence. Indexed
+// like CHARACTERS/CharacterId.
+export const PHASE_FOUR_CUBE_PIECE_SPAWNS: Record<CharacterId, Point3> = {
+  0: cubePieceSpawn("crown", 0, -2.5),
+  1: cubePieceSpawn("falls", 0, -2),
+  2: cubePieceSpawn("waterfall-summit", -2, 2),
+};
 
 export type CanopyPath = {
   id: string;
@@ -185,6 +215,18 @@ export const PHASE_FOUR_PATHS: CanopyPath[] = [
       [4.2, 13.5, -14],
       [4.2, 16, -18],
       [0.5, 16, -18],
+    ],
+  },
+  {
+    id: "shrine-ladder",
+    from: "waterfall-summit",
+    to: "summit-shrine",
+    kind: "ladder",
+    width: 1.6,
+    points: [
+      [13, 31, -51],
+      [6, 36, -60],
+      [0, 41, -68],
     ],
   },
 ];
@@ -392,7 +434,7 @@ export function phaseFourAdjacentSite(
 }
 
 export const PHASE_FOUR_RIVER: Point3[] = [
-  [14, -4.8, -39],
+  [13, -4.8, -34],
   [11, -4.8, -30],
   [7, -4.8, -20],
   [10, -4.8, -9],
@@ -400,6 +442,8 @@ export const PHASE_FOUR_RIVER: Point3[] = [
   [3, -4.8, 19],
   [10, -4.8, 38],
   [6, -4.8, 64],
+  [9, -4.8, 120],
+  [3, -4.8, 200],
 ];
 export const PHASE_FOUR_WATERFALL = {
   position: [14, -4.8, -39] as Point3,
@@ -407,11 +451,13 @@ export const PHASE_FOUR_WATERFALL = {
   width: 6.5,
 };
 export const PHASE_FOUR_UPPER_RIVER: Point3[] = [
+  [12, 12.7, -200],
+  [20, 12.7, -145],
   [18, 12.7, -104],
   [6, 12.7, -88],
   [4, 12.7, -75],
   [12, 12.7, -63],
   [18, 12.7, -54],
   [14, 12.7, -44],
-  [14, 12.7, -39],
+
 ];

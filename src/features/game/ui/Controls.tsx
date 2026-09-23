@@ -1,24 +1,54 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { MonkeyGlyph } from "@/features/story/SceneArt";
 import { runtime, useGame, type Quality } from "../state/store";
-import { CHARACTERS, CHARACTER_KEY_BINDINGS } from "../types";
+import { CHARACTERS, CHARACTER_KEY_BINDINGS, type CharacterId } from "../types";
 import type { Locale } from "@/content/story";
 import Inventory from "./Inventory";
+import { phase2Chess } from "../world/phase2Chess";
+import { canopyInteractionHint, type CanopyInteractionHint } from "../state/rules";
 import styles from "./Game.module.css";
 
 type Instruction = { title: string; body: string };
+// Matches CHARACTERS' order — each monkey's own cube-piece colour.
+const CUBE_PIECE_NAMES: Record<CharacterId, { pt: string; en: string }> = {
+  0: { pt: "branca", en: "white" },
+  1: { pt: "amarela", en: "yellow" },
+  2: { pt: "marrom", en: "brown" },
+};
 
 function MovementDebugPanel() {
   const output = useRef<HTMLPreElement>(null);
+  // requestAnimationFrame counts actual browser paint frames, independent of
+  // the R3F render loop's per-frame delta (which this panel only samples
+  // every 100ms below) — a much steadier FPS reading than 1/renderDelta.
+  const fps = useRef(0);
+  useEffect(() => {
+    let frames = 0,
+      last = performance.now(),
+      raf: number;
+    const tick = (now: number) => {
+      frames++;
+      if (now - last >= 500) {
+        fps.current = (frames * 1_000) / (now - last);
+        frames = 0;
+        last = now;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
   useEffect(() => {
     const update = () => {
       const element = output.current;
       if (!element) return;
       const id = useGame.getState().puzzle.selected;
+      const map = useGame.getState().map;
       const frame = runtime.movementDebug[id];
       const formatVector = (value: { x: number; y: number; z: number }) =>
         `${value.x.toFixed(2)}, ${value.y.toFixed(2)}, ${value.z.toFixed(2)}`;
       element.textContent = [
+        `${fps.current.toFixed(0)} fps  map ${map}  pos ${formatVector(frame.position)}`,
         `${frame.state}  physics ${(frame.physicsDt * 1_000).toFixed(2)}ms  render ${(frame.renderDelta * 1_000).toFixed(2)}ms`,
         `v ${formatVector(frame.velocity)}`,
         `g ${formatVector(frame.gravity)}`,
@@ -58,6 +88,25 @@ export default function Controls({
   };
   const p = state.puzzle;
   const f = state.abilityKey.replace("Key", "");
+  // Player position lives in `runtime` (per-frame data, not React state — see
+  // store.ts), so a plain state subscription never notices proximity to a
+  // stump/harvest site. Poll it at a coarse, UI-appropriate rate instead of
+  // wiring this panel into the physics frame loop.
+  const [canopyNear, setCanopyNear] = useState<CanopyInteractionHint | null>(
+    null,
+  );
+  useEffect(() => {
+    if (state.map !== "phase3" || state.paused) return;
+    const timer = window.setInterval(() => {
+      setCanopyNear(
+        canopyInteractionHint(
+          useGame.getState().puzzle,
+          runtime.positions[useGame.getState().puzzle.selected],
+        ),
+      );
+    }, 150);
+    return () => window.clearInterval(timer);
+  }, [state.map, state.paused]);
   const instruction = (
     titlePt: string,
     bodyPt: string,
@@ -66,14 +115,50 @@ export default function Controls({
   ): Instruction =>
     pt ? { title: titlePt, body: bodyPt } : { title: titleEn, body: bodyEn };
   let hint: Instruction | null = null;
-  if (state.map === "phase4")
+  if (state.map === "phase2") {
     hint = instruction(
-      "Fase 4 · Vale das copas",
-      "Aproxime-se do cipó que sai da clareira e pressione E para caminhar sobre ele até o platô alto. Para voltar, aproxime-se da ponta no platô e pressione E. No trajeto, WASD segue a direção da câmera; solte as teclas para parar. Dali, siga os cipós até o cume atrás da cachoeira. E: agarrar qualquer trecho ao alcance por baixo; segure no ar para pegar o próximo · WASD: impulso · Espaço: soltar · Shift/Ctrl: subir/descer no cipó · R: reiniciar.",
-      "Phase 4 · Canopy valley",
-      "Approach the vine leaving the clearing and press E to walk along it to the high plateau. To return, approach its end on the plateau and press E. On this rope, WASD follows the camera heading; release the keys to stop. Then swing toward the summit behind the waterfall. E: grab any reachable section from below; hold in flight to catch the next vine · WASD: build momentum · Space: release · Shift/Ctrl: climb up/down the vine · R: restart.",
+      "Fase 2 · Jardim das cinzas",
+      "Recolha as 3 peças de xadrez no caminho até a cerejeira e a lareira. Pule a lava: tocar nela leva você ao início. Seus companheiros seguem e pulam com você. Suba pela rampa circular e sente nas brancas com E. WASD: andar · Espaço: pular · 1/2/3: trocar · R: início.",
+      "Phase 2 · Garden of ashes",
+      "Collect 3 chess pieces on the way to the cherry tree and fireplace. Jump over lava: touching it returns you to the start. Your companions follow and jump with you. Climb the circular ramp and sit on White’s stump with E. WASD: walk · Space: jump · 1/2/3: switch · R: start.",
     );
-  else if (!state.learned.move || !state.learned.camera)
+  } else if (state.map === "phase3") {
+    const missing = CUBE_PIECE_NAMES[p.selected];
+    const collected = p.canopyVines.filter(Boolean).length;
+    // Standing at a stump/harvest site gets the specific, proximity-aware
+    // reason (right monkey? right order? already done?) in place of the
+    // general progression summary below.
+    const taskPt = canopyNear
+      ? canopyNear.pt
+      : !p.canopyFocused
+        ? "Com o branco (2), suba pela escada de cipó junto à árvore central até o platô \"Copa alta\" e concentre-se lá com E ou sua habilidade."
+        : collected < 3
+          ? `Com o dourado (1), colha com E os cipós marcados junto aos galhos inferiores (${collected}/3).`
+          : !p.canopyGoldTied
+            ? "Com o dourado (1), pressione E no toco de baixo (perto da cachoeira) para amarrar o cipó."
+            : !p.canopyBridgeBuilt
+              ? "Com o marrom (3), pressione E no toco de cima (perto do cume) para construir a ponte de cipó."
+              : "A ponte está pronta: E em uma ponta e WASD para atravessar nos dois sentidos.";
+    const taskEn = canopyNear
+      ? canopyNear.en
+      : !p.canopyFocused
+        ? "With White (2), climb the vine ladder by the heart tree up to the \"High Canopy\" plateau and focus there with E or your ability."
+        : collected < 3 ? `Use Gold (1) to harvest the marked lower-branch vines with E (${collected}/3).`
+          : !p.canopyGoldTied ? "Use Gold (1) at the lower stump, near the waterfall: E ties the vine."
+            : !p.canopyBridgeBuilt ? "Use Brown (3) at the upper stump, near the summit: E builds the vine bridge."
+              : "Bridge ready: E at either end, then WASD to cross in either direction.";
+    const deliveryPt = p.cubeDelivered[p.selected] ? "Seu prisma já foi entregue."
+      : p.cubePieces[p.selected] ? "Leve seu prisma ao totem acima do cume e pressione E para entregá-lo."
+        : `Colete o prisma ${missing.pt} com E e entregue-o pessoalmente ao totem acima do cume.`;
+    const deliveryEn = p.cubeDelivered[p.selected] ? "Your prism has been delivered."
+      : p.cubePieces[p.selected] ? "Carry your prism to the totem above the summit and press E to deliver it."
+        : `Collect the ${missing.en} prism with E and bring it to the totem above the summit.`;
+    hint = p.cubeDelivered.every(Boolean)
+      ? instruction("Os três prismas foram entregues", "Pressione E no totem para abrir o cubo mágico.",
+          "All three prisms delivered", "Press E at the totem to open the magic cube.")
+      : instruction("Fase 3 · Vale das copas", `${deliveryPt} ${taskPt} E: agarrar cipó · Espaço: soltar · Shift/Ctrl: subir/descer · Cair no chão leva ao início.`,
+          "Phase 3 · Canopy valley", `${deliveryEn} ${taskEn} E: grab vine · Space: release · Shift/Ctrl: climb · Falling to the ground returns you to spawn.`);
+  } else if (!state.learned.move || !state.learned.camera)
     hint = instruction(
       "Explore a ilha",
       "Use WASD ou as setas para caminhar. Clique na tela para olhar ao redor com o mouse; pressione Esc quando quiser liberar o cursor. Aproxime-se de uma banana e pressione E para coletá-la.",
@@ -98,10 +183,10 @@ export default function Controls({
               "Press 1 to control Kikazaru, the golden monkey. Take him to the golden circle in front of the bridge.",
             )
           : instruction(
-              "Ative o poder de Kikazaru",
-              `Posicione Kikazaru dentro do círculo dourado e pressione ${f}. O poder dele marcará as três madeiras escondidas.`,
-              "Activate Kikazaru's power",
-              `Place Kikazaru inside the golden circle and press ${f}. His power will mark the three hidden pieces of timber.`,
+              "Ative o poder de Kikazaru (1)",
+              `Posicione Kikazaru (1) dentro do círculo dourado e pressione ${f}. O poder dele marcará as três madeiras escondidas.`,
+              "Activate Kikazaru's power (1)",
+              `Place Kikazaru (1) inside the golden circle and press ${f}. His power will mark the three hidden pieces of timber.`,
             );
     else if (!p.logs.every(Boolean))
       hint =
@@ -114,9 +199,9 @@ export default function Controls({
             )
           : instruction(
               "Colete as três madeiras",
-              "Aproxime Iwazaru de cada palmeira marcada e pressione E ou Enter. O contador no inventário mostra quanto ainda falta.",
+              "Aproxime Iwazaru (3) de cada palmeira marcada e pressione E ou Enter. O contador no inventário mostra quanto ainda falta.",
               "Collect all three pieces",
-              "Take Iwazaru to each marked palm and press E or Enter. The inventory counter shows how many pieces remain.",
+              "Take Iwazaru (3) to each marked palm and press E or Enter. The inventory counter shows how many pieces remain.",
             );
     else
       hint =
@@ -129,9 +214,9 @@ export default function Controls({
             )
           : instruction(
               "Construa a ponte",
-              "Leve Iwazaru ao totem à direita da ponte e pressione E ou Enter para usar as madeiras.",
+              "Leve Iwazaru (3) ao totem à direita da ponte e pressione E ou Enter para usar as madeiras.",
               "Build the bridge",
-              "Take Iwazaru to the totem on the right of the bridge and press E or Enter to use the timber.",
+              "Take Iwazaru (3) to the totem on the right of the bridge and press E or Enter to use the timber.",
             );
   } else if (!p.unlocked && state.zone < 3)
     hint = instruction(
@@ -151,9 +236,9 @@ export default function Controls({
               "Press 2 to control Mizaru, the silver monkey, and take him to the silver symbol.",
             )
           : instruction(
-              "Ative o poder de Mizaru",
+              "Ative o poder de Mizaru (2)",
               `Fique sobre o símbolo prateado e pressione ${f}. Ao trocar de personagem, o poder continuará ativo.`,
-              "Activate Mizaru's power",
+              "Activate Mizaru's power (2)",
               `Stand on the silver symbol and press ${f}. His power will remain active when you switch characters.`,
             );
     else if (!p.powers[1])
@@ -161,15 +246,15 @@ export default function Controls({
         p.selected !== 1
           ? instruction(
               "Silencie a barreira",
-              "Mantenha o poder de Mizaru ativo e pressione 1 para controlar Kikazaru. Leve-o ao símbolo dourado.",
+              "Mantenha o poder de Mizaru (2) ativo e pressione 1 para controlar Kikazaru. Leve-o ao símbolo dourado.",
               "Silence the barrier",
-              "Keep Mizaru's power active and press 1 to control Kikazaru. Take him to the golden symbol.",
+              "Keep Mizaru (2)'s power active and press 1 to control Kikazaru. Take him to the golden symbol.",
             )
           : instruction(
-              "Ative o poder de Kikazaru",
-              `Fique sobre o símbolo dourado e pressione ${f}. Com os dois poderes ativos, Mizaru poderá perceber a sequência.`,
-              "Activate Kikazaru's power",
-              `Stand on the golden symbol and press ${f}. With both powers active, Mizaru will be able to perceive the sequence.`,
+              "Ative o poder de Kikazaru (1)",
+              `Fique sobre o símbolo dourado e pressione ${f}. Com os dois poderes ativos, Mizaru (2) poderá perceber a sequência.`,
+              "Activate Kikazaru's power (1)",
+              `Stand on the golden symbol and press ${f}. With both powers active, Mizaru (2) will be able to perceive the sequence.`,
             );
     else if (p.selected === 0)
       hint = instruction(
@@ -187,9 +272,9 @@ export default function Controls({
       );
     else
       hint = instruction(
-        "Observe a sequência com Mizaru",
+        "Observe a sequência com Mizaru (2)",
         "Pressione 2 para voltar a Mizaru. Somente ele consegue perceber as quatro ondas que formam cada algarismo.",
-        "Observe the sequence with Mizaru",
+        "Observe the sequence with Mizaru (2)",
         "Press 2 to return to Mizaru. Only he can perceive the four waves that form each digit.",
       );
   } else if (p.bridge && p.unlocked && !p.built && state.zone === 3)
@@ -203,9 +288,9 @@ export default function Controls({
           )
         : instruction(
             "Ative o mecanismo final",
-            `Leve Iwazaru ao mecanismo atrás do cadeado e pressione E, Enter ou ${f} para concluir.`,
+            `Leve Iwazaru (3) ao mecanismo atrás do cadeado e pressione E, Enter ou ${f} para concluir.`,
             "Activate the final mechanism",
-            `Take Iwazaru to the mechanism behind the padlock and press E, Enter, or ${f} to finish.`,
+            `Take Iwazaru (3) to the mechanism behind the padlock and press E, Enter, or ${f} to finish.`,
           );
   else if (p.built)
     hint = instruction(
@@ -238,6 +323,7 @@ export default function Controls({
           className={styles.icon}
           aria-label={pt ? "Reposicionar grupo" : "Reset group"}
           onClick={() => {
+            if (state.map === "phase2") { phase2Chess.stop(); runtime.phase2Restore.fill(null); }
             runtime.clear();
             state.reset();
           }}
@@ -268,7 +354,7 @@ export default function Controls({
         </button>
       </div>
       {state.movementDebug && <MovementDebugPanel />}
-      {hint && !state.paused && (
+      {hint && !state.paused && !state.cubePuzzleOpen && (
         <div className={styles.hint} role="status">
           <strong>{hint.title}</strong>
           <span>{hint.body}</span>

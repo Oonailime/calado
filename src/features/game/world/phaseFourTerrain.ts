@@ -6,7 +6,8 @@ import {
   MathUtils,
   Vector3,
 } from "three";
-import { PHASE_FOUR_RIVER, PHASE_FOUR_UPPER_RIVER } from "./phaseFourLayout";
+import type { Vec3 } from "../types";
+import { PHASE_FOUR_FEET_OFFSET, PHASE_FOUR_RIVER, PHASE_FOUR_UPPER_RIVER } from "./phaseFourLayout";
 
 const river = new CatmullRomCurve3(
   PHASE_FOUR_RIVER.map((p) => new Vector3(...p)),
@@ -96,4 +97,9 @@ export function createPhaseFourGroundGeometry() {
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
+}
+
+/** Ground is lethal, including the upper river bank above the old fall cutoff. */
+export function phaseFourTouchesGround(position: Vec3) {
+  return position.y - PHASE_FOUR_FEET_OFFSET <= phaseFourGroundHeight(position.x, position.z) + 0.18;
 }

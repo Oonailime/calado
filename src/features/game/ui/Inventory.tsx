@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { Locale } from "@/content/story";
 import { useGame } from "../state/store";
+import { CHESS_TROPHIES, type ChessTrophyId } from "../state/chessTrophies";
 import styles from "./Game.module.css";
 
-type PickupKind = "banana" | "wood";
+type PickupKind = "banana" | "wood" | ChessTrophyId;
 type Pickup = { id: number; kind: PickupKind };
 
 export const PICKUP_VISIBLE_MS = 5_000;
@@ -43,10 +44,16 @@ function WoodIcon() {
 }
 
 function ItemIcon({ kind }: { kind: PickupKind }) {
-  return kind === "banana" ? <BananaIcon /> : <WoodIcon />;
+  if (kind === "banana") return <BananaIcon />;
+  if (kind === "wood") return <WoodIcon />;
+  return <svg viewBox="0 0 32 32" aria-hidden="true" style={{ color: CHESS_TROPHIES.find(trophy => trophy.id === kind)?.color }}>
+    <path d="M9 5h14v8c0 6-14 6-14 0Z" fill="currentColor" />
+    <path d="M9 8H5v4c0 4 4 5 6 5M23 8h4v4c0 4-4 5-6 5M16 19v6M10 27h12" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+  </svg>;
 }
 
 export default function Inventory({ locale }: { locale: Locale }) {
+  const trophies = useGame(state => state.chessTrophies);
   const bananas = useGame((state) => state.puzzle.bananas);
   const logs = useGame((state) => state.puzzle.logs);
   const bridge = useGame((state) => state.puzzle.bridge);
@@ -57,6 +64,8 @@ export default function Inventory({ locale }: { locale: Locale }) {
   const pt = locale === "pt";
 
   useEffect(() => {
+    useGame.getState().hydrateChessTrophies();
+    let previousTrophies = useGame.getState().chessTrophies;
     let previous = useGame.getState().puzzle;
     const activeTimers = new Map<number, number>();
     let bananaCounterTimer: number | undefined;
@@ -66,6 +75,8 @@ export default function Inventory({ locale }: { locale: Locale }) {
         collected(state.puzzle.bananas) - collected(previous.bananas);
       const woodDelta = collected(state.puzzle.logs) - collected(previous.logs);
       previous = state.puzzle;
+      const newTrophies = state.chessTrophies.filter(id => !previousTrophies.includes(id));
+      previousTrophies = state.chessTrophies;
 
       // The counters themselves only surface around a collect/use event (see
       // PICKUP_VISIBLE_MS) instead of sitting on screen permanently; each new
@@ -86,13 +97,14 @@ export default function Inventory({ locale }: { locale: Locale }) {
           PICKUP_VISIBLE_MS,
         );
       }
-      if (bananaDelta <= 0 && woodDelta <= 0) return;
+      if (bananaDelta <= 0 && woodDelta <= 0 && !newTrophies.length) return;
 
       const additions: Pickup[] = [];
       for (let index = 0; index < bananaDelta; index += 1)
         additions.push({ id: nextId.current++, kind: "banana" });
       for (let index = 0; index < woodDelta; index += 1)
         additions.push({ id: nextId.current++, kind: "wood" });
+      for (const kind of newTrophies) additions.push({ id: nextId.current++, kind });
       setPickups((current) => [...current, ...additions]);
 
       additions.forEach((pickup) => {
@@ -124,6 +136,13 @@ export default function Inventory({ locale }: { locale: Locale }) {
         role="group"
         aria-label={pt ? "Inventário" : "Inventory"}
       >
+        {CHESS_TROPHIES.filter(trophy => trophies.includes(trophy.id)).map(trophy => (
+          <div key={trophy.id} className={`${styles.inventoryItem} ${styles.inventoryTrophy}`} data-item={trophy.id}
+            title={pt ? `Vitória no xadrez contra ${trophy.name}` : `Chess victory against ${trophy.name}`}>
+            <ItemIcon kind={trophy.id} />
+            <span>{pt ? "Troféu" : "Trophy"} {trophy.name}</span>
+          </div>
+        ))}
         {bananaCounterVisible && (
           <div
             className={`${styles.inventoryItem} ${styles.inventoryBanana}`}
@@ -159,19 +178,19 @@ export default function Inventory({ locale }: { locale: Locale }) {
               className={`${styles.pickup} ${
                 pickup.kind === "banana"
                   ? styles.inventoryBanana
-                  : styles.inventoryWood
+                  : pickup.kind === "wood" ? styles.inventoryWood : styles.inventoryTrophy
               }`}
             >
               <ItemIcon kind={pickup.kind} />
-              <span aria-hidden="true">+1</span>
+              <span aria-hidden="true">+1 {CHESS_TROPHIES.find(trophy => trophy.id === pickup.kind)?.name}</span>
               <span className={styles.visuallyHidden}>
                 {pickup.kind === "banana"
                   ? pt
                     ? "Banana coletada"
                     : "Banana collected"
-                  : pt
-                    ? "Madeira coletada"
-                    : "Timber collected"}
+                  : pickup.kind === "wood"
+                    ? pt ? "Madeira coletada" : "Timber collected"
+                    : `${pt ? "Troféu conquistado" : "Trophy earned"}: ${CHESS_TROPHIES.find(trophy => trophy.id === pickup.kind)?.name}`}
               </span>
             </div>
           ))}

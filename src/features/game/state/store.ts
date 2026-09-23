@@ -1,27 +1,70 @@
 import { create } from "zustand";
+import { CHESS_TROPHIES, CHESS_TROPHIES_STORAGE_KEY, readChessTrophies, type ChessTrophyId } from "./chessTrophies";
 import type { CharacterId, Vec3 } from "../types";
 import type { LocomotionState } from "../characters/monkeyMotion";
 import { LOCOMOTION_TUNING } from "../characters/locomotionConfig";
 import { characterSpawn } from "../world/layout";
 import {
-  collectLog,
+  type Axis,
+  type Direction,
+  type Layer,
+  type RubiksCubeRuntimeState,
+  DEFAULT_SCRAMBLE_SEED,
+  scrambleCube,
+  turnFace,
+} from "../world/rubiksCubeState";
+import { RESTING_FACE_BASIS, type FaceBasis } from "../world/rubiksCubeView";
+import {
+  beginCubeTurn,
+  collectCubePiece,
   construct,
+  collectLog,
   eatBanana,
+  finishCubeTurn,
   initialPuzzle,
+  interactCanopy,
   recover,
+  restoreKikazaruHearing,
+  restoreMizaruSight,
   selectCharacter,
   startPower,
   submitCodeDigit,
   type PuzzleState,
 } from "./rules";
 export type Quality = "low" | "medium" | "high" | "ultra";
-export type GameMap = "islands" | "phase4";
+export type GameMap = "islands" | "phase2" | "phase3";
 
 export function gameMapFromQuery(value: string | null): GameMap | undefined {
-  if (value === "islands" || value === "phase4") return value;
+  if (value === "phase4") return "phase3";
+  if (value === "islands" || value === "phase2" || value === "phase3") return value;
   return undefined;
 }
+
+function initialGameMap(): GameMap {
+  if (typeof window === "undefined") return "islands";
+  return (
+    gameMapFromQuery(new URLSearchParams(window.location.search).get("map")) ??
+    "islands"
+  );
+}
+
+// A URL-only dev shortcut: ?map=phase2&skip spawns at the clearing (the
+// same spot arriving back from phase3 already uses) with all three chess
+// pieces already in hand, instead of the long walk in from the arrival
+// portal — for quickly testing the chess table/tree portal without
+// replaying the route each time. Doesn't touch historicalSolved; the puzzle
+// itself still has to be solved normally.
+export function phase2SkipWalk(): boolean {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).has("skip");
+}
 type Store = {
+  phase2FromCanopy: boolean;
+  phase2Pieces: [boolean, boolean, boolean];
+  collectChessPiece: (index: number) => void;
+  chessTrophies: ChessTrophyId[];
+  hydrateChessTrophies: () => void;
+  awardChessTrophy: (opponent: CharacterId) => boolean;
   puzzle: PuzzleState;
   paused: boolean;
   muted: boolean;
@@ -35,6 +78,9 @@ type Store = {
   learned: Record<string, boolean>;
   zone: number;
   lockOpen: boolean;
+  // Mirrors lockOpen for the shrine's cube-twisting overlay — see Lock.tsx's
+  // precedent and useControls.ts's pointer-lock-release effect.
+  cubePuzzleOpen: boolean;
   // Which world is currently mounted. The islands map is the puzzle from
   // the start of the game; phase4 is the canopy valley reached through its
   // portal. Only one world is mounted at a time.
@@ -43,6 +89,12 @@ type Store = {
   power: (id: CharacterId, position: Vec3) => void;
   build: (position: Vec3) => void;
   eat: (id: CharacterId, position: Vec3) => boolean;
+  canopyInteract: (position: Vec3) => boolean;
+  restoreMizaruSight: () => void;
+  restoreKikazaruHearing: () => void;
+  collectCube: (id: CharacterId, position: Vec3) => boolean;
+  turnCubeFace: (axis: Axis, layer: Layer, direction: Direction) => void;
+  completeCubeTurn: () => void;
   submitLockDigit: (position: Vec3, digit: number) => void;
   reset: () => void;
   learn: (key: string) => void;
@@ -50,6 +102,7 @@ type Store = {
     patch: Partial<
       Pick<
         Store,
+        | "phase2FromCanopy"
         | "paused"
         | "muted"
         | "quality"
@@ -61,12 +114,41 @@ type Store = {
         | "abilityKey"
         | "zone"
         | "lockOpen"
+        | "cubePuzzleOpen"
         | "map"
       >
     >,
   ) => void;
 };
 export const useGame = create<Store>((set) => ({
+  phase2FromCanopy: phase2SkipWalk(),
+  phase2Pieces: phase2SkipWalk() ? [true, true, true] : [false, false, false],
+  collectChessPiece: (index) => set(s => {
+    if (index < 0 || index > 2 || s.phase2Pieces[index]) return s;
+    const pieces = [...s.phase2Pieces] as [boolean, boolean, boolean];
+    pieces[index] = true;
+    try { localStorage.setItem("phase2ChessPieces", JSON.stringify(pieces)); } catch {}
+    return { phase2Pieces: pieces };
+  }),
+  chessTrophies: [],
+  hydrateChessTrophies: () => set(s => {
+    const saved = readChessTrophies();
+    const merged = [...new Set([...s.chessTrophies, ...saved])];
+    return merged.length === s.chessTrophies.length ? s : { chessTrophies: merged };
+  }),
+  awardChessTrophy: (opponent) => {
+    let awarded = false;
+    set(s => {
+      const id = CHESS_TROPHIES[opponent].id;
+      if (s.chessTrophies.includes(id)) return s;
+      const saved = readChessTrophies();
+      awarded = !saved.includes(id);
+      const chessTrophies = [...new Set([...s.chessTrophies, ...saved, id])];
+      try { localStorage.setItem(CHESS_TROPHIES_STORAGE_KEY, JSON.stringify(chessTrophies)); } catch {}
+      return { chessTrophies };
+    });
+    return awarded;
+  },
   puzzle: initialPuzzle(),
   paused: false,
   muted: false,
@@ -80,16 +162,19 @@ export const useGame = create<Store>((set) => ({
   learned: {},
   zone: 0,
   lockOpen: false,
-  map: "islands",
+  cubePuzzleOpen: false,
+  map: initialGameMap(),
   select: (id) =>
-    set((s) => ({
-      puzzle: selectCharacter(s.puzzle, id),
+    set((s) => {
+      if (!runtime.chessActive && s.map === "phase3" && id !== s.puzzle.selected) runtime.canopySelectionEpoch++;
+      return {
+      puzzle: runtime.chessActive ? s.puzzle : selectCharacter(s.puzzle, id),
       learned: {
         ...s.learned,
         switch: true,
         hold: s.learned.hold || s.puzzle.powers[s.puzzle.selected],
       },
-    })),
+    }; }),
   power: (id, p) => set((s) => ({ puzzle: startPower(s.puzzle, id, p) })),
   build: (p) =>
     set((s) => {
@@ -106,9 +191,59 @@ export const useGame = create<Store>((set) => ({
     });
     return ate;
   },
+  canopyInteract: (position) => {
+    let changed = false;
+    set(state => {
+      if (state.map !== "phase3") return state;
+      const puzzle = interactCanopy(state.puzzle, position);
+      changed = puzzle !== state.puzzle;
+      return changed ? { puzzle } : state;
+    });
+    return changed;
+  },
+  restoreMizaruSight: () => set((s) => ({ puzzle: restoreMizaruSight(s.puzzle) })),
+  restoreKikazaruHearing: () => set((s) => ({ puzzle: restoreKikazaruHearing(s.puzzle) })),
+  collectCube: (id, position) => {
+    let collected = false;
+    set((state) => {
+      if (state.map !== "phase3") return state;
+      const puzzle = collectCubePiece(state.puzzle, id, position);
+      collected = puzzle !== state.puzzle;
+      return collected ? { puzzle } : state;
+    });
+    return collected;
+  },
+  turnCubeFace: (axis, layer, direction) =>
+    set((s) => {
+      if (!runtime.rubiksCube || runtime.rubiksCube.activeTurn) return s;
+      const puzzle = beginCubeTurn(s.puzzle);
+      if (puzzle === s.puzzle) return s;
+      runtime.rubiksCube.activeTurn = { axis, layer, direction, startedAt: performance.now() };
+      return { puzzle };
+    }),
+  completeCubeTurn: () =>
+    set((s) => {
+      const cube = runtime.rubiksCube;
+      const active = cube?.activeTurn;
+      if (!cube || !active) return s;
+      cube.cubies = turnFace(cube.cubies, active.axis, active.layer, active.direction);
+      cube.activeTurn = null;
+      const puzzle = finishCubeTurn(s.puzzle, cube.cubies);
+      // The overlay unmounts once solved (Game.tsx switches to the ending
+      // screen) — close it explicitly so it isn't left "open" underneath,
+      // which previously left the pointer-lock-release effect and the
+      // canvas click-to-relock handler fighting each other.
+      return puzzle.cubeSolved ? { puzzle, cubePuzzleOpen: false } : { puzzle };
+    }),
   submitLockDigit: (position, digit) =>
     set((s) => ({ puzzle: submitCodeDigit(s.puzzle, position, digit) })),
-  reset: () => set((s) => ({ puzzle: recover(s.puzzle), lockOpen: false })),
+  reset: () =>
+    set((s) => ({
+      puzzle: recover(s.puzzle),
+      phase2FromCanopy: false,
+      lockOpen: false,
+      cubePuzzleOpen: false,
+    })),
   learn: (key) =>
     set((s) =>
       s.learned[key] ? s : { learned: { ...s.learned, [key]: true } },
@@ -173,6 +308,14 @@ function movementDebugFrame() {
 
 // Positions/frame data intentionally live outside React's render state.
 export const runtime = {
+  canopySelectionEpoch: 0,
+  // Live 0..1 progress crossing the cooperative vine bridge, ratcheting up
+  // only — read by Game.tsx (sight) and useSound.ts (hearing) to ease the
+  // blind/muffled filters off. Once either reaches 1, the corresponding
+  // puzzle.*Restored flag makes the payoff permanent regardless of this
+  // value, which itself resets to 0 like any other per-frame runtime data.
+  mizaruVineSight: 0,
+  kikazaruVineHearing: 0,
   positions: [
     characterSpawn(0),
     characterSpawn(1),
@@ -186,6 +329,18 @@ export const runtime = {
   keys: new Set<string>(),
   yaw: 0,
   pitch: 0.38,
+  // Mouse-wheel camera zoom — a multiplier applied to each map's own base
+  // follow distance (see FollowCamera.tsx), clamped in useControls.ts's
+  // wheel handler so it can't be scrolled past a comfortable in/out range.
+  zoom: 1,
+  // Which raw direction is currently "Right/Up/Front" for the cube puzzle's
+  // view-relative U/D/L/R/F/B notation (see world/rubiksCubeView.ts) —
+  // updated instantly and persistently by RubiksCubePuzzle.tsx's D-pad
+  // (never springs back); RubiksCube.tsx's useFrame animates the visible
+  // transition toward whatever this currently is.
+  cubeInspect: {
+    faceBasis: RESTING_FACE_BASIS as FaceBasis,
+  },
   jump: false,
   interact: false,
   motions: [null, null, null] as [string | null, string | null, string | null],
@@ -212,6 +367,16 @@ export const runtime = {
   // request pointer lock on it without threading a ref through props.
   canvasElement: null as HTMLElement | null,
   splashes: [] as Vec3[],
+  // Created lazily once all three pieces are collected — see useControls.ts.
+  rubiksCube: null as RubiksCubeRuntimeState | null,
+  ensureRubiksCube(): RubiksCubeRuntimeState {
+    if (!this.rubiksCube)
+      this.rubiksCube = {
+        cubies: scrambleCube(DEFAULT_SCRAMBLE_SEED),
+        activeTurn: null,
+      };
+    return this.rubiksCube;
+  },
   binarySequenceStep: null as number | null,
   binarySequenceStartedAt: 0,
   binarySequenceElapsed(step: number, now = performance.now()) {
@@ -243,12 +408,18 @@ export const runtime = {
     this.motions.fill(null);
     this.activeVine = null;
     this.swingingVines.clear();
+    if (this.rubiksCube) this.rubiksCube.activeTurn = null;
     for (const contacts of this.vineContacts) {
       contacts.left = null;
       contacts.right = null;
     }
+    this.mizaruVineSight = 0;
+    this.kikazaruVineHearing = 0;
     this.stopBinarySequence();
   },
+  chessActive: false,
+  phase2Restore: [null, null, null] as (Vec3 | null)[],
+  phase2Seats: [null, null] as [number | null, number | null],
 };
 
 // TEMP-VERIFY: live inspection hook for Playwright, removed before finishing.

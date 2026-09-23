@@ -336,14 +336,22 @@ export function useSound(running: boolean): void {
   ]);
 
   // Footstep volume is gated every animation frame, since movement updates
-  // on the physics loop rather than through React state.
+  // on the physics loop rather than through React state. Kikazaru's muffling
+  // rides along on the same loop: it eases off as he crosses the vine bridge
+  // (runtime.kikazaruVineHearing, live per-frame data — not React state),
+  // which the state-change-driven effect above has no way to track. Both
+  // write the same AudioParams; this just runs far more often, so its
+  // (blend-aware) target wins on every frame except the rare one where
+  // `puzzle.selected` itself just changed — imperceptible given
+  // setTargetAtTime already eases rather than snapping.
   useEffect(() => {
     if (muted || !running) return;
     let frame: number;
     const tick = () => {
       const state = audio.current;
       if (state) {
-        const selected = useGame.getState().puzzle.selected;
+        const s = useGame.getState();
+        const selected = s.puzzle.selected;
         const moving =
           runtime.grounded[selected] &&
           runtime.speeds[selected] > FOOTSTEP_SPEED_THRESHOLD;
@@ -352,12 +360,34 @@ export function useSound(running: boolean): void {
           state.context.currentTime,
           FOOTSTEP_TIME_CONSTANT,
         );
+        const kikazaruSelected = selected === 1;
+        const kikazaruPowerActive = kikazaruSelected && s.puzzle.powers[1];
+        if (kikazaruSelected && !kikazaruPowerActive) {
+          const clarity = s.puzzle.kikazaruHearingRestored
+            ? 1
+            : runtime.kikazaruVineHearing;
+          const scale =
+            MUSIC_SCALE * (KIKAZARU_MUSIC_FACTOR + (1 - KIKAZARU_MUSIC_FACTOR) * clarity);
+          const frequency =
+            MUSIC_FILTER_MUFFLED_HZ +
+            (MUSIC_FILTER_NORMAL_HZ - MUSIC_FILTER_MUFFLED_HZ) * clarity;
+          state.musicGain.gain.setTargetAtTime(
+            ambient * scale,
+            state.context.currentTime,
+            MUSIC_FILTER_TIME_CONSTANT,
+          );
+          state.musicFilter.frequency.setTargetAtTime(
+            frequency,
+            state.context.currentTime,
+            MUSIC_FILTER_TIME_CONSTANT,
+          );
+        }
       }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [muted, running, effects]);
+  }, [muted, running, effects, ambient]);
 
   useEffect(() => {
     const state = audio.current;

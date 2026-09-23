@@ -1,5 +1,8 @@
 import type { CharacterId, Vec3 } from "../types";
 import { ISLAND_SURFACE_Y } from "../world/layout";
+import { PHASE_FOUR_CUBE_PIECE_SPAWNS, PHASE_FOUR_PLATFORMS } from "../world/phaseFourLayout";
+import { solvedLayerCount, type CubieState } from "../world/rubiksCubeState";
+import { CANOPY_FOCUS_DECK, CANOPY_HARVESTS, CANOPY_STUMPS } from "../world/canopyCooperationLayout";
 export type PuzzleState = {
   selected: CharacterId;
   powers: [boolean, boolean, boolean];
@@ -14,6 +17,23 @@ export type PuzzleState = {
   // Counts wrong padlock guesses so the UI can flash feedback once per miss
   // (see Lock.tsx) — never decremented, only ever compared for a change.
   wrongAttempts: number;
+  // Phase 3's shrine puzzle. Indexed like CHARACTERS: 0 white (Mizaru), 1
+  // yellow (Kikazaru), 2 brown (Iwazaru) — see PHASE_FOUR_CUBE_PIECE_SPAWNS.
+  cubePieces: [boolean, boolean, boolean];
+  cubeDelivered: [boolean, boolean, boolean];
+  canopyFocused: boolean;
+  canopyVines: [boolean, boolean, boolean];
+  canopyGoldTied: boolean;
+  canopyBridgeBuilt: boolean;
+  cubeTurning: boolean;
+  cubeLayersSolved: number;
+  cubeSolved: boolean;
+  // Permanent, one-way payoffs for crossing the vine bridge they cooperated
+  // to build (see runtime.mizaruVineSight/kikazaruVineHearing in store.ts for
+  // the live in-progress animation) — once true, stays true for the rest of
+  // the session, regardless of later resets or which vine they're on.
+  mizaruSightRestored: boolean;
+  kikazaruHearingRestored: boolean;
 };
 export const initialPuzzle = (): PuzzleState => ({
   selected: 2,
@@ -27,7 +47,24 @@ export const initialPuzzle = (): PuzzleState => ({
   built: false,
   revision: 0,
   wrongAttempts: 0,
+  cubePieces: [false, false, false],
+  cubeDelivered: [false, false, false],
+  canopyFocused: false,
+  canopyVines: [false, false, false],
+  canopyGoldTied: false,
+  canopyBridgeBuilt: false,
+  cubeTurning: false,
+  cubeLayersSolved: 0,
+  cubeSolved: false,
+  mizaruSightRestored: false,
+  kikazaruHearingRestored: false,
 });
+export function restoreMizaruSight(state: PuzzleState): PuzzleState {
+  return state.mizaruSightRestored ? state : { ...state, mizaruSightRestored: true };
+}
+export function restoreKikazaruHearing(state: PuzzleState): PuzzleState {
+  return state.kikazaruHearingRestored ? state : { ...state, kikazaruHearingRestored: true };
+}
 export const distance = (a: Vec3, b: Vec3) => Math.hypot(a.x - b.x, a.z - b.z);
 export const anchors = {
   bridge: { x: 0, y: ISLAND_SURFACE_Y, z: -2 },
@@ -175,4 +212,122 @@ export function recover(state: PuzzleState): PuzzleState {
     sustained: [false, false, false],
     revision: state.revision + 1,
   };
+}
+const CUBE_PIECE_RANGE = 2;
+// Mirrors collectLog/eatBanana: only the matching character, within range of
+// their own plateau, can pick up their cube piece.
+export function collectCubePiece(
+  state: PuzzleState,
+  id: CharacterId,
+  position: Vec3,
+): PuzzleState {
+  if (state.selected !== id || state.cubePieces[id]) return state;
+  const [x, y, z] = PHASE_FOUR_CUBE_PIECE_SPAWNS[id];
+  if (Math.hypot(position.x - x, position.y - y, position.z - z) > CUBE_PIECE_RANGE) return state;
+  const cubePieces = [...state.cubePieces] as PuzzleState["cubePieces"];
+  cubePieces[id] = true;
+  return { ...state, cubePieces };
+}
+export function beginCubeTurn(state: PuzzleState): PuzzleState {
+  if (state.cubeTurning || state.cubeSolved) return state;
+  return { ...state, cubeTurning: true };
+}
+export function finishCubeTurn(
+  state: PuzzleState,
+  cubies: readonly CubieState[],
+): PuzzleState {
+  const cubeLayersSolved = solvedLayerCount(cubies);
+  return {
+    ...state,
+    cubeTurning: false,
+    cubeLayersSolved,
+    cubeSolved: cubeLayersSolved === 3,
+  };
+}
+const CUBE_SHRINE_RANGE = 2.6;
+const cubeShrineCenter = PHASE_FOUR_PLATFORMS.find(
+  (deck) => deck.id === "summit-shrine",
+)!.center;
+export function nearCubeShrine(position: Vec3): boolean {
+  const [x, y, z] = cubeShrineCenter;
+  return distance(position, { x, y, z }) < CUBE_SHRINE_RANGE && Math.abs(position.y - y) < 2;
+}
+
+function nearCanopyPoint(position: Vec3, point: readonly number[], range = 2.4) {
+  return Math.hypot(position.x - point[0], position.z - point[2]) < range &&
+    Math.abs(position.y - point[1]) < 2;
+}
+
+export function onCanopyFocusDeck(position: Vec3) {
+  const deck = CANOPY_FOCUS_DECK;
+  return Math.abs(position.x - deck.center[0]) <= deck.width / 2 &&
+    Math.abs(position.z - deck.center[2]) <= deck.depth / 2 &&
+    Math.abs(position.y - (deck.center[1] + 0.55)) < 1.5;
+}
+
+export type CanopyInteractionHint = { id: string; ready: boolean; pt: string; en: string };
+
+/** The same ranges as the gameplay actions, with a reason when an action is locked. */
+export function canopyInteractionHint(state: PuzzleState, position: Vec3): CanopyInteractionHint | null {
+  const count = state.canopyVines.filter(Boolean).length;
+  const hint = (id: string, ready: boolean, pt: string, en: string) => ({ id, ready, pt, en });
+  const prerequisite = (id: string) => !state.canopyFocused
+    ? hint(id, false, "Primeiro, concentre o branco (2) no platô branco.", "First, focus White (2) on the white plateau.")
+    : count < 3 ? hint(id, false, `Faltam ${3 - count} cipós: colha os cipós iluminados com o dourado (1).`, `${3 - count} vines needed: harvest the glowing vines with Gold (1).`) : null;
+  if (nearCanopyPoint(position, CANOPY_STUMPS.lower)) {
+    if (state.canopyBridgeBuilt) return hint("bridge-lower", true, "E · Caminhar pelo cipó até o platô superior", "E · Walk the vine to the upper plateau");
+    const required = prerequisite("stump-lower");
+    if (required) return required;
+    return state.selected === 1
+      ? hint("stump-lower", true, "E · Amarrar o cipó neste toco", "E · Tie the vine to this stump")
+      : hint("stump-lower", false, "Troque para o dourado (1) para amarrar o cipó.", "Switch to Gold (1) to tie the vine.");
+  }
+  if (nearCanopyPoint(position, CANOPY_STUMPS.upper)) {
+    if (state.canopyBridgeBuilt) return hint("bridge-upper", true, "E · Caminhar pelo cipó até o platô inferior", "E · Walk the vine to the lower plateau");
+    const required = prerequisite("stump-upper");
+    if (required) return required;
+    if (!state.canopyGoldTied) return hint("stump-upper", false, "O dourado (1) precisa amarrar a ponta no toco de baixo primeiro.", "Gold (1) must tie the end at the lower stump first.");
+    return state.selected === 2
+      ? hint("stump-upper", true, "E · Construir a ponte de cipó", "E · Build the vine bridge")
+      : hint("stump-upper", false, "Troque para o marrom (3) para construir a ponte.", "Switch to Brown (3) to build the bridge.");
+  }
+  if (onCanopyFocusDeck(position) && !state.canopyFocused) return state.selected === 0
+    ? hint("focus", true, "E · Concentrar e revelar os cipós das árvores", "E · Focus to reveal the tree vines")
+    : hint("focus", false, "Troque para o branco (2) e concentre-se neste platô.", "Switch to White (2) and focus on this plateau.");
+  const harvest = CANOPY_HARVESTS.findIndex((site, i) => !state.canopyVines[i] && nearCanopyPoint(position, site.position));
+  if (harvest >= 0) {
+    if (!state.canopyFocused) return hint(`harvest-${harvest}`, false, "Cipó oculto: o branco (2) precisa se concentrar no platô branco.", "Hidden vine: White (2) must focus on the white plateau.");
+    return state.selected === 1
+      ? hint(`harvest-${harvest}`, true, `E · Colher cipó (${count}/3)`, `E · Harvest vine (${count}/3)`)
+      : hint(`harvest-${harvest}`, false, "Troque para o dourado (1) para colher este cipó.", "Switch to Gold (1) to harvest this vine.");
+  }
+  if (onCanopyFocusDeck(position) && state.selected === 0) return hint("focused", false,
+    "Cipós revelados! Troque para o dourado (1) e colha os três cipós iluminados.", "Vines revealed! Switch to Gold (1) and harvest the three glowing vines.");
+  return null;
+}
+
+export function interactCanopy(state: PuzzleState, position: Vec3): PuzzleState {
+  const id = state.selected;
+  if (state.cubePieces[id] && !state.cubeDelivered[id] && nearCubeShrine(position)) {
+    const cubeDelivered = [...state.cubeDelivered] as PuzzleState["cubeDelivered"];
+    cubeDelivered[id] = true;
+    return { ...state, cubeDelivered };
+  }
+  if (id === 0 && !state.canopyFocused && onCanopyFocusDeck(position))
+    return { ...state, canopyFocused: true };
+  if (!state.canopyFocused) return state;
+  if (id === 1 && !state.canopyBridgeBuilt) {
+    const index = CANOPY_HARVESTS.findIndex((site, i) => !state.canopyVines[i] && nearCanopyPoint(position, site.position));
+    if (index >= 0) {
+      const canopyVines = [...state.canopyVines] as PuzzleState["canopyVines"];
+      canopyVines[index] = true;
+      return { ...state, canopyVines };
+    }
+  }
+  if (!state.canopyVines.every(Boolean)) return state;
+  if (id === 1 && !state.canopyGoldTied && nearCanopyPoint(position, CANOPY_STUMPS.lower))
+    return { ...state, canopyGoldTied: true };
+  if (id === 2 && state.canopyGoldTied && !state.canopyBridgeBuilt && nearCanopyPoint(position, CANOPY_STUMPS.upper))
+    return { ...state, canopyBridgeBuilt: true };
+  return state;
 }
