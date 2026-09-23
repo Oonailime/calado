@@ -13,7 +13,6 @@ import {
   DodecahedronGeometry,
   DoubleSide,
   Fog,
-  Group,
   InstancedMesh,
   LatheGeometry,
   MathUtils,
@@ -49,6 +48,7 @@ import {
   PULSE_ZERO,
 } from "./soundCode";
 import WisdomTotem from "./Totem";
+import Padlock, { PADLOCK_MODEL_URL } from "./Padlock";
 import BananaGroves from "./BananaGroves";
 import Portal, { PORTAL_MODEL_URL } from "./Portal";
 import { powerAnchorVisibility } from "./powerAnchorVisibility";
@@ -349,48 +349,6 @@ function NoiseBarrier({
       </mesh>
       <SoundWaves active={active} visible={visible} digit={digit} step={step} />
     </>
-  );
-}
-function Padlock({ unlocked }: { unlocked: boolean }) {
-  const shackle = useRef<Group>(null);
-  useFrame((_, delta) => {
-    if (!shackle.current) return;
-    const t = Math.min(1, delta * 4);
-    const targetY = unlocked ? 0.22 : 0;
-    const targetRotation = unlocked ? -0.9 : 0;
-    shackle.current.position.y += (targetY - shackle.current.position.y) * t;
-    shackle.current.rotation.z +=
-      (targetRotation - shackle.current.rotation.z) * t;
-  });
-  return (
-    <group position={[anchors.padlock.x, 0, anchors.padlock.z]}>
-      <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.75, 0.82, 40]} />
-        <meshBasicMaterial
-          color={unlocked ? "#8f9a86" : "#eac369"}
-          transparent
-          opacity={unlocked ? 0.3 : 0.55}
-        />
-      </mesh>
-      <mesh position={[0, 0.32, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.5, 0.6, 0.24]} />
-        <meshStandardMaterial color="#8a7a52" metalness={0.5} roughness={0.5} />
-      </mesh>
-      <mesh position={[0, 0.34, 0.13]}>
-        <circleGeometry args={[0.09, 16]} />
-        <meshStandardMaterial color="#20201a" />
-      </mesh>
-      <group ref={shackle} position={[0, 0.62, 0]}>
-        <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
-          <torusGeometry args={[0.22, 0.045, 8, 20, Math.PI]} />
-          <meshStandardMaterial
-            color="#c9c2a5"
-            metalness={0.6}
-            roughness={0.3}
-          />
-        </mesh>
-      </group>
-    </group>
   );
 }
 const MOTE_COUNT = 48;
@@ -778,6 +736,7 @@ export default function World({
   // mounting it lazily (only once the bridge is revealed) would suspend the
   // whole Physics/Character subtree mid-game and reset everyone to spawn.
   const bridgeModel = useLoader(GLTFLoader, BRIDGE_MODEL_URL);
+  const padlockModel = useLoader(GLTFLoader, PADLOCK_MODEL_URL);
   const portalModel = useLoader(GLTFLoader, PORTAL_MODEL_URL);
   const visibleAnchors = powerAnchorVisibility(puzzle);
   return (
@@ -877,7 +836,7 @@ export default function World({
                 />
               </group>
             )}
-            <Padlock unlocked={puzzle.unlocked} />
+            <Padlock template={padlockModel.scene} unlocked={puzzle.unlocked} />
           </>
         )}
       </group>
