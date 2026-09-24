@@ -4,11 +4,6 @@
   top: 16%;
   right: 5vw;
   width: min(49vw, 720px);
-  max-height: calc(100svh - 225px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: #a38e62 transparent;
   padding: 0 10px 10px;
 }
 .heading {
@@ -171,7 +166,6 @@
 @media (max-height: 760px) {
   .portfolio {
     top: 15%;
-    max-height: calc(100svh - 185px);
   }
   .projectLink {
     padding: 12px;

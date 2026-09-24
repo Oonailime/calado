@@ -9,6 +9,8 @@ import {
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { story, type Locale } from "@/content/story";
+import { buildingIndex } from "./scene3d/buildings";
+import { houseDoorOpenness } from "./scene3d/cameraRig";
 import { MonkeyGlyph } from "./SceneArt";
 import styles from "./Experience.module.css";
 import WorkPortfolio from "./WorkPortfolio";
@@ -39,6 +41,23 @@ export default function Experience() {
   );
   const scene = Math.min(7, Math.floor(progress * 8));
   const phase = Math.min(1, progress * 8 - scene);
+  const ufmgDoorOpenness = houseDoorOpenness(
+    buildingIndex("mobility"),
+    progress,
+    reduced,
+  );
+  const portfolioIsVisible = (scene === 3 && phase >= 0.5) || scene === 4;
+  const portfolioEntry = reduced
+    ? portfolioIsVisible
+      ? 1
+      : 0
+    : scene === 3
+      ? Math.max(0, Math.min(1, (phase - 0.5) / 0.4))
+      : scene === 4
+        ? 1
+        : 0;
+  const portfolioReveal = Math.min(portfolioEntry, 1 - ufmgDoorOpenness);
+  const showPortfolio = portfolioIsVisible && portfolioReveal > 0;
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
     const media = gsap.matchMedia();
@@ -174,7 +193,9 @@ export default function Experience() {
               <p>{pt ? "Desenvolvedor de Software" : "Software Developer"}</p>
             )}
           </div>
-          {scene === 4 && <WorkPortfolio locale={locale} />}
+          {showPortfolio && (
+            <WorkPortfolio locale={locale} reveal={portfolioReveal} />
+          )}
           <div className={styles.preview}>
             0{scene + 1} · {pt ? story[scene].title : story[scene].titleEn}
           </div>

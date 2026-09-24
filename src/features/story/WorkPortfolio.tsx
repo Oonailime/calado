@@ -20,7 +20,26 @@ const paths = {
   books: "M4 7h6v21H4ZM12 4h6v24h-6ZM21 8l5-1 4 20-5 1ZM4 23h6M12 23h6",
 };
 
-export default function WorkPortfolio({ locale }: { locale: Locale }) {
+function easedReveal(reveal: number, index = 0) {
+  const progress = Math.max(0, Math.min(1, (reveal - index * 0.12) / 0.4));
+  return progress * progress * (3 - 2 * progress);
+}
+
+function revealStyle(progress: number) {
+  return {
+    opacity: progress,
+    filter: `blur(${(1 - progress) * 7}px)`,
+    transform: `translateY(${(1 - progress) * 12}px)`,
+  };
+}
+
+export default function WorkPortfolio({
+  locale,
+  reveal,
+}: {
+  locale: Locale;
+  reveal: number;
+}) {
   const pt = locale === "pt";
   const dialog = useRef<HTMLDialogElement>(null);
   const [showPost, setShowPost] = useState(false);
@@ -30,62 +49,71 @@ export default function WorkPortfolio({ locale }: { locale: Locale }) {
       aria-label={pt ? "Portfólio de projetos" : "Project portfolio"}
     >
       <div className={styles.heading}>
-        <h2>{pt ? "Projetos selecionados" : "Selected projects"}</h2>
-        <span>01 — 06</span>
+        <h2 style={revealStyle(easedReveal(reveal))}>
+          {pt ? "Projetos selecionados" : "Selected projects"}
+        </h2>
       </div>
       <div className={styles.grid}>
-        {portfolio.map((project, i) => (
-          <article key={project.id} className={styles.card}>
-            <a
-              href={project.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={styles.projectLink}
+        {portfolio.map((project, i) => {
+          const cardReveal = easedReveal(reveal, i);
+          return (
+            <article
+              key={project.id}
+              className={styles.card}
+              style={revealStyle(cardReveal)}
+              inert={cardReveal < 0.05}
             >
-              <div className={styles.art}>
-                <svg
-                  viewBox="0 0 32 32"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.4"
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                  aria-hidden="true"
-                >
-                  <path d={paths[project.symbol]} />
-                </svg>
-                <span>0{i + 1}</span>
-                <span className={styles.arrow} aria-hidden="true">
+              <a
+                href={project.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.projectLink}
+              >
+                <div className={styles.art}>
+                  <svg
+                    viewBox="0 0 32 32"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.4"
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    aria-hidden="true"
+                  >
+                    <path d={paths[project.symbol]} />
+                  </svg>
+                  <span>0{i + 1}</span>
+                  <span className={styles.arrow} aria-hidden="true">
+                    ↗
+                  </span>
+                </div>
+                <h3>{project.name}</h3>
+                <p>{project[locale]}</p>
+                <div className={styles.tags}>{project.tags.join(" · ")}</div>
+                <span className={styles.visit}>
+                  {project.kind === "site"
+                    ? pt
+                      ? "Visitar site"
+                      : "Visit website"
+                    : pt
+                      ? "Ver no GitHub"
+                      : "View on GitHub"}{" "}
                   ↗
                 </span>
-              </div>
-              <h3>{project.name}</h3>
-              <p>{project[locale]}</p>
-              <div className={styles.tags}>{project.tags.join(" · ")}</div>
-              <span className={styles.visit}>
-                {project.kind === "site"
-                  ? pt
-                    ? "Visitar site"
-                    : "Visit website"
-                  : pt
-                    ? "Ver no GitHub"
-                    : "View on GitHub"}{" "}
-                ↗
-              </span>
-            </a>
-            {project.id === "terminal77" && (
-              <button
-                className={styles.postButton}
-                onClick={() => {
-                  setShowPost(true);
-                  dialog.current?.showModal();
-                }}
-              >
-                {pt ? "O relato no LinkedIn" : "The story on LinkedIn"} ↗
-              </button>
-            )}
-          </article>
-        ))}
+              </a>
+              {project.id === "terminal77" && (
+                <button
+                  className={styles.postButton}
+                  onClick={() => {
+                    setShowPost(true);
+                    dialog.current?.showModal();
+                  }}
+                >
+                  {pt ? "O relato no LinkedIn" : "The story on LinkedIn"} ↗
+                </button>
+              )}
+            </article>
+          );
+        })}
       </div>
       <dialog
         ref={dialog}
