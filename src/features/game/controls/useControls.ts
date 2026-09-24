@@ -79,8 +79,8 @@ export function useControls(active: boolean, onExit: () => void) {
         "Backquote",
         "ShiftLeft",
         "ShiftRight",
-        "ControlLeft",
-        "ControlRight",
+        "AltLeft",
+        "AltRight",
         state.abilityKey,
       ];
       if (!tracked.includes(e.code)) return;

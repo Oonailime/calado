@@ -272,37 +272,38 @@ export function canopyInteractionHint(state: PuzzleState, position: Vec3): Canop
   const count = state.canopyVines.filter(Boolean).length;
   const hint = (id: string, ready: boolean, pt: string, en: string) => ({ id, ready, pt, en });
   const prerequisite = (id: string) => !state.canopyFocused
-    ? hint(id, false, "Primeiro, concentre o branco (2) no platô branco.", "First, focus White (2) on the white plateau.")
-    : count < 3 ? hint(id, false, `Faltam ${3 - count} cipós: colha os cipós iluminados com o dourado (1).`, `${3 - count} vines needed: harvest the glowing vines with Gold (1).`) : null;
+    ? hint(id, false, "Primeiro, concentre Mizaru (2) na Copa alta.", "First, focus Mizaru (2) on the High Canopy deck.")
+    : count < 3 ? hint(id, false, `Faltam ${3 - count} cipós: colha os cipós iluminados com Kikazaru (1).`, `${3 - count} vines needed: harvest the glowing vines with Kikazaru (1).`) : null;
   if (nearCanopyPoint(position, CANOPY_STUMPS.lower)) {
     if (state.canopyBridgeBuilt) return hint("bridge-lower", true, "E · Caminhar pelo cipó até o platô superior", "E · Walk the vine to the upper plateau");
     const required = prerequisite("stump-lower");
     if (required) return required;
     return state.selected === 1
       ? hint("stump-lower", true, "E · Amarrar o cipó neste toco", "E · Tie the vine to this stump")
-      : hint("stump-lower", false, "Troque para o dourado (1) para amarrar o cipó.", "Switch to Gold (1) to tie the vine.");
+      : hint("stump-lower", false, "Troque para Kikazaru (1) para amarrar o cipó.", "Switch to Kikazaru (1) to tie the vine.");
   }
   if (nearCanopyPoint(position, CANOPY_STUMPS.upper)) {
     if (state.canopyBridgeBuilt) return hint("bridge-upper", true, "E · Caminhar pelo cipó até o platô inferior", "E · Walk the vine to the lower plateau");
     const required = prerequisite("stump-upper");
     if (required) return required;
-    if (!state.canopyGoldTied) return hint("stump-upper", false, "O dourado (1) precisa amarrar a ponta no toco de baixo primeiro.", "Gold (1) must tie the end at the lower stump first.");
+    if (!state.canopyGoldTied) return hint("stump-upper", false, "Kikazaru (1) precisa amarrar a ponta no toco de baixo primeiro.", "Kikazaru (1) must tie the end at the lower stump first.");
     return state.selected === 2
       ? hint("stump-upper", true, "E · Construir a ponte de cipó", "E · Build the vine bridge")
-      : hint("stump-upper", false, "Troque para o marrom (3) para construir a ponte.", "Switch to Brown (3) to build the bridge.");
+      : hint("stump-upper", false, "Troque para Iwazaru (3) para construir a ponte.", "Switch to Iwazaru (3) to build the bridge.");
   }
   if (onCanopyFocusDeck(position) && !state.canopyFocused) return state.selected === 0
     ? hint("focus", true, "E · Concentrar e revelar os cipós das árvores", "E · Focus to reveal the tree vines")
-    : hint("focus", false, "Troque para o branco (2) e concentre-se neste platô.", "Switch to White (2) and focus on this plateau.");
+    : hint("focus", false, "Troque para Mizaru (2) e pressione E neste platô.", "Switch to Mizaru (2) and press E on this deck.");
   const harvest = CANOPY_HARVESTS.findIndex((site, i) => !state.canopyVines[i] && nearCanopyPoint(position, site.position));
   if (harvest >= 0) {
-    if (!state.canopyFocused) return hint(`harvest-${harvest}`, false, "Cipó oculto: o branco (2) precisa se concentrar no platô branco.", "Hidden vine: White (2) must focus on the white plateau.");
+    if (!state.canopyFocused) return hint(`harvest-${harvest}`, false, "Cipó oculto: concentre Mizaru (2) na Copa alta.", "Hidden vine: focus Mizaru (2) on the High Canopy deck.");
     return state.selected === 1
       ? hint(`harvest-${harvest}`, true, `E · Colher cipó (${count}/3)`, `E · Harvest vine (${count}/3)`)
-      : hint(`harvest-${harvest}`, false, "Troque para o dourado (1) para colher este cipó.", "Switch to Gold (1) to harvest this vine.");
+      : hint(`harvest-${harvest}`, false, "Troque para Kikazaru (1) para colher este cipó.", "Switch to Kikazaru (1) to harvest this vine.");
   }
-  if (onCanopyFocusDeck(position) && state.selected === 0) return hint("focused", false,
-    "Cipós revelados! Troque para o dourado (1) e colha os três cipós iluminados.", "Vines revealed! Switch to Gold (1) and harvest the three glowing vines.");
+  if (onCanopyFocusDeck(position) && state.selected === 0 && count < 3) return hint("focused", false,
+    `Troque para Kikazaru (1) e colha os cipós restantes (${count}/3).`,
+    `Switch to Kikazaru (1) and harvest the remaining vines (${count}/3).`);
   return null;
 }
 

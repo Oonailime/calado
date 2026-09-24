@@ -4,8 +4,8 @@ import { BoxGeometry, Mesh, MeshStandardMaterial, Raycaster, TubeGeometry, Vecto
 import { accelerateStaticRaycast } from "../src/features/game/camera/staticRaycast";
 import { islandFollowerTarget } from "../src/features/game/characters/followerNavigation";
 import { CANOPY_BRIDGE_CURVE, CANOPY_BRIDGE_SITE, CANOPY_HARVESTS, CANOPY_PRISM_SOCKETS, CANOPY_STUMPS } from "../src/features/game/world/canopyCooperationLayout";
-import { canopyHarvestCurve, createCanopyHarvestMarkerGeometry } from "../src/features/game/world/phaseFourAssets";
-import { PHASE_FOUR_PLATFORMS } from "../src/features/game/world/phaseFourLayout";
+import { canopyHarvestCurve, createCanopyHarvestMarkerGeometry, phaseFourBranchVinePoints, phaseFourPathCurve, PHASE_FOUR_BRANCH_CLEARANCE } from "../src/features/game/world/phaseFourAssets";
+import { PHASE_FOUR_PATHS, PHASE_FOUR_PLATFORMS } from "../src/features/game/world/phaseFourLayout";
 
 test("built vine stays straight and connects the left corners of both decks", () => {
   const start = CANOPY_BRIDGE_CURVE.getPoint(0), end = CANOPY_BRIDGE_CURVE.getPoint(1);
@@ -51,6 +51,24 @@ test("harvest cuffs follow the same polygonal surface without crossing the vine"
       assert.ok(a.distanceTo(new Vector3(...site.position)) < 1.5);
     }
     cuff.dispose(); bark.dispose();
+  }
+});
+
+test("decorative lianas spiral around each walking bough outside its bark", () => {
+  for (const path of PHASE_FOUR_PATHS.filter(path => path.kind === "branch")) {
+    const curve = phaseFourPathCurve(path);
+    const points = phaseFourBranchVinePoints(path);
+    const radius = path.width * 0.58;
+    let above = false, below = false;
+    for (let i = 0; i < points.length; i++) {
+      const center = curve.getPointAt(i / (points.length - 1));
+      center.y -= radius + PHASE_FOUR_BRANCH_CLEARANCE;
+      const vine = new Vector3(...points[i]);
+      assert.ok(vine.distanceTo(center) > radius + 0.095);
+      above ||= vine.y > center.y + radius * 0.8;
+      below ||= vine.y < center.y - radius * 0.8;
+    }
+    assert.equal(above && below, true, path.id);
   }
 });
 

@@ -110,6 +110,17 @@ const SUMMIT_SHRINE_XZ: [number, number] = [
   PHASE_FOUR_PLATFORMS.find((deck) => deck.id === "summit-shrine")!.center[2],
 ];
 const SUMMIT_SHRINE_CLEARANCE = 25;
+const FIRST_VINE_PLATEAU_Y = PHASE_FOUR_PLATFORMS.find(
+  (deck) => deck.id === "vine-plateau",
+)!.center[1];
+const OPAQUE_LOWER_BRANCHES = new Set([
+  ...PHASE_FOUR_PLATFORMS
+    .filter((deck) => deck.center[1] < FIRST_VINE_PLATEAU_Y)
+    .map((deck) => `support-${deck.id}`),
+  ...PHASE_FOUR_PATHS
+    .filter((path) => path.kind === "branch" && path.points.every((point) => point[1] < FIRST_VINE_PLATEAU_Y))
+    .map((path) => `bough-${path.id}`),
+]);
 function clearsSummitShrine(x: number, z: number) {
   return Math.hypot(x - SUMMIT_SHRINE_XZ[0], z - SUMMIT_SHRINE_XZ[1]) >= SUMMIT_SHRINE_CLEARANCE;
 }
@@ -261,7 +272,9 @@ class AssetBuilder {
       const separator = batchKey.indexOf("/");
       const namespace = separator >= 0 ? batchKey.slice(0, separator) : "";
       const layer = batchKey.slice(batchKey.lastIndexOf("/") + 1);
-      const drawKey = namespace || batchKey;
+      // A playable tree needs independently fadeable crown, trunk and limbs.
+      // Fading one merged tree erased branches below the player as well.
+      const drawKey = /^tree-\d+$/.test(namespace) ? batchKey : namespace || batchKey;
       const batch = drawBatches.get(drawKey) ?? {
         geometries: [],
         layers: new Set<string>(),
@@ -272,7 +285,8 @@ class AssetBuilder {
       drawBatches.set(drawKey, batch);
     }
     for (const [drawKey, batch] of drawBatches) {
-      const hasSolid = batch.layers.has("solid");
+      const hasSolid = batch.layers.has("solid") ||
+        [...batch.layers].some(layer => layer.startsWith("tree-branch-") || layer === "tree-crown");
       const geometry = mergeGeometries(batch.geometries, false)!;
       batch.geometries.forEach((geo) => geo.dispose());
       geometry.computeBoundingSphere();
@@ -307,12 +321,17 @@ class AssetBuilder {
       mesh.userData.cameraOccluder =
         !!batch.namespace &&
         !batch.layers.has("glow") &&
-        batch.namespace !== "distant";
+        batch.namespace !== "distant" &&
+        !OPAQUE_LOWER_BRANCHES.has(batch.namespace);
       mesh.userData.canopySupport = /^(support-|swing-support-|bough-)/.test(batch.namespace);
+      mesh.userData.canopyCrown = /^tree-\d+$/.test(batch.namespace) && batch.layers.has("tree-crown");
       if (mesh.userData.cameraOccluder) accelerateStaticRaycast(mesh);
       mesh.castShadow = hasSolid;
       mesh.receiveShadow = true;
-      if (batch.namespace) mesh.userData.cameraOcclusionGroup = parent.uuid;
+      if (batch.namespace)
+        mesh.userData.cameraOcclusionGroup = /^tree-\d+$/.test(batch.namespace)
+          ? `${parent.uuid}/${drawKey}`
+          : parent.uuid;
       parent.add(mesh);
     }
     return group;
@@ -581,6 +600,7 @@ function giantTree(
       radius * 0.35,
       palette.bark[i % 4],
       radius * 0.1,
+      `tree-branch-${i}`,
     );
     for (let j = 0; j < (detailed ? 6 : 3); j++) {
       const crown: Point3 = [
@@ -598,7 +618,7 @@ function giantTree(
           radius * (0.9 + rng() * 0.5),
         ],
         undefined,
-        "foliage",
+        "tree-crown",
       );
       if (detailed) {
         for (let k = 0; k < 4; k++)
@@ -608,7 +628,7 @@ function giantTree(
             [crown[0], crown[1] + radius * 0.6, crown[2]],
             undefined,
             new Quaternion().setFromAxisAngle(UP, k * 1.6 + a),
-            "foliage",
+            "tree-crown",
           );
       }
     }
@@ -622,7 +642,7 @@ function giantTree(
         0.11,
         "#4c6b2b",
         20,
-        "foliage",
+        "tree-crown",
       );
     }
     for (let i = 0; i < 4; i++)
@@ -1362,6 +1382,32 @@ export function createPhaseFourVineTieGeometry(
   return new TubeGeometry(new CatmullRomCurve3(curl), 48, 0.075, 7, false);
 }
 
+export function phaseFourBranchVinePoints(path: CanopyPath): Point3[] {
+  const curve = phaseFourPathCurve(path);
+  const branchRadius = path.width * 0.58;
+  const ropeRadius = 0.095;
+  // Match the bough's raised bark relief, then clear it with the whole rope.
+  const wrapRadius = branchRadius * 1.027 +
+    Math.min(0.095, branchRadius * 0.05) + ropeRadius + 0.05;
+  const turns = Math.max(2, Math.round(curve.getLength() / 5.5));
+  const steps = turns * 28;
+  const points: Point3[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const center = curve.getPointAt(t);
+    center.y -= branchRadius + PHASE_FOUR_BRANCH_CLEARANCE;
+    const tangent = curve.getTangentAt(t);
+    const side = new Vector3(tangent.z, 0, -tangent.x).normalize();
+    const angle = Math.PI + t * turns * Math.PI * 2;
+    points.push([
+      center.x + side.x * Math.sin(angle) * wrapRadius,
+      center.y + Math.cos(angle) * wrapRadius,
+      center.z + side.z * Math.sin(angle) * wrapRadius,
+    ]);
+  }
+  return points;
+}
+
 export function createPhaseFourEnvironment() {
   const builder = new AssetBuilder();
   builder.add(
@@ -1451,21 +1497,11 @@ export function createPhaseFourEnvironment() {
       );
     });
   });
-  // Looped lianas hang below the walkways, leaving the deck surfaces clear.
+  // These lianas wrap the walking boughs. A loose curve below the path cuts
+  // through the bark where the branch widens or changes direction.
   PHASE_FOUR_PATHS.filter((path) => path.kind === "branch").forEach((path) => {
     builder.scoped(`liana-${path.id}`, () => {
-      const curve = phaseFourPathCurve(path),
-        points: Point3[] = [];
-      for (let i = 0; i <= 12; i++) {
-        const p = curve.getPoint(i / 12),
-          d = curve.getTangent(i / 12);
-        points.push([
-          p.x + d.z * (path.width * 0.5 + 0.1),
-          p.y - 0.6 - Math.sin((i / 12) * Math.PI) * 4,
-          p.z - d.x * (path.width * 0.5 + 0.1),
-        ]);
-      }
-      builder.tube(points, 0.095, "#365c2b", 24, "foliage");
+      builder.tube(phaseFourBranchVinePoints(path), 0.095, "#365c2b", 96, "foliage");
     });
   });
   const rng = random(204);

@@ -199,11 +199,17 @@ export default function SelectionVine({
       }
     }
     if (!active) return;
-    const jumping = locomotion.current?.state === "JUMP";
-    const risingVelocity = locomotion.current?.velocity?.y ?? 0;
+    const movement = locomotion.current;
+    const jumping = movement?.state === "JUMP";
+    const risingVelocity = movement?.velocity?.y ?? 0;
     const rising = jumping && risingVelocity > 0;
     // Falling mid-jump: neither the vine nor the circling debris is shown.
-    const showVine = !jumping;
+    // A hanging or walking monkey has no ground marker beneath it.
+    const showVine =
+      !jumping &&
+      !movement?.hands?.left.grabbed &&
+      !movement?.hands?.right.grabbed &&
+      movement?.motion !== "vine-walk";
     const showSpiral = jumping && rising;
 
     if (vineGroup.current) {

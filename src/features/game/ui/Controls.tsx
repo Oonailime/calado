@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { MonkeyGlyph } from "@/features/story/SceneArt";
 import { runtime, useGame, type Quality } from "../state/store";
 import { CHARACTERS, CHARACTER_KEY_BINDINGS, type CharacterId } from "../types";
@@ -6,9 +6,12 @@ import type { Locale } from "@/content/story";
 import Inventory from "./Inventory";
 import { phase2Chess } from "../world/phase2Chess";
 import { canopyInteractionHint, type CanopyInteractionHint } from "../state/rules";
+import { PHASE_FOUR_PLATFORMS } from "../world/phaseFourLayout";
+import { brownPrismGuidance, canopyRouteGuidance, onBrownPrismDeck, onShrineDeck, shrineGuidance } from "./canopyGuidance";
 import styles from "./Game.module.css";
 
 type Instruction = { title: string; body: string };
+const HIGH_PLATEAU = PHASE_FOUR_PLATFORMS.find(deck => deck.id === "vine-plateau")!;
 // Matches CHARACTERS' order — each monkey's own cube-piece colour.
 const CUBE_PIECE_NAMES: Record<CharacterId, { pt: string; en: string }> = {
   0: { pt: "branca", en: "white" },
@@ -87,23 +90,35 @@ export default function Controls({
     pause.current?.focus();
   };
   const p = state.puzzle;
+  const chess = useSyncExternalStore(phase2Chess.subscribe, phase2Chess.getSnapshot, phase2Chess.getSnapshot);
   const f = state.abilityKey.replace("Key", "");
   // Player position lives in `runtime` (per-frame data, not React state — see
   // store.ts), so a plain state subscription never notices proximity to a
   // stump/harvest site. Poll it at a coarse, UI-appropriate rate instead of
   // wiring this panel into the physics frame loop.
-  const [canopyNear, setCanopyNear] = useState<CanopyInteractionHint | null>(
-    null,
-  );
+  const [canopyContext, setCanopyContext] = useState<{
+    near: CanopyInteractionHint | null;
+    highPlateau: boolean;
+    shrine: boolean;
+    brownPrismDeck: boolean;
+    motion: string | null;
+  }>({ near: null, highPlateau: false, shrine: false, brownPrismDeck: false, motion: null });
   useEffect(() => {
     if (state.map !== "phase3" || state.paused) return;
     const timer = window.setInterval(() => {
-      setCanopyNear(
-        canopyInteractionHint(
-          useGame.getState().puzzle,
-          runtime.positions[useGame.getState().puzzle.selected],
-        ),
-      );
+      const puzzle = useGame.getState().puzzle;
+      const position = runtime.positions[puzzle.selected];
+      const deck = HIGH_PLATEAU;
+      setCanopyContext({
+        near: canopyInteractionHint(puzzle, position),
+        shrine: onShrineDeck(position),
+        brownPrismDeck: onBrownPrismDeck(position),
+        highPlateau:
+          Math.abs(position.x - deck.center[0]) <= deck.width / 2 + 0.5 &&
+          Math.abs(position.z - deck.center[2]) <= deck.depth / 2 + 0.5 &&
+          Math.abs(position.y - (deck.center[1] + 0.55)) < 2.5,
+        motion: runtime.motions[puzzle.selected],
+      });
     }, 150);
     return () => window.clearInterval(timer);
   }, [state.map, state.paused]);
@@ -116,48 +131,51 @@ export default function Controls({
     pt ? { title: titlePt, body: bodyPt } : { title: titleEn, body: bodyEn };
   let hint: Instruction | null = null;
   if (state.map === "phase2") {
-    hint = instruction(
-      "Fase 2 · Jardim das cinzas",
-      "Recolha as 3 peças de xadrez no caminho até a cerejeira e a lareira. Pule a lava: tocar nela leva você ao início. Seus companheiros seguem e pulam com você. Suba pela rampa circular e sente nas brancas com E. WASD: andar · Espaço: pular · 1/2/3: trocar · R: início.",
-      "Phase 2 · Garden of ashes",
-      "Collect 3 chess pieces on the way to the cherry tree and fireplace. Jump over lava: touching it returns you to the start. Your companions follow and jump with you. Climb the circular ramp and sit on White’s stump with E. WASD: walk · Space: jump · 1/2/3: switch · R: start.",
-    );
+    if (!chess.tabOpen) hint = chess.historicalSolved
+      ? instruction("Fase 2 · Portal aberto", "Vá ao portal da cerejeira para a fase 3. A mesa continua disponível para partidas livres.",
+          "Phase 2 · Portal open", "Enter the cherry tree portal for phase 3. The chess table is open for free games.")
+      : instruction("Fase 2 · Caminho", "WASD: andar · Espaço: saltar a lava · 1/2/3: trocar macaco. Siga para a cerejeira.",
+          "Phase 2 · Path", "WASD: move · Space: jump over lava · 1/2/3: switch monkey. Head for the cherry tree.");
   } else if (state.map === "phase3") {
-    const missing = CUBE_PIECE_NAMES[p.selected];
-    const collected = p.canopyVines.filter(Boolean).length;
-    // Standing at a stump/harvest site gets the specific, proximity-aware
-    // reason (right monkey? right order? already done?) in place of the
-    // general progression summary below.
-    const taskPt = canopyNear
-      ? canopyNear.pt
-      : !p.canopyFocused
-        ? "Com o branco (2), suba pela escada de cipó junto à árvore central até o platô \"Copa alta\" e concentre-se lá com E ou sua habilidade."
-        : collected < 3
-          ? `Com o dourado (1), colha com E os cipós marcados junto aos galhos inferiores (${collected}/3).`
-          : !p.canopyGoldTied
-            ? "Com o dourado (1), pressione E no toco de baixo (perto da cachoeira) para amarrar o cipó."
-            : !p.canopyBridgeBuilt
-              ? "Com o marrom (3), pressione E no toco de cima (perto do cume) para construir a ponte de cipó."
-              : "A ponte está pronta: E em uma ponta e WASD para atravessar nos dois sentidos.";
-    const taskEn = canopyNear
-      ? canopyNear.en
-      : !p.canopyFocused
-        ? "With White (2), climb the vine ladder by the heart tree up to the \"High Canopy\" plateau and focus there with E or your ability."
-        : collected < 3 ? `Use Gold (1) to harvest the marked lower-branch vines with E (${collected}/3).`
-          : !p.canopyGoldTied ? "Use Gold (1) at the lower stump, near the waterfall: E ties the vine."
-            : !p.canopyBridgeBuilt ? "Use Brown (3) at the upper stump, near the summit: E builds the vine bridge."
-              : "Bridge ready: E at either end, then WASD to cross in either direction.";
-    const deliveryPt = p.cubeDelivered[p.selected] ? "Seu prisma já foi entregue."
-      : p.cubePieces[p.selected] ? "Leve seu prisma ao totem acima do cume e pressione E para entregá-lo."
-        : `Colete o prisma ${missing.pt} com E e entregue-o pessoalmente ao totem acima do cume.`;
-    const deliveryEn = p.cubeDelivered[p.selected] ? "Your prism has been delivered."
-      : p.cubePieces[p.selected] ? "Carry your prism to the totem above the summit and press E to deliver it."
-        : `Collect the ${missing.en} prism with E and bring it to the totem above the summit.`;
-    hint = p.cubeDelivered.every(Boolean)
-      ? instruction("Os três prismas foram entregues", "Pressione E no totem para abrir o cubo mágico.",
-          "All three prisms delivered", "Press E at the totem to open the magic cube.")
-      : instruction("Fase 3 · Vale das copas", `${deliveryPt} ${taskPt} E: agarrar cipó · Espaço: soltar · Shift/Ctrl: subir/descer · Cair no chão leva ao início.`,
-          "Phase 3 · Canopy valley", `${deliveryEn} ${taskEn} E: grab vine · Space: release · Shift/Ctrl: climb · Falling to the ground returns you to spawn.`);
+    const route = canopyRouteGuidance(p, pt);
+    const { near, highPlateau, shrine, brownPrismDeck, motion } = canopyContext;
+    if (p.cubeSolved) hint = null;
+    else if (motion === "vine-swing" || motion === "vine-grab")
+      hint = instruction("Balanço no cipó", "WASD: balançar · E: alcançar o próximo cipó · Shift/Alt: subir/descer · Espaço: soltar.",
+        "Swinging on a vine", "WASD: swing · E: reach the next vine · Shift/Alt: climb up/down · Space: release.");
+    else if (motion === "vine-walk")
+      hint = instruction("Travessia no cipó", "WASD: caminhe pelo cipó; inverta a direção para voltar.",
+        "Walking the vine", "WASD: cross the vine; reverse direction to go back.");
+    else if (shrine)
+      hint = shrineGuidance(p, pt);
+    else if (brownPrismDeck && !p.cubeDelivered[2])
+      hint = brownPrismGuidance(p, pt);
+    else if (p.cubePieces[2] && !p.cubeDelivered[2])
+      hint = brownPrismGuidance(p, pt);
+    else if (p.cubeDelivered.every(Boolean))
+      hint = instruction("Os três prismas foram entregues", "Vá ao totem do cume e pressione E para abrir o cubo.",
+        "All three prisms delivered", "Go to the summit shrine and press E to open the cube.");
+    else if (near)
+      hint = instruction("Ação próxima", near.pt, "Nearby action", near.en);
+    else if (highPlateau)
+      hint = instruction("Platô alto · cipós pendulares", "Com Iwazaru (3), vá à borda e pressione E para agarrar o cipó. WASD balança; E alcança o próximo.",
+        "High plateau · swinging vines", "With Iwazaru (3), go to the edge and press E to grab the vine. WASD swings; E reaches the next one.");
+    else if (route)
+      hint = route;
+    else if (p.cubePieces[p.selected] && !p.cubeDelivered[p.selected])
+      hint = instruction("Entregar o prisma", "Leve seu prisma ao totem e pressione E para entregá-lo.",
+        "Deliver the prism", "Take your prism to the shrine and press E to deliver it.");
+    else if (p.cubeDelivered[p.selected])
+      hint = instruction("Prisma entregue", "Troque para um macaco que ainda precisa entregar o prisma.",
+        "Prism delivered", "Switch to a monkey that still needs to deliver a prism.");
+    else {
+      const color = CUBE_PIECE_NAMES[p.selected];
+      const location = p.selected === 0 ? ["na Copa alta", "on the High Canopy deck"]
+        : p.selected === 1 ? ["no mirante da cachoeira", "at the waterfall lookout"]
+          : ["no cume atrás da cachoeira", "on the summit behind the waterfall"];
+      hint = instruction("Coletar prisma", `Com este macaco, pressione E junto ao prisma ${color.pt} ${location[0]}.`,
+        "Collect prism", `With this monkey, press E by the ${color.en} prism ${location[1]}.`);
+    }
   } else if (!state.learned.move || !state.learned.camera)
     hint = instruction(
       "Explore a ilha",
@@ -178,9 +196,9 @@ export default function Controls({
         p.selected !== 1
           ? instruction(
               "Primeiro, revele as madeiras",
-              "Pressione 1 para controlar Kikazaru, o macaco dourado. Leve-o até o círculo dourado diante da ponte.",
+              "Pressione 1 para controlar Kikazaru. Leve-o até o círculo dourado diante da ponte.",
               "First, reveal the timber",
-              "Press 1 to control Kikazaru, the golden monkey. Take him to the golden circle in front of the bridge.",
+              "Press 1 to control Kikazaru. Take him to the golden circle in front of the bridge.",
             )
           : instruction(
               "Ative o poder de Kikazaru (1)",

@@ -164,7 +164,7 @@ type Controller = {
   // to trigger the idle vine-hang fidget after a stretch of staying put.
   idleElapsed: number;
   // -1 while actively climbing up a held rope (shift), 1 while paying it out
-  // (ctrl), 0 otherwise. Read by the leg-pump pose so climbing reads as
+  // (alt), 0 otherwise. Read by the leg-pump pose so climbing reads as
   // active effort even while the pendulum itself is nearly still.
   climbRate: number;
 };
@@ -450,7 +450,7 @@ function updateHandContact(
       hand.attachStartLength +
       (hand.restLength - hand.attachStartLength) * easeInOut(t);
   } else if (site.vine.twoPoint && rope) {
-    // Shift/ctrl (see applyVineClimbControl) can change the rope's own
+    // Shift/alt (see applyVineClimbControl) can change the rope's own
     // length on the fly to climb up/down it - restLength must keep tracking
     // that, not just the value calibrated once at the original grab.
     const climbOffset = shoulderOffset(locomotion, hand.side) ?? {
@@ -499,8 +499,8 @@ const VINE_CLIMB_MIN_LENGTH = 1.1;
 const VINE_CLIMB_TAIL_CLEARANCE = 0.3;
 
 /**
- * Shift/ctrl feed the held rope through the grip like climbing a real rope:
- * shift shortens it (hauling the body up, closer to the fixed tie), ctrl
+ * Shift/alt feed the held rope through the grip like climbing a real rope:
+ * shift shortens it (hauling the body up, closer to the fixed tie), alt
  * lengthens it (gravity pays the body back out, bounded by the far end).
  * The constraint is maxDistanceOnly (see updateHandContact), so tightening
  * it actively pulls the body in while loosening it just raises the ceiling
@@ -517,8 +517,7 @@ function applyVineClimbControl(controller: Controller, dt: number) {
     return;
   }
   const up = runtime.keys.has("ShiftLeft") || runtime.keys.has("ShiftRight");
-  const down =
-    runtime.keys.has("ControlLeft") || runtime.keys.has("ControlRight");
+  const down = runtime.keys.has("AltLeft") || runtime.keys.has("AltRight");
   if (up === down) {
     controller.climbRate = 0;
     return;

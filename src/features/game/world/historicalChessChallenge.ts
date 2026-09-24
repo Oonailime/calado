@@ -15,14 +15,6 @@ export const TAL_GULKO_SEQUENCE = [
   "Kg8",
   "Rff7",
 ] as const;
-export const HISTORICAL_HINTS = [
-  "Esse lance não segue o ataque histórico. Procure uma captura de torre que abra a sétima fileira, mesmo deixando a dama atacada.",
-  "A combinação exige manter o rei sob pressão. Procure um xeque de torre na sétima fileira.",
-  "O bispo em e7 sustenta a defesa. Procure removê-lo com xeque.",
-  "A segunda torre precisa entrar no ataque. Procure ativá-la com xeque pela coluna f.",
-  "As duas torres precisam dominar a sétima fileira. Observe qual delas deve subir.",
-];
-
 export function createHistoricalChallenge() {
   const chess = new Chess(TAL_GULKO_FEN);
   if (chess.fen() !== TAL_GULKO_FEN)

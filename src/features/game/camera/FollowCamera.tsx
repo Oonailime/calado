@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import {
+  Box3,
   InstancedMesh,
   Material,
   Mesh,
@@ -11,8 +12,9 @@ import {
 } from "three";
 import { runtime, useGame } from "../state/store";
 import { ZOOM_MIN } from "../controls/useControls";
-import { PHASE_FOUR_PLATFORMS } from "../world/phaseFourLayout";
+import { PHASE_FOUR_PLATFORMS, PHASE_FOUR_TREES } from "../world/phaseFourLayout";
 import { occlusionRaycast } from "./occlusionRaycast";
+import { cameraInsideTreeCrown, cameraNearCanopySupport } from "./canopyCameraZone";
 import { InstanceOcclusion } from "./instanceOcclusion";
 import { PHASE_TWO_TABLE, phaseTwoGroundHeight } from "../world/phaseTwoLayout";
 import { phase2Chess } from "../world/phase2Chess";
@@ -34,7 +36,7 @@ const PHASE2_DISTANCE = 28;
 const PHASE2_RISE_BASE = 5;
 const PHASE2_PULL_BACK = 14;
 
-const OCCLUDER_OPACITY = 0.16;
+const OCCLUDER_OPACITY = 0.08;
 const PLAYER_CLEARANCE = 0.35;
 const OCCLUSION_SAMPLE_SECONDS = 0.06;
 const OCCLUDER_CACHE_SECONDS = 0.5;
@@ -159,6 +161,8 @@ export default function FollowCamera({ running }: { running: boolean }) {
   const occluderCacheElapsed = useRef(OCCLUDER_CACHE_SECONDS);
   const occluders = useRef<Mesh[]>([]);
   const occluderGroups = useRef(new Map<string, Mesh[]>());
+  const canopyTrees = useRef(new Map<number, Mesh[]>());
+  const canopySupports = useRef(new Map<Mesh, Box3>());
   const blocked = useRef(new Set<Mesh>());
   const faded = useRef(new Map<Mesh, FadeEntry>());
   const instances = useRef(new InstanceOcclusion());
@@ -173,6 +177,8 @@ export default function FollowCamera({ running }: { running: boolean }) {
       blocked.current.clear();
       occluders.current = [];
       occluderGroups.current.clear();
+      canopyTrees.current.clear();
+      canopySupports.current.clear();
     },
     [],
   );
@@ -307,6 +313,8 @@ export default function FollowCamera({ running }: { running: boolean }) {
         }
         occluders.current = [];
         occluderGroups.current.clear();
+        canopyTrees.current.clear();
+        canopySupports.current.clear();
         scene.traverse((object) => {
           if (
             object instanceof Mesh &&
@@ -322,6 +330,19 @@ export default function FollowCamera({ running }: { running: boolean }) {
             const members = occluderGroups.current.get(key) ?? [];
             members.push(object);
             occluderGroups.current.set(key, members);
+            const match = /^Phase4_CanopyVillage_tree-(\d+)$/.exec(object.parent?.name ?? "");
+            if (match && object.userData.canopyCrown) {
+              const seed = Number(match[1]);
+              const treeMeshes = canopyTrees.current.get(seed) ?? [];
+              treeMeshes.push(object);
+              canopyTrees.current.set(seed, treeMeshes);
+            }
+            if (state.map === "phase3" && object.userData.canopySupport) {
+              if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
+              if (object.geometry.boundingBox)
+                canopySupports.current.set(object,
+                  object.geometry.boundingBox.clone().applyMatrix4(object.matrixWorld));
+            }
           }
         });
       }
@@ -364,6 +385,21 @@ export default function FollowCamera({ running }: { running: boolean }) {
           else blocked.current.add(hit.object);
         }
       }
+    }
+
+    if (state.map === "phase3") {
+      // A ray to the player can miss leaves around the lens. Only the crown
+      // fades by proximity; trunk and limbs stay visible unless they actually
+      // intersect that ray.
+      for (const tree of PHASE_FOUR_TREES) {
+        if (!cameraInsideTreeCrown(camera.position, tree)) continue;
+        for (const mesh of canopyTrees.current.get(tree.seed) ?? [])
+          blocked.current.add(mesh);
+      }
+      // A support limb can fill the foreground while missing the narrow ray
+      // toward the player. Fade it when the lens approaches its actual bounds.
+      for (const [mesh, bounds] of canopySupports.current)
+        if (cameraNearCanopySupport(camera.position, player.current, bounds)) blocked.current.add(mesh);
     }
 
     for (const mesh of blocked.current) {

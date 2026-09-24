@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Locale } from "@/content/story";
 import { runtime, useGame } from "../state/store";
-import { CUBE_COLOR_HEX } from "../world/rubiksCubeAssets";
-import { colorForLayer } from "../world/rubiksCubeState";
 import {
   faceMove,
   RESTING_FACE_BASIS,
@@ -18,6 +16,14 @@ import styles from "./Game.module.css";
 // component body — so the labels always match what's actually in front of
 // the player, however they've reoriented the view.
 const FACE_ORDER: FaceName[] = ["U", "D", "L", "R", "F", "B"];
+const FACE_LABELS: Record<FaceName, { pt: string; en: string }> = {
+  U: { pt: "Mover o topo", en: "Turn the top" },
+  D: { pt: "Mover a base", en: "Turn the bottom" },
+  L: { pt: "Mover a face esquerda", en: "Turn the left face" },
+  R: { pt: "Mover a face direita", en: "Turn the right face" },
+  F: { pt: "Mover a face frontal", en: "Turn the front face" },
+  B: { pt: "Mover a face traseira", en: "Turn the back face" },
+};
 
 export default function RubiksCubePuzzle({ locale }: { locale: Locale }) {
   const pt = locale === "pt";
@@ -130,15 +136,10 @@ export default function RubiksCubePuzzle({ locale }: { locale: Locale }) {
       </p>
       <div className={styles.cubeControls}>
         {FACE_ORDER.map((name) => {
-          const move = faceMove(faceBasis, name);
-          const swatch = move.axis === 2 ? CUBE_COLOR_HEX[colorForLayer(move.layer)] : undefined;
           return (
             <div key={name} className={styles.cubeRow}>
               <span>
-                {swatch && (
-                  <i className={styles.cubeSwatch} style={{ background: swatch }} aria-hidden="true" />
-                )}
-                {name}
+                {pt ? FACE_LABELS[name].pt : FACE_LABELS[name].en}: {name}
               </span>
               <button
                 type="button"

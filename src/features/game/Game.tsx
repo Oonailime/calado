@@ -35,6 +35,7 @@ import styles from "./ui/Game.module.css";
 import { PHASE_TWO_START_YAW } from "./world/phaseTwoLayout";
 import { phase2Chess } from "./world/phase2Chess";
 import { ChessPanel } from "./world/ChessTab";
+import { TrophyCollection } from "./ui/Inventory";
 
 class WorldBoundary extends Component<
   { children: ReactNode; fallback: ReactNode },
@@ -418,6 +419,7 @@ export default function Game({ active, locale, onExit }: GameProps) {
                   ? "As três marcas do vale se uniram numa só peça brilhante, no alto do santuário. Por enquanto, a jornada termina aqui — mas o portal de chegada reabriu: explore o vale à vontade, ou atravesse-o de volta para a fase anterior quando quiser."
                   : "The valley's three marks became one gleaming whole, atop the shrine. For now, the journey ends here — but the arrival portal has reopened: explore the valley freely, or step back through it to the previous stage whenever you like."}
               </p>
+              <TrophyCollection locale={locale} />
               <button
                 autoFocus
                 className={styles.resume}

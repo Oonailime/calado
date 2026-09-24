@@ -4,6 +4,7 @@ import { Chess } from "chess.js";
 import { phase2Chess } from "./phase2Chess";
 import { useGame } from "../state/store";
 import { CHARACTERS } from "../types";
+import { PHASE_TWO_PICKUPS } from "./phaseTwoLayout";
 import styles from "../ui/Game.module.css";
 
 const PIECE_GLYPH: Record<string, string> = {
@@ -83,11 +84,9 @@ export default function ChessTab() {
         {state.mode === "idle" && (
           <div className={styles.chessTabSide}>
             <p role="status">{state.message}</p>
-            <p>
-              {state.requestedMode === "historical"
-                ? "Use WASD para chegar à cepa das brancas e E para sentar. As pretas respondem sozinhas; a outra cepa fica vazia."
-                : "Use WASD para chegar às cepas e E para ocupar. Troque de macaco com 1/2/3. A partida começa quando o segundo se posicionar."}
-            </p>
+            <p>{state.requestedMode === "historical"
+              ? "E na cepa branca inicia o desafio; as pretas respondem automaticamente."
+              : "Ocupe a outra cepa com um segundo macaco para começar."}</p>
             {state.seats.map((seat, i) => (
               <p key={i}>
                 Cepa {i + 1} · {i === 0 ? "Brancas" : "Pretas"}:{" "}
@@ -182,10 +181,7 @@ export default function ChessTab() {
                       ? CHARACTERS[opponent.monkeyId].name
                       : state.requestedMode === "historical" ? "Gulko · lances históricos" : "aguardando"}
                   </p>
-                  <p>
-                    Clique em uma peça e depois em uma casa destacada. Vermelho
-                    indica captura.
-                  </p>
+                  {!state.gameOver && <p>Clique em sua peça e depois em uma casa destacada.</p>}
                   <button
                     disabled={state.thinking}
                     onClick={() => phase2Chess.restart()}
@@ -208,17 +204,17 @@ export function ChessPanel() {
   const state = useSyncExternalStore(phase2Chess.subscribe, phase2Chess.getSnapshot, phase2Chess.getSnapshot);
   const pieces = useGame(s => s.phase2Pieces);
   const count = pieces.filter(Boolean).length;
+  const nextPiece = PHASE_TWO_PICKUPS.find((_, index) => !pieces[index]);
+  const nextLocation = nextPiece?.id === 0 ? "no início da trilha"
+    : nextPiece?.id === 1 ? "adiante no caminho"
+      : "na rampa circular";
   return <>
     {!state.tabOpen && (
       <div className={styles.chessPanel} role="region" aria-label="Instruções de xadrez">
         <div className={styles.chessTitle}>Fase 2 · Xadrez</div>
-        {count < 3 ? <p>Recolha as três peças no caminho: peão, cavalo e torre. Peças encontradas: {count}/3. Pule a lava e siga a rampa ao redor da clareira.</p>
-          : !state.historicalSolved ? <p>Sente na cepa das brancas com E para abrir o tabuleiro e resolver o desafio histórico. As pretas jogam sozinhas.</p>
-          : <><p>Desafio concluído! O portal na cerejeira leva à Fase 3.</p>
-            <p>Agora você pode jogar contra os outros macacos e conquistar os três troféus. Sente um macaco em qualquer cepa com E, troque com 1/2/3 e sente outro na cepa oposta para começar.</p></>}
-        {!state.historicalSolved && <p>Resolva o desafio para liberar o portal e as partidas contra os macacos.</p>}
-        {state.seats.some(Boolean) && state.mode === "idle" && <p>Adversário sentado. Troque de macaco e ocupe a outra cepa.</p>}
-        <small>O tabuleiro abre ao começar a partida e fecha ao sair. Esc: sair da mesa.</small>
+        {count < 3 ? <p>Próxima peça: {nextPiece?.label} {nextLocation}. {count}/3 coletadas.</p>
+          : !state.historicalSolved ? <p>Pressione E na cepa branca e resolva a combinação no tabuleiro. O portal abre após o desafio.</p>
+          : <p>Você pode jogar xadrez com os outros macacos: E em uma cepa, troque com 1/2/3 e pressione E na outra.</p>}
       </div>
     )}
     <ChessTab />

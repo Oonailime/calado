@@ -15,6 +15,7 @@ import {
   Group,
   InstancedMesh,
   Mesh,
+  MeshStandardMaterial,
   Object3D,
   ShaderMaterial,
   UniformsLib,
@@ -22,6 +23,7 @@ import {
   Vector3,
 } from "three";
 import { runtime, useGame } from "../state/store";
+import { canopyVineLeafOpacity } from "../camera/canopyCameraZone";
 import { type ArborealSite } from "./forestLayout";
 import {
   createPhaseFourEnvironment,
@@ -209,7 +211,7 @@ export function SwingingVine({
     },
     [site.id, ties, leafGeometry],
   );
-  useFrame(() => {
+  useFrame(({ camera }) => {
     if (!segments.current) return;
     const active = runtime.vineContacts
       .flatMap((hands) => [hands.left, hands.right])
@@ -237,6 +239,12 @@ export function SwingingVine({
     leaves.current?.children.forEach((leaf, i) => {
       const p = points[2 + i * 2];
       leaf.position.set(p.x, p.y, p.z);
+      const distance = Math.hypot(
+        camera.position.x - p.x,
+        camera.position.y - p.y,
+        camera.position.z - p.z,
+      );
+      ((leaf as Mesh).material as MeshStandardMaterial).opacity = canopyVineLeafOpacity(distance);
     });
   });
   return (
@@ -261,6 +269,8 @@ export function SwingingVine({
             <meshStandardMaterial
               color={PHASE_FOUR_VINE_LEAF_COLORS[i % 5]}
               roughness={1}
+              transparent
+              depthWrite={false}
             />
           </mesh>
         ))}

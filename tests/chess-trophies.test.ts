@@ -5,6 +5,8 @@ import { StockfishEngine } from "../src/features/game/world/stockfishEngine";
 import { PHASE_TWO_STOOLS } from "../src/features/game/world/phaseTwoLayout";
 import { runtime, useGame } from "../src/features/game/state/store";
 import { CHESS_TROPHIES, CHESS_TROPHIES_STORAGE_KEY, readChessTrophies } from "../src/features/game/state/chessTrophies";
+import { BANANA_TROPHY_STORAGE_KEY, readBananaTrophy } from "../src/features/game/state/trophies";
+import { anchors, initialPuzzle } from "../src/features/game/state/rules";
 import type { CharacterId } from "../src/features/game/types";
 
 test("each defeated monkey awards a distinct persistent item, from either side, without duplicates", async (t) => {
@@ -105,4 +107,22 @@ test("saved trophies reject malformed data and unknown items and tolerate blocke
   useGame.setState({ chessTrophies: [] });
   assert.equal(useGame.getState().awardChessTrophy(2), true);
   assert.ok(useGame.getState().chessTrophies.includes("chess-iwazaru"));
+});
+
+test("all four bananas award one persistent trophy", () => {
+  const saved = new Map<string, string>();
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: {
+    getItem: (key: string) => saved.get(key) ?? null,
+    setItem: (key: string, value: string) => saved.set(key, value),
+  } });
+  useGame.setState({ puzzle: initialPuzzle(), bananaTrophy: false });
+  for (let index = 0; index < anchors.bananas.length; index++) {
+    assert.equal(useGame.getState().eat(2, anchors.bananas[index]), true);
+    assert.equal(useGame.getState().bananaTrophy, index === anchors.bananas.length - 1);
+  }
+  assert.equal(saved.get(BANANA_TROPHY_STORAGE_KEY), "true");
+  assert.equal(readBananaTrophy(), true);
+  useGame.setState({ bananaTrophy: false });
+  useGame.getState().hydrateBananaTrophy();
+  assert.equal(useGame.getState().bananaTrophy, true);
 });

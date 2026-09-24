@@ -5,7 +5,6 @@ import { PHASE_TWO_STOOLS } from "./phaseTwoLayout";
 import {
   createHistoricalChallenge,
   TAL_GULKO_SEQUENCE,
-  HISTORICAL_HINTS,
 } from "./historicalChessChallenge";
 import { StockfishEngine } from "./stockfishEngine";
 
@@ -350,7 +349,7 @@ export const phase2Chess = {
     promotion = null;
     if (mode === "historical" && move.san !== TAL_GULKO_SEQUENCE[ply]) {
       chess.undo();
-      message = HISTORICAL_HINTS[Math.floor(ply / 2)];
+      message = "Esse lance não continua a combinação. Tente outra jogada.";
       emit();
       return;
     }

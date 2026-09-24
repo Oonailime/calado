@@ -288,7 +288,7 @@ test("chess tab solves the puzzle, restores monkeys, persists and starts free ga
 });
 
 
-test("winning against each monkey adds a different trophy to the inventory and survives reload", async ({ page }) => {
+test("winning shows each trophy briefly and keeps it for the ending", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.addInitScript(() => localStorage.setItem("historicalChessPuzzleSolved", "true"));
@@ -316,13 +316,29 @@ test("winning against each monkey adds a different trophy to the inventory and s
       await tab.getByRole("button", { name: square, exact: true }).click();
     }
     await expect(tab.getByRole("status")).toContainText("Você venceu");
-    await expect(inventory.locator(`[data-item="chess-${name}"]`)).toBeVisible();
-    await expect(inventory.locator('[data-item^="chess-"]')).toHaveCount(id + 1);
+    await expect(page.locator(`[data-pickup="chess-${name}"]`)).toBeVisible();
+    await expect(inventory.locator('[data-item^="chess-"]')).toHaveCount(0);
     await page.getByRole("button", { name: "Sair do xadrez", exact: true }).click();
   }
   await page.screenshot({ path: "test-results/chess-trophy-inventory.png" });
   await page.reload();
   await expect(game).toHaveAttribute("data-ready", "true", { timeout: 90000 });
-  await expect(inventory.locator('[data-item^="chess-"]')).toHaveCount(3);
+  await expect(inventory.locator('[data-item^="chess-"]')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => (
+    window as unknown as { __game: { useGame: { getState: () => { chessTrophies: string[] } } } }
+  ).__game.useGame.getState().chessTrophies.length)).toBe(3);
+  await page.evaluate(() => {
+    const store = (window as unknown as {
+      __game: { useGame: {
+        getState: () => { puzzle: object };
+        setState: (patch: object) => void;
+      } };
+    }).__game.useGame;
+    store.setState({ puzzle: { ...store.getState().puzzle, cubeSolved: true } });
+  });
+  const trophyList = page.getByRole("region", { name: "Troféus" });
+  await expect(trophyList).toBeVisible();
+  await expect(trophyList.locator('[data-earned="true"]')).toHaveCount(3);
+  await expect(trophyList.locator('[data-trophy="all-bananas"]')).toHaveAttribute("data-earned", "false");
   expect(errors).toEqual([]);
 });

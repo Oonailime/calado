@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { CHESS_TROPHIES, CHESS_TROPHIES_STORAGE_KEY, readChessTrophies, type ChessTrophyId } from "./chessTrophies";
+import { BANANA_TROPHY_STORAGE_KEY, readBananaTrophy } from "./trophies";
 import type { CharacterId, Vec3 } from "../types";
 import type { LocomotionState } from "../characters/monkeyMotion";
 import { LOCOMOTION_TUNING } from "../characters/locomotionConfig";
@@ -63,6 +64,8 @@ type Store = {
   phase2Pieces: [boolean, boolean, boolean];
   collectChessPiece: (index: number) => void;
   chessTrophies: ChessTrophyId[];
+  bananaTrophy: boolean;
+  hydrateBananaTrophy: () => void;
   hydrateChessTrophies: () => void;
   awardChessTrophy: (opponent: CharacterId) => boolean;
   puzzle: PuzzleState;
@@ -131,6 +134,10 @@ export const useGame = create<Store>((set) => ({
     return { phase2Pieces: pieces };
   }),
   chessTrophies: [],
+  bananaTrophy: false,
+  hydrateBananaTrophy: () => set(s =>
+    readBananaTrophy() && !s.bananaTrophy ? { bananaTrophy: true } : s,
+  ),
   hydrateChessTrophies: () => set(s => {
     const saved = readChessTrophies();
     const merged = [...new Set([...s.chessTrophies, ...saved])];
@@ -187,7 +194,12 @@ export const useGame = create<Store>((set) => ({
     set((state) => {
       const puzzle = eatBanana(state.puzzle, id, position);
       ate = puzzle !== state.puzzle;
-      return ate ? { puzzle } : state;
+      if (!ate) return state;
+      const bananaTrophy = state.bananaTrophy || puzzle.bananas.every(Boolean);
+      if (bananaTrophy && !state.bananaTrophy) {
+        try { localStorage.setItem(BANANA_TROPHY_STORAGE_KEY, "true"); } catch {}
+      }
+      return { puzzle, bananaTrophy };
     });
     return ate;
   },
