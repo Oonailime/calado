@@ -182,6 +182,7 @@ type Controller = {
 function vector(x = 0, y = 0, z = 0): MutableVec3 {
   return { x, y, z };
 }
+const STANDING_STILL: Readonly<Vec3> = { x: 0, y: 0, z: 0 };
 
 // Vine-walk entry/exit used to hand the body's facing straight from
 // walk.basis (or straight back to undefined/grounded on arrival) with no
@@ -1195,7 +1196,16 @@ export default function Character({
       locomotion.current.speed = 0;
       return;
     }
-    if (inPhaseTwo && runtime.chessActive) { rigid.setLinvel({ x: 0, y: 0, z: 0 }, true); return; }
+    if (inPhaseTwo && runtime.chessActive) {
+      // Monkeys off the stools stand idle while a game is on: stop the walk
+      // cycle along with the body, instead of freezing them mid-stride.
+      rigid.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      if (traversal.state === "RUN") setState(traversal, "GROUND");
+      updateLocomotion(traversal, locomotion.current, position, STANDING_STILL, runtime.grounded[id]);
+      runtime.speeds[id] = 0;
+      runtime.motions[id] = locomotion.current.motion ?? null;
+      return;
+    }
     locomotion.current.classicGroundMotion = inPhaseFour || inPhaseTwo;
     // Match main's shorter ordinary jump without changing pendulum gravity.
     const gravityScale =
@@ -2073,7 +2083,10 @@ export default function Character({
           const target = phaseTwoFollowTarget(position, leader);
           const dx = target.x-position.x, dz = target.z-position.z, distance = Math.hypot(dx,dz);
           const leaderDistance = Math.hypot(leader.x-position.x,leader.z-position.z);
-          if (leaderDistance > 2 && distance > 0.15) {
+          // A leader seated at the chess table stays put: following would only
+          // walk the others into the table and stools.
+          const leaderSeated = runtime.phase2Seats.includes(puzzle.selected);
+          if (!leaderSeated && leaderDistance > 2 && distance > 0.15) {
             followWait.current = Math.max(0, followWait.current-dt);
             if (followWait.current <= 0) {
               targetX = dx/distance*4; targetZ = dz/distance*4; hasMovementTarget = true;

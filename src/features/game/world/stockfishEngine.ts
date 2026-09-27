@@ -1,6 +1,31 @@
-import { parseStockfishInfo, type StockfishAnalysis } from "./chessRefutation";
+// Keep this module free of runtime imports: the browser test loads it on its
+// own (tests/browser/phase-two-chess.spec.ts) to drive the real WASM worker.
 
 export type StockfishElo = 800 | 1600 | 2000;
+
+/** What Stockfish reported for the position after the player's move. */
+export type StockfishAnalysis = {
+  /** Principal variation in UCI notation, starting with the side to move. */
+  pv: string[];
+  /** Centipawns from the side to move's perspective. */
+  cp?: number;
+  /** Mate in N from the side to move's perspective (negative: being mated). */
+  mate?: number;
+};
+
+/** Reads score and PV from one UCI `info` line; returns null for other lines. */
+export function parseStockfishInfo(line: string): StockfishAnalysis | null {
+  if (!line.startsWith("info ") || !line.includes(" pv ")) return null;
+  const multipv = line.match(/ multipv (\d+)/);
+  if (multipv && multipv[1] !== "1") return null;
+  const score = line.match(/ score (cp|mate) (-?\d+)/);
+  const pv = line.slice(line.indexOf(" pv ") + 4).trim().split(/\s+/);
+  return {
+    pv,
+    ...(score?.[1] === "cp" ? { cp: Number(score[2]) } : {}),
+    ...(score?.[1] === "mate" ? { mate: Number(score[2]) } : {}),
+  };
+}
 
 export class StockfishEngine {
   private worker: Worker | null = null;

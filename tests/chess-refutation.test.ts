@@ -3,8 +3,8 @@ import { test } from "node:test";
 import {
   describeWrongMove,
   formatUciLine,
-  parseStockfishInfo,
 } from "../src/features/game/world/chessRefutation";
+import { parseStockfishInfo } from "../src/features/game/world/stockfishEngine";
 import { createHistoricalChallenge } from "../src/features/game/world/historicalChessChallenge";
 
 test("parses score and principal variation from Stockfish info lines", () => {

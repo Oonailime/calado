@@ -6,8 +6,8 @@ import {
   createHistoricalChallenge,
   TAL_GULKO_SEQUENCE,
 } from "./historicalChessChallenge";
-import { StockfishEngine } from "./stockfishEngine";
-import { describeWrongMove, type StockfishAnalysis } from "./chessRefutation";
+import { StockfishEngine, type StockfishAnalysis } from "./stockfishEngine";
+import { describeWrongMove } from "./chessRefutation";
 
 export type Phase2Mode = "idle" | "historical" | "free";
 export type Phase2Seat = { monkeyId: CharacterId; color: "w" | "b" };

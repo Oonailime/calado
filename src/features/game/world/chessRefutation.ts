@@ -1,14 +1,5 @@
 import { Chess, type Move, type PieceSymbol } from "chess.js";
-
-/** What Stockfish reported for the position after the player's move. */
-export type StockfishAnalysis = {
-  /** Principal variation in UCI notation, starting with the side to move. */
-  pv: string[];
-  /** Centipawns from the side to move's perspective. */
-  cp?: number;
-  /** Mate in N from the side to move's perspective (negative: being mated). */
-  mate?: number;
-};
+import type { StockfishAnalysis } from "./stockfishEngine";
 
 const PIECE_NAMES: Record<PieceSymbol, string> = {
   p: "o peão",
@@ -18,20 +9,6 @@ const PIECE_NAMES: Record<PieceSymbol, string> = {
   q: "a dama",
   k: "o rei",
 };
-
-/** Reads score and PV from one UCI `info` line; returns null for other lines. */
-export function parseStockfishInfo(line: string): StockfishAnalysis | null {
-  if (!line.startsWith("info ") || !line.includes(" pv ")) return null;
-  const multipv = line.match(/ multipv (\d+)/);
-  if (multipv && multipv[1] !== "1") return null;
-  const score = line.match(/ score (cp|mate) (-?\d+)/);
-  const pv = line.slice(line.indexOf(" pv ") + 4).trim().split(/\s+/);
-  return {
-    pv,
-    ...(score?.[1] === "cp" ? { cp: Number(score[2]) } : {}),
-    ...(score?.[1] === "mate" ? { mate: Number(score[2]) } : {}),
-  };
-}
 
 function moveLabel(fen: string, san: string, first: boolean) {
   const [, turn, , , , number] = fen.split(" ");

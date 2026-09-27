@@ -190,6 +190,9 @@ test("chess tab solves the puzzle, restores monkeys, persists and starts free ga
           ?.type,
     )
     .toBe("r");
+  // Correct moves never need the engine; only a wrong move loads it, to
+  // explain the refutation.
+  expect(engineRequests).toHaveLength(0);
   await clickSquare("g7");
   await clickSquare("g8");
   // The wrong move is shown and refuted on the board; skipping restores it.
@@ -239,7 +242,10 @@ test("chess tab solves the puzzle, restores monkeys, persists and starts free ga
     expect(seat.pelvis[0]).toBeCloseTo(PHASE_TWO_STOOLS[index].x, 2);
     expect(seat.pelvis[2]).toBeCloseTo(PHASE_TWO_STOOLS[index].z, 2);
   });
-  expect(engineRequests).toHaveLength(0);
+  // The only engine the historical challenge loads is the analyst that
+  // explained the wrong move above.
+  for (const url of engineRequests)
+    expect(url).toMatch(/\/stockfish-19-lite-single\.(js|wasm)$/);
   await page.screenshot({ path: "test-results/chess-puzzle-completed.png" });
   await expect(game).toHaveAttribute("data-map", "phase2");
   await page.getByRole("button", { name: "Sair da mesa" }).click();
