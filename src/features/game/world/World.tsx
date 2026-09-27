@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame, useLoader, useThree } from "@react-three/fiber";
 import {
   CuboidCollider,
@@ -47,7 +47,7 @@ import {
   buildDigitSequence,
   PULSE_ZERO,
 } from "./soundCode";
-import BridgeBuildStump, { BRIDGE_STUMP_MODEL_URL } from "./BridgeBuildStump";
+import BridgeBuildStump, { BRIDGE_STUMP_MODEL_URLS } from "./BridgeBuildStump";
 import WisdomTotem, { TOTEM_MODEL_URL } from "./Totem";
 import Padlock, { PADLOCK_MODEL_URL } from "./Padlock";
 import BananaGroves from "./BananaGroves";
@@ -743,7 +743,10 @@ export default function World({
   const bridgeModel = useLoader(GLTFLoader, BRIDGE_MODEL_URL);
   const padlockModel = useLoader(GLTFLoader, PADLOCK_MODEL_URL);
   const totemModel = useLoader(GLTFLoader, TOTEM_MODEL_URL);
-  const stumpModel = useLoader(GLTFLoader, BRIDGE_STUMP_MODEL_URL);
+  // Deferred, so switching quality keeps the current stump on screen while
+  // the other tier loads, instead of suspending (and resetting) the world.
+  const stumpQuality = useDeferredValue(quality);
+  const stumpModel = useLoader(GLTFLoader, BRIDGE_STUMP_MODEL_URLS[stumpQuality]);
   const visibleAnchors = powerAnchorVisibility(puzzle);
   return (
     <>

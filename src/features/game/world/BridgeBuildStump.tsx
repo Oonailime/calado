@@ -2,9 +2,17 @@ import { useMemo } from "react";
 import { CylinderCollider, RigidBody } from "@react-three/rapier";
 import { Mesh, type Group } from "three";
 import { anchors } from "../state/rules";
+import type { Quality } from "../state/store";
 import { ISLAND_SURFACE_Y } from "./layout";
 
-export const BRIDGE_STUMP_MODEL_URL = "/assets/models/bridge-stump/carved-stump.glb";
+// One export per graphics tier (scripts/prepare-bridge-stump.py), so a lower
+// quality also downloads and draws a lighter stump.
+export const BRIDGE_STUMP_MODEL_URLS: Record<Quality, string> = {
+  ultra: "/assets/models/bridge-stump/carved-stump-ultra.glb",
+  high: "/assets/models/bridge-stump/carved-stump-high.glb",
+  medium: "/assets/models/bridge-stump/carved-stump-high.glb",
+  low: "/assets/models/bridge-stump/carved-stump-low.glb",
+};
 const STUMP_SCALE = 0.5;
 
 export default function BridgeBuildStump({ template }: { template: Group }) {

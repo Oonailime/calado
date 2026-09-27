@@ -1,18 +1,20 @@
 import { chromium } from '@playwright/test';
 import { mkdir, writeFile } from 'node:fs/promises';
+// The zen portal only remains as phase 2's arrival portal (islands now opens a tree portal).
 const browser = await chromium.launch({headless:true, executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE, args:['--use-angle=d3d11','--disable-dev-shm-usage']});
 const result = {};
 try {
  const page = await browser.newPage({viewport:{width:1440,height:900}});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.goto(`${process.env.BENCHMARK_BASE_URL || 'http://localhost:3000'}/?map=islands&skip`,{timeout:120000});
+ await page.goto(`${process.env.BENCHMARK_BASE_URL || 'http://localhost:3000'}/?map=phase2&skip`,{timeout:120000});
  await page.waitForFunction(()=>window.__canopyTest?.scene.getObjectByName('map-portal') && document.querySelector('[data-ready="true"]'),null,{timeout:120000});
  await page.evaluate(()=>{
   const {useGame}=window.__game;
   useGame.getState().configure({quality:'high',reduced:false});
-  useGame.setState(s=>({puzzle:{...s.puzzle,built:true}}));
+  // Once the game is beaten the arrival portal stays open instead of closing after 3 s.
+  useGame.setState(s=>({puzzle:{...s.puzzle,cubeSolved:true}}));
  });
- await page.waitForTimeout(8500);
+ await page.waitForFunction(()=>window.__canopyTest.scene.getObjectByName('portal-settled-structure')?.visible,null,{timeout:30000});
  await page.evaluate(()=>window.__game.useGame.getState().configure({paused:true}));
  await page.waitForTimeout(300);
  await mkdir('test-results',{recursive:true});
@@ -23,7 +25,10 @@ try {
    portal.visible=mode!=='hidden';
    const physical=[];
    portal.traverse(o=>{if(o.isMesh)for(const m of Array.isArray(o.material)?o.material:[o.material])if(m.transmission>0){physical.push({name:m.name,transmission:m.transmission});if(mode==='without-transmission'){m.transmission=0;m.needsUpdate=true;}}});
-   camera.position.set(0,4.2,-26);camera.lookAt(0,3,-34);camera.updateMatrixWorld();
+   // 8 m in front of the portal (its local +z), as the islands benchmark framed it.
+   const e=portal.matrixWorld.elements,length=Math.hypot(e[8],e[10]);
+   const [x,y,z,fx,fz]=[e[12],e[13],e[14],e[8]/length,e[10]/length];
+   camera.position.set(x+fx*8,y+3,z+fz*8);camera.lookAt(x,y+1.8,z);camera.updateMatrixWorld();
    gl.info.autoReset=false;
    const context=gl.getContext();
    const frames=[];
