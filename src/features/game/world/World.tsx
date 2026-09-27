@@ -131,19 +131,24 @@ function Island({
     </>
   );
 }
+// Each power anchor keeps its monkey's own glyph everywhere it appears:
+// Kikazaru (gold) is always a circle and Mizaru (silver) always a triangle,
+// matching the instructions and the character direction.
+const ANCHOR_SHAPES = { 0: "triangle", 1: "circle" } as const;
+
 function Anchor({
   x,
   z,
-  color,
+  monkey,
   active,
-  shape,
 }: {
   x: number;
   z: number;
-  color: string;
+  monkey: 0 | 1;
   active: boolean;
-  shape: "reveal" | "silence";
 }) {
+  const color = CHARACTERS[monkey].light;
+  const triangle = ANCHOR_SHAPES[monkey] === "triangle";
   return (
     <group position={[x, 0.02, z]}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
@@ -154,8 +159,8 @@ function Anchor({
           opacity={active ? 1 : 0.35}
         />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, shape === "reveal" ? 0 : Math.PI / 4]}>
-        <ringGeometry args={[0.39, 0.46, shape === "reveal" ? 3 : 32]} />
+      <mesh rotation={[-Math.PI / 2, 0, triangle ? 0 : Math.PI / 4]}>
+        <ringGeometry args={[0.39, 0.46, triangle ? 3 : 32]} />
         <meshBasicMaterial color={color} />
       </mesh>
       {active && (
@@ -774,9 +779,8 @@ export default function World({
         {visibleAnchors.bridge && (
           <Anchor
             {...anchors.bridge}
-            color={CHARACTERS[1].light}
+            monkey={1}
             active={puzzle.powers[1]}
-            shape="reveal"
           />
         )}
         {!puzzle.bridge &&
@@ -793,15 +797,13 @@ export default function World({
           <>
             <Anchor
               {...anchors.reveal}
-              color={CHARACTERS[0].light}
+              monkey={0}
               active={puzzle.powers[0]}
-              shape="reveal"
             />
             <Anchor
               {...anchors.silence}
-              color={CHARACTERS[1].light}
+              monkey={1}
               active={puzzle.powers[1]}
-              shape="silence"
             />
           </>
         )}

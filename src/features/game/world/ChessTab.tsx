@@ -7,19 +7,16 @@ import { CHARACTERS } from "../types";
 import { PHASE_TWO_PICKUPS } from "./phaseTwoLayout";
 import styles from "../ui/Game.module.css";
 
+// Both colours use the filled glyphs so every piece is a solid silhouette;
+// CSS paints white pieces white and black pieces black. U+FE0E keeps the
+// pawn (which has an emoji form) rendered as text.
 const PIECE_GLYPH: Record<string, string> = {
-  wp: "♙",
-  wn: "♘",
-  wb: "♗",
-  wr: "♖",
-  wq: "♕",
-  wk: "♔",
-  bp: "♟",
-  bn: "♞",
-  bb: "♝",
-  br: "♜",
-  bq: "♛",
-  bk: "♚",
+  p: "♟︎",
+  n: "♞︎",
+  b: "♝︎",
+  r: "♜︎",
+  q: "♛︎",
+  k: "♚︎",
 };
 
 function squareIsLight(square: string) {
@@ -108,9 +105,12 @@ export default function ChessTab() {
               const selected = state.selected === square;
               const legal = state.legalTargets.includes(square as never);
               const capture = state.captureTargets.includes(square as never);
+              const lastMove =
+                state.lastMove?.from === square || state.lastMove?.to === square;
               const classNames = [
                 styles.chessSquare,
                 squareIsLight(square) ? styles.chessLight : styles.chessDark,
+                lastMove ? styles.chessLastMove : "",
                 cell?.color === "w"
                   ? styles.chessWhitePiece
                   : styles.chessBlackPiece,
@@ -137,8 +137,9 @@ export default function ChessTab() {
                   data-piece={cell ? `${cell.color}${cell.type}` : ""}
                   data-legal={legal}
                   data-capture={capture}
+                  data-last-move={lastMove}
                 >
-                  {cell ? PIECE_GLYPH[`${cell.color}${cell.type}`] : ""}
+                  {cell ? PIECE_GLYPH[cell.type] : ""}
                 </button>
               );
             }),
@@ -181,7 +182,20 @@ export default function ChessTab() {
                       ? CHARACTERS[opponent.monkeyId].name
                       : state.requestedMode === "historical" ? "Gulko · lances históricos" : "aguardando"}
                   </p>
-                  {!state.gameOver && <p>Clique em sua peça e depois em uma casa destacada.</p>}
+                  {state.demo ? (
+                    <>
+                      <p>
+                        O tabuleiro mostra o seu lance e a resposta do
+                        Stockfish. Depois, a posição volta para você tentar de
+                        novo.
+                      </p>
+                      <button onClick={() => phase2Chess.skipDemo()}>
+                        Pular demonstração
+                      </button>
+                    </>
+                  ) : (
+                    !state.gameOver && <p>Clique em sua peça e depois em uma casa destacada.</p>
+                  )}
                   <button
                     disabled={state.thinking}
                     onClick={() => phase2Chess.restart()}

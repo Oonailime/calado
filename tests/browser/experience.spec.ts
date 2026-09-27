@@ -167,7 +167,7 @@ test("jogo coopera na ponte, recupera checkpoint e libera scroll com Esc", async
   await game.focus();
   await expect(page.locator("body")).toHaveCSS("overflow", "hidden");
   await page.screenshot({ path: "test-results/prototipo-inicio.png" });
-  // Kikazaru alcança o símbolo dourado da primeira ponte por movimento real.
+  // Kikazaru alcança o círculo dourado da primeira ponte por movimento real.
   await page.keyboard.press("Digit1");
   await expect(game).toHaveAttribute("data-selected", "1");
   await page.keyboard.press("Space");

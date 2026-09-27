@@ -7,12 +7,31 @@ import {
   TAL_GULKO_SEQUENCE,
 } from "./historicalChessChallenge";
 import { StockfishEngine } from "./stockfishEngine";
+import { describeWrongMove, type StockfishAnalysis } from "./chessRefutation";
 
 export type Phase2Mode = "idle" | "historical" | "free";
 export type Phase2Seat = { monkeyId: CharacterId; color: "w" | "b" };
 export const PHASE_TWO_ELOS = { 0: 2000, 1: 800, 2: 1600 } as const;
 const listeners = new Set<() => void>();
 let engine: StockfishEngine | null = null;
+// Full-strength engine that explains wrong moves in the historical challenge.
+let analyst: StockfishEngine | null = null;
+let analysing = false;
+let refutation = 0;
+// While a wrong move and its refutation are replayed on the board, the real
+// position (and its last move) wait here to be restored.
+let demo = false;
+let restoreLastMove: Move | null = null;
+const ANALYSING_MESSAGE =
+  "Esse lance não continua a combinação. Analisando com Stockfish…";
+const FALLBACK_MESSAGE =
+  "Esse lance não continua a combinação. Tente outra jogada.";
+/** Plies of the Stockfish line replayed (same length as the written line). */
+const DEMO_PLIES = 6;
+/** Demonstration moves slide this many times slower than normal moves. */
+const DEMO_PACE = 3;
+const DEMO_GAP_MS = 700;
+const DEMO_HOLD_MS = 2000;
 let chess = createHistoricalChallenge();
 let displayFen = chess.fen();
 let mode: Phase2Mode = "idle",
@@ -32,7 +51,7 @@ let lastMove: Move | null = null;
 let promotion: { from: Square; to: Square } | null = null;
 const savedPositions = new Map<CharacterId, Vec3>();
 let camera: { yaw: number; pitch: number; zoom: number } | null = null;
-let animate: ((move: Move) => Promise<void>) | null = null;
+let animate: ((move: Move, pace: number) => Promise<void>) | null = null;
 function snapshot() {
   return {
     mode,
@@ -51,6 +70,7 @@ function snapshot() {
     promotion,
     revision,
     lastMove,
+    demo,
   };
 }
 let cachedSnapshot = snapshot();
@@ -79,12 +99,12 @@ function status() {
           ? "Xeque! Sua vez."
           : "Sua vez.";
 }
-async function play(move: Move, token: number) {
+async function play(move: Move, token: number, pace = 1) {
   lastMove = move;
   // Acknowledge the click immediately; the 3D scene slides into this position.
   displayFen = move.after;
   emit();
-  if (animate) await animate(move);
+  if (animate) await animate(move, pace);
   if (session !== token) return false;
   return true;
 }
@@ -114,6 +134,82 @@ async function opponent(token: number) {
   thinking = false;
   emit();
 }
+function cancelRefutation() {
+  refutation++;
+  if (analysing) {
+    // A search still running can't take a new position; restart the worker.
+    analyst?.dispose();
+    analyst = null;
+    analysing = false;
+  }
+}
+function wait(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+/** Puts the real position back on both boards after a demonstration. */
+function endDemo() {
+  demo = false;
+  thinking = false;
+  displayFen = chess.fen();
+  lastMove = restoreLastMove;
+  // A new revision makes the 3D board drop its animations and resync.
+  revision++;
+}
+/**
+ * Shows a move outside Tal's combination on the board, then replays
+ * Stockfish's best defence slowly before restoring the real position. The
+ * logical game (`chess`) never keeps the wrong move; only the display does.
+ */
+async function demonstrateWrongMove(move: Move) {
+  cancelRefutation();
+  const token = refutation,
+    game = session;
+  const live = () => token === refutation && game === session;
+  restoreLastMove = lastMove;
+  demo = true;
+  thinking = true;
+  message = ANALYSING_MESSAGE;
+  const shown = play(move, game, DEMO_PACE);
+  let analysis: StockfishAnalysis;
+  try {
+    analyst ??= new StockfishEngine(false);
+    analysing = true;
+    [analysis] = await Promise.all([analyst.analyse(move.after), shown]);
+    if (!live()) return;
+    analysing = false;
+  } catch {
+    if (!live()) return;
+    analysing = false;
+    await shown;
+    if (!live()) return;
+    message = FALLBACK_MESSAGE;
+    endDemo();
+    emit();
+    return;
+  }
+  message = describeWrongMove(move, analysis);
+  emit();
+  const board = new Chess(move.after);
+  for (const uci of analysis.pv.slice(0, DEMO_PLIES)) {
+    await wait(DEMO_GAP_MS);
+    if (!live()) return;
+    let reply: Move;
+    try {
+      reply = board.move({
+        from: uci.slice(0, 2),
+        to: uci.slice(2, 4),
+        promotion: uci[4],
+      });
+    } catch {
+      break;
+    }
+    if (!(await play(reply, game, DEMO_PACE)) || !live()) return;
+  }
+  await wait(DEMO_HOLD_MS);
+  if (!live()) return;
+  endDemo();
+  emit();
+}
 function begin() {
   if (!seats[0] || (requestedMode === "free" && !seats[1])) return;
   mode = requestedMode;
@@ -124,6 +220,8 @@ function begin() {
   session++;
   revision++;
   lastMove = null;
+  cancelRefutation();
+  demo = false;
   chess = mode === "historical" ? createHistoricalChallenge() : new Chess();
   displayFen = chess.fen();
   selected = null;
@@ -198,7 +296,7 @@ export const phase2Chess = {
     requestedMode = historicalSolved ? "free" : "historical";
     emit();
   },
-  registerAnimator(fn: (move: Move) => Promise<void>) {
+  registerAnimator(fn: (move: Move, pace: number) => Promise<void>) {
     animate = fn;
     return () => {
       if (animate === fn) animate = null;
@@ -232,6 +330,14 @@ export const phase2Chess = {
     if (typeof document !== "undefined") document.exitPointerLock?.();
     emit();
   },
+  /** Ends a wrong-move demonstration early and restores the real position. */
+  skipDemo() {
+    if (!demo) return;
+    cancelRefutation();
+    if (message === ANALYSING_MESSAGE) message = FALLBACK_MESSAGE;
+    endDemo();
+    emit();
+  },
   restart() {
     if (thinking || mode === "idle") return;
     engine?.dispose();
@@ -241,6 +347,10 @@ export const phase2Chess = {
     session++;
     engine?.dispose();
     engine = null;
+    cancelRefutation();
+    analyst?.dispose();
+    analyst = null;
+    demo = false;
     for (const [id, position] of savedPositions)
       runtime.phase2Restore[id] = position;
     savedPositions.clear();
@@ -349,10 +459,10 @@ export const phase2Chess = {
     promotion = null;
     if (mode === "historical" && move.san !== TAL_GULKO_SEQUENCE[ply]) {
       chess.undo();
-      message = "Esse lance não continua a combinação. Tente outra jogada.";
-      emit();
+      await demonstrateWrongMove(move);
       return;
     }
+    cancelRefutation();
     const token = session;
     thinking = true;
     emit();

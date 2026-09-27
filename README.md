@@ -1,6 +1,6 @@
 # Emiliano Calado — História e Templo dos Três
 
-Primeira entrega de pré-produção e prototipagem, seguindo [PLANO_IMPLEMENTACAO.md](PLANO_IMPLEMENTACAO.md). Não é o portfólio completo: a direção artística e as mecânicas precisam passar pela validação da Etapa 3 antes da produção integral.
+Portfólio pessoal interativo de Emiliano Calado. A história biográfica acompanha o scroll e conduz a uma experiência 3D jogável, **O Templo dos Três**. O projeto segue em desenvolvimento; veja o [estado atual](PLANO_IMPLEMENTACAO.md) e a [direção do produto](Prompt_portfolio_Emiliano_Calado.md).
 
 ## Executar no PC
 
@@ -11,12 +11,16 @@ npm ci
 npm run dev
 ```
 
-- `http://localhost:3000`: animatic de oito cenas ligado ao scroll. Ao final, clique em **Jogar** para entrar no protótipo.
-- `http://localhost:3000/estudo`: caderno interno com conceito do trio, pelagens, storyboards, animatic com controle manual e mapa.
+- `http://localhost:3000`: história interativa de oito cenas, portfólio de projetos e entrada para o jogo.
+- `http://localhost:3000/?map=phase2`: abre diretamente a região vulcânica e o desafio de xadrez.
+- `http://localhost:3000/?map=phase3`: abre diretamente a região da copa, com platôs e cipós.
+- `http://localhost:3000/?map=phase4`: alias compatível de `phase3`.
+- `http://localhost:3000/?map=phase2&skip`: atalho local para inspecionar o desafio de xadrez.
+- `http://localhost:3000/estudo`: caderno e ferramentas internas de pré-produção. Em produção, a rota fica oculta a menos que `ENABLE_STUDIO=1` seja configurado.
 
 O jogo bloqueia o scroll. **Esc** abre pausa/configurações, de onde também dá para sair do modo jogo; **Retomar** preserva a progressão. Celulares recebem orientação para usar PC.
 
-## Controles do protótipo
+## Controles do jogo
 
 | Ação                                                | Controle                                       |
 | --------------------------------------------------- | ----------------------------------------------- |
@@ -62,15 +66,14 @@ O acabamento do terreno separa topo gramado, terra aparente e uma rampa física 
 
 Os testes de terreno verificam a correspondência entre malha e colisão, o repouso das cápsulas e o vão da ponte. Os testes de navegador cobrem nascimento, reposicionamento, travessia e checkpoint.
 
-## Estrutura e próxima etapa
+## Estrutura e documentação
 
 História em `src/features/story`; jogo separado em personagens, câmera, controles, estado/regras, mundo, áudio e interface. `src/content/profile.ts` contém os destinos reais extraídos do currículo, preparados para os portais futuros; não são expostos por um menu.
 
-- [Direção e decisões](docs/preproducao/DIRECAO.md)
-- [Inventário de assets e desempenho](docs/preproducao/ASSETS.md)
-- [Protocolo e pendências de validação](docs/preproducao/VALIDACAO.md)
-- [Prompt da prancha gerada](docs/preproducao/PROMPTS.md)
+- [Direção atual do produto](Prompt_portfolio_Emiliano_Calado.md)
+- [Estado atual e evolução](PLANO_IMPLEMENTACAO.md)
+- [Regras para agentes de código](AGENTS.md)
+- [Prompt inicial (legado)](docs/legado/Prompt_portfolio_Emiliano_Calado.md)
+- [Plano inicial (legado)](docs/legado/PLANO_IMPLEMENTACAO.md)
 
-O caderno fica desativado em produção por padrão. `ENABLE_STUDIO=1` serve somente para uma revisão interna explicitamente configurada. Toda a pré-produção está com `noindex`.
-
-Faltam validação com pessoas e em PC de referência, arte/áudio definitivos, transição cinematográfica final, regiões completas e portais. As referências e o currículo originais foram preservados.
+O caderno interno não faz parte da navegação pública. A rota principal também não é indexada nesta fase do projeto. O código atual é a fonte de verdade para funcionalidades implementadas; documentos iniciais substituídos estão preservados em `docs/legado/`.

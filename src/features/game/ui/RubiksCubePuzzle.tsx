@@ -4,6 +4,7 @@ import { runtime, useGame } from "../state/store";
 import {
   faceMove,
   RESTING_FACE_BASIS,
+  snapCubeViewYaw,
   stepFaceBasis,
   type FaceBasis,
   type FaceName,
@@ -41,6 +42,11 @@ export default function RubiksCubePuzzle({ locale }: { locale: Locale }) {
     // unmounts/remounts each time the overlay closes/opens); only the
     // runtime mirror needs an explicit reset here.
     runtime.cubeInspect.faceBasis = RESTING_FACE_BASIS;
+    // The camera frames the cube from the monkey's own yaw, which stays
+    // frozen while this overlay is open. Square it up to the nearest face so
+    // "F" is unambiguously the face the camera looks at; the letters and the
+    // view arrows below all read the cube from this same yaw.
+    runtime.yaw = snapCubeViewYaw(runtime.yaw);
   }, []);
   // Mirrors Lock.tsx: this overlay owns Escape while open (see
   // useControls.ts's `if (state.lockOpen || state.cubePuzzleOpen) return;`).
@@ -60,13 +66,13 @@ export default function RubiksCubePuzzle({ locale }: { locale: Locale }) {
   // into view); unlike a drag it does not spring back on its own.
   // RubiksCube.tsx's useFrame animates the visible transition toward it.
   const step = (direction: ViewStep) => {
-    const next = stepFaceBasis(faceBasis, direction);
+    const next = stepFaceBasis(faceBasis, direction, runtime.yaw);
     runtime.cubeInspect.faceBasis = next;
     setFaceBasis(next);
   };
   const turn = (name: FaceName, clockwise: boolean) => {
     if (useGame.getState().puzzle.cubeTurning) return;
-    const move = faceMove(faceBasis, name);
+    const move = faceMove(faceBasis, name, runtime.yaw);
     const direction = clockwise ? move.direction : ((-move.direction) as 1 | -1);
     useGame.getState().turnCubeFace(move.axis, move.layer, direction);
   };

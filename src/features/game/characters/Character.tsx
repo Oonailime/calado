@@ -27,6 +27,7 @@ import {
   CHARACTER_CAPSULE_RADIUS,
   CHARACTER_SPAWN_Y,
   characterSpawn,
+  islandFinalPuzzleSpawn,
 } from "../world/layout";
 import { CANOPY_BRIDGE_CURVE, CANOPY_BRIDGE_SITE } from "../world/canopyCooperationLayout";
 import { phaseFourTouchesGround } from "../world/phaseFourTerrain";
@@ -53,11 +54,16 @@ import {
   PHASE_FOUR_FALL_Y,
   PHASE_FOUR_LADDER_SITE,
   phaseFourCharacterSpawn,
+  phaseFourShrineSpawn,
   phaseFourAdjacentSite,
 } from "../world/phaseFourLayout";
 import {
   closestSwingingVineGrip,
   createSwingingVine,
+  hoistSwingingVine,
+  PENDULUM_PUMP_ACCELERATION,
+  pendulumPumpAllowed,
+  rerigUnheldSwingingVines,
   releaseRearVineTie,
 } from "../world/swingingVine";
 import {
@@ -167,6 +173,10 @@ type Controller = {
   // (alt), 0 otherwise. Read by the leg-pump pose so climbing reads as
   // active effort even while the pendulum itself is nearly still.
   climbRate: number;
+  // Set when a hand closes on a rope below its authored grip (a loose rope
+  // regrabbed low): the monkey climbs back to the designed pendulum length
+  // unless the player takes over with shift/alt.
+  ropeHoist: boolean;
 };
 
 function vector(x = 0, y = 0, z = 0): MutableVec3 {
@@ -267,6 +277,7 @@ function createController(): Controller {
     travelDirection: 1,
     idleElapsed: 0,
     climbRate: 0,
+    ropeHoist: false,
   };
 }
 
@@ -297,6 +308,7 @@ function clearTraversal(controller: Controller) {
   controller.handoffCount = 0;
   controller.closestReachDistance = Number.POSITIVE_INFINITY;
   controller.fromSwing = false;
+  controller.ropeHoist = false;
   controller.hands.left.pointReady = false;
   controller.hands.right.pointReady = false;
   controller.bodyLean = 0;
@@ -440,19 +452,12 @@ function updateHandContact(
     anchor.y = hand.support.y - anchor.y;
     anchor.z = hand.support.z - anchor.z;
   }
-  if (hand.attachElapsed < LOCOMOTION_TUNING.attachSmoothing) {
-    hand.attachElapsed = Math.min(
-      LOCOMOTION_TUNING.attachSmoothing,
-      hand.attachElapsed + dt,
-    );
-    const t = hand.attachElapsed / LOCOMOTION_TUNING.attachSmoothing;
-    hand.constraint.length =
-      hand.attachStartLength +
-      (hand.restLength - hand.attachStartLength) * easeInOut(t);
-  } else if (site.vine.twoPoint && rope) {
-    // Shift/alt (see applyVineClimbControl) can change the rope's own
-    // length on the fly to climb up/down it - restLength must keep tracking
-    // that, not just the value calibrated once at the original grab.
+  if (site.vine.twoPoint && rope) {
+    // Shift/alt and the automatic climb (see applyVineClimbControl) change
+    // the rope's own length on the fly - restLength must keep tracking it,
+    // including while the grab is still easing in: easing toward the length
+    // captured at the grab and then snapping to the shorter live length
+    // would jolt the body up the rope.
     const climbOffset = shoulderOffset(locomotion, hand.side) ?? {
       x: 0,
       y: 0.49,
@@ -468,8 +473,18 @@ function updateHandContact(
         ),
       );
     hand.restLength = rope.constraints[0].length + rootToGrip;
-    hand.constraint.length = hand.restLength;
   }
+  if (hand.attachElapsed < LOCOMOTION_TUNING.attachSmoothing) {
+    hand.attachElapsed = Math.min(
+      LOCOMOTION_TUNING.attachSmoothing,
+      hand.attachElapsed + dt,
+    );
+    const t = hand.attachElapsed / LOCOMOTION_TUNING.attachSmoothing;
+    hand.constraint.length =
+      hand.attachStartLength +
+      (hand.restLength - hand.attachStartLength) * easeInOut(t);
+  } else if (site.vine.twoPoint && rope)
+    hand.constraint.length = hand.restLength;
   const dx = position.x - anchor.x;
   const dy = position.y - anchor.y;
   const dz = position.z - anchor.z;
@@ -495,6 +510,9 @@ function updateHandContact(
 }
 
 const VINE_CLIMB_RATE = 1.6;
+/** Automatic climb after grabbing a rope low (see Controller.ropeHoist). */
+const ROPE_HOIST_RATE = 2.4;
+const ROPE_HOIST_MARGIN = 0.25;
 const VINE_CLIMB_MIN_LENGTH = 1.1;
 const VINE_CLIMB_TAIL_CLEARANCE = 0.3;
 
@@ -514,10 +532,17 @@ function applyVineClimbControl(controller: Controller, dt: number) {
     : undefined;
   if (!rope) {
     controller.climbRate = 0;
+    controller.ropeHoist = false;
     return;
   }
   const up = runtime.keys.has("ShiftLeft") || runtime.keys.has("ShiftRight");
   const down = runtime.keys.has("AltLeft") || runtime.keys.has("AltRight");
+  if (up !== down) controller.ropeHoist = false;
+  else if (controller.ropeHoist) {
+    controller.climbRate = -1;
+    controller.ropeHoist = hoistSwingingVine(rope, dt, ROPE_HOIST_RATE);
+    return;
+  }
   if (up === down) {
     controller.climbRate = 0;
     return;
@@ -584,6 +609,8 @@ function attachHand(
           }),
       hand.target,
     );
+    controller.ropeHoist =
+      rope.constraints[0].length > rope.hangLength + ROPE_HOIST_MARGIN;
   }
   hand.site = site;
   hand.grabbed = true;
@@ -1066,10 +1093,12 @@ export default function Character({
     // transition. Passing them as a RigidBody position prop also moved gold
     // when construction switched off his power and re-rendered the body.
     const state = useGame.getState();
+    const skip = state.finalPuzzleSkip === map;
     const spawn = map === "phase2"
       ? phaseTwoCharacterSpawn(id, state.phase2FromCanopy)
-      : map === "phase3" ? phaseFourCharacterSpawn(id)
-      : characterSpawn(id, state.puzzle.bridge);
+      : map === "phase3"
+        ? skip ? phaseFourShrineSpawn(id) : phaseFourCharacterSpawn(id)
+        : skip ? islandFinalPuzzleSpawn(id) : characterSpawn(id, state.puzzle.bridge);
     const testing = window as unknown as { __canopyBodies?: unknown[] };
     (testing.__canopyBodies ??= [])[id] = rigid;
     if (rigid) {
@@ -1193,6 +1222,15 @@ export default function Character({
         clearTraversal(traversal);
         runtime.vineContacts[id].left = null;
         runtime.vineContacts[id].right = null;
+        // Back at the arrival clearing, the climb restarts with every rope
+        // nobody holds tied at both ends again (a loose one hangs out of
+        // reach of the decks).
+        if (inPhaseFour)
+          rerigUnheldSwingingVines(
+            runtime.swingingVines,
+            runtime.vineContacts,
+            sitesForMap(state.map),
+          );
         runtime.positions[id] = spawn;
         if (inPhaseTwo && selected) { runtime.yaw = PHASE_TWO_START_YAW; runtime.keys.clear(); runtime.jump = false; }
         runtime.motions[id] = null;
@@ -1759,6 +1797,7 @@ export default function Character({
             basis.up,
           );
           let assistAcceleration = 0;
+          let pumping = false;
           if (traversal.reach?.handoffFrom) {
             const target = traversal.hands[traversal.reach.hand].target;
             scratch.assistDirection.x = target.x - position.x;
@@ -1772,7 +1811,12 @@ export default function Character({
             (inputForward || inputRight)
           ) {
             copyVector(scratch.assistDirection, basis.forward);
-            assistAcceleration = LOCOMOTION_TUNING.swingAssist;
+            // A canopy pendulum is pumped like a playground swing (see
+            // pendulumPumpAllowed); other ropes keep the steady lean.
+            pumping = !!assistHand.site?.vine.twoPoint;
+            assistAcceleration = pumping
+              ? PENDULUM_PUMP_ACCELERATION
+              : LOCOMOTION_TUNING.swingAssist;
           }
           if (assistAcceleration > 0) {
             projectTangential(
@@ -1788,6 +1832,17 @@ export default function Character({
               ) > 1e-6
             ) {
               normalizeVector(scratch.assistDirection, scratch.assistDirection);
+              if (
+                pumping &&
+                !pendulumPumpAllowed(
+                  position,
+                  velocity,
+                  scratch.assistDirection,
+                  assistHand.constraint.anchor,
+                  assistHand.constraint.length,
+                )
+              )
+                assistAcceleration = 0;
               scratch.assistedVelocity.x +=
                 scratch.assistDirection.x * assistAcceleration * dt;
               scratch.assistedVelocity.y +=
@@ -2175,6 +2230,11 @@ export default function Character({
           scratch.commandVelocity.x = dx * gain;
           scratch.commandVelocity.y = dy * gain + 0.25;
           scratch.commandVelocity.z = dz * gain;
+          // A loose rope hangs straight along the body, so its reach point
+          // rises with the body: lifting toward it would fly the monkey up
+          // the rope. Close the horizontal gap only; the hand reaches up.
+          if (runtime.swingingVines.get(reach.site.id)?.free)
+            scratch.commandVelocity.y = velocity.y;
           hasMovementTarget = true;
         }
         if (grounded || hasMovementTarget || jumping)

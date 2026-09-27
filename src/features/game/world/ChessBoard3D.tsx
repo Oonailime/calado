@@ -23,7 +23,7 @@ export default function ChessBoard3D({
     scene.syncFromFen(phase2Chess.getSnapshot().fen);
   }, [scene, state.revision]);
   useEffect(
-    () => phase2Chess.registerAnimator((move) => scene.animate(move)),
+    () => phase2Chess.registerAnimator((move, pace) => scene.animate(move, pace)),
     [scene],
   );
   useEffect(() => () => scene.dispose(), [scene]);
@@ -40,6 +40,28 @@ export default function ChessBoard3D({
             void phase2Chess.choose(event.object.userData.square);
         }}
       />
+      {/* Last move: origin and destination tinted, never intercepting clicks. */}
+      {state.lastMove &&
+        [state.lastMove.from, state.lastMove.to].map((square) => {
+          const p = squareToWorldPosition(square);
+          return (
+            <mesh
+              key={`last-${square}`}
+              position={[p.x, p.y - 0.008, p.z]}
+              raycast={() => null}
+            >
+              <boxGeometry
+                args={[0.3 * PHASE_TWO_CHESS_SCALE, 0.01, 0.3 * PHASE_TWO_CHESS_SCALE]}
+              />
+              <meshBasicMaterial
+                transparent
+                opacity={0.45}
+                color="#f5d24a"
+                depthWrite={false}
+              />
+            </mesh>
+          );
+        })}
       {/* One picking surface; only highlighted squares need a draw call. */}
       <mesh
         position={[PHASE_TWO_TABLE[0], squareToWorldPosition("a1").y - 0.012, PHASE_TWO_TABLE[1]]}

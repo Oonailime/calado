@@ -9,6 +9,16 @@ export function cameraInsideTreeCrown(camera: Point, tree: Tree) {
     Math.hypot(camera.x - tree.position[0], camera.z - tree.position[2]) < tree.radius * 5.3;
 }
 
+/**
+ * True when the player is up in the canopy (at or above `minY`) and within
+ * a tree's leaf spread (branch reach plus crown clusters, about 5.3 radii)
+ * plus a margin, so its leaves and limbs can clear the view around them.
+ */
+export function playerNearCanopyTree(player: Point, tree: Tree, minY: number) {
+  return player.y >= minY &&
+    Math.hypot(player.x - tree.position[0], player.z - tree.position[2]) < tree.radius * 5.3 + 6;
+}
+
 export function cameraNearCanopySupport(
   camera: Point,
   player: Point,

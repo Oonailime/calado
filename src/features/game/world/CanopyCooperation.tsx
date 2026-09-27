@@ -3,20 +3,45 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { CylinderCollider, RigidBody } from "@react-three/rapier";
-import { Group, Mesh, MeshBasicMaterial, MeshStandardMaterial, PointLight, TubeGeometry } from "three";
+import { Color, Group, Mesh, MeshStandardMaterial, Object3D, PointLight, TubeGeometry } from "three";
 import { runtime, useGame } from "../state/store";
-import { createCanopyHarvestMarkerGeometry, createPhaseFourVineLeafGeometry, PHASE_FOUR_VINE_LEAF_COLORS } from "./phaseFourAssets";
+import { createPhaseFourVineLeafGeometry, PHASE_FOUR_VINE_LEAF_COLORS } from "./phaseFourAssets";
 import { PHASE_FOUR_CUBE_PIECE_SPAWNS, PHASE_FOUR_PLATFORMS } from "./phaseFourLayout";
 import { CANOPY_BRIDGE_CURVE, CANOPY_BRIDGE_ENDPOINTS, CANOPY_HARVESTS, CANOPY_PRISM_SOCKETS, CANOPY_STUMPS } from "./canopyCooperationLayout";
 
 const COLORS = ["#e5efeb", "#f2c653", "#b77c45"];
 const SHRINE = PHASE_FOUR_PLATFORMS.find(deck => deck.id === "summit-shrine")!.center;
 const BRIDGE_LEAF_COUNT = 20;
+// Once Mizaru focuses, each vine still to harvest slowly fades along its
+// whole length from its natural colour to white and back. The vine's colour
+// lives in its vertex colours, so the white comes from a rising emissive
+// glow rather than from the material colour.
+const HARVEST_BLINK_PERIOD_SECONDS = 3;
+const HARVEST_WHITE = new Color("#ffffff");
+// Reduced motion holds the vine half-way to white instead of fading.
+const HARVEST_REDUCED_WHITENESS = 0.5;
 
 export default function CanopyCooperation({ scene, running }: { scene: Group; running: boolean }) {
   const puzzle = useGame(state => state.puzzle);
   const rope = useMemo(() => new TubeGeometry(CANOPY_BRIDGE_CURVE, 180, 0.1, 8, false), []);
-  const harvestMarkers = useMemo(() => CANOPY_HARVESTS.map(site => createCanopyHarvestMarkerGeometry(site.id, site.position)), []);
+  // Each harvestable vine's own scenery group and its original materials,
+  // captured before the camera's occlusion fade can swap in clones.
+  const harvestVines = useMemo(() => CANOPY_HARVESTS.map(site => {
+    let group: Object3D | undefined;
+    // AssetBuilder prefixes scopes with the environment's exported name.
+    scene.traverse(child => {
+      if (child.name.endsWith(`_liana-${site.id}`)) group = child;
+    });
+    const materials: { material: MeshStandardMaterial; emissive: Color; intensity: number }[] = [];
+    group?.traverse(child => {
+      if (!(child instanceof Mesh)) return;
+      for (const material of Array.isArray(child.material) ? child.material : [child.material])
+        if (material instanceof MeshStandardMaterial)
+          materials.push({ material, emissive: material.emissive.clone(), intensity: material.emissiveIntensity });
+    });
+    return { group, materials };
+  }), [scene]);
+  const harvestBlinking = useRef(CANOPY_HARVESTS.map(() => false));
   const leafGeometry = useMemo(() => createPhaseFourVineLeafGeometry(), []);
   const leafPoints = useMemo(
     () =>
@@ -41,17 +66,14 @@ export default function CanopyCooperation({ scene, running }: { scene: Group; ru
   // notice, which is why focusing silently succeeded but read as "broken").
   const burst = useRef(-1);
   const wasFocused = useRef(false);
-  const harvestGlows = useRef<(Mesh | null)[]>([]);
+  const reduced = useGame(state => state.reduced);
 
-  useEffect(() => () => { rope.dispose(); harvestMarkers.forEach(marker => marker.dispose()); leafGeometry.dispose(); }, [rope, harvestMarkers, leafGeometry]);
+  useEffect(() => () => { rope.dispose(); leafGeometry.dispose(); }, [rope, leafGeometry]);
   useEffect(() => {
-    CANOPY_HARVESTS.forEach((site, i) => {
-      // AssetBuilder prefixes scopes with the environment's exported name.
-      scene.traverse(child => {
-        if (child.name.endsWith(`_liana-${site.id}`)) child.visible = !puzzle.canopyVines[i];
-      });
+    harvestVines.forEach((vine, i) => {
+      if (vine.group) vine.group.visible = !puzzle.canopyVines[i];
     });
-  }, [scene, puzzle.canopyVines]);
+  }, [harvestVines, puzzle.canopyVines]);
   useFrame(({ clock }, delta) => {
     if (!running) return;
     progress.current = puzzle.canopyBridgeBuilt ? Math.min(1, progress.current + delta / 1.8) : 0;
@@ -85,11 +107,27 @@ export default function CanopyCooperation({ scene, running }: { scene: Group; ru
     if (focusRingMaterial.current)
       focusRingMaterial.current.emissiveIntensity = focusPulse;
     if (focusLight.current) focusLight.current.intensity = focusPulse * 1.6;
-    const pulse = 0.75 + Math.sin(clock.elapsedTime * 2.4) * 0.25;
-    harvestGlows.current.forEach((mesh) => {
-      if (!mesh) return;
-      // Pulse the colour only: the cuff stays fitted to the actual vine.
-      (mesh.material as MeshBasicMaterial).color.setRGB(0.55 + pulse * 0.35, 1, 0.25 + pulse * 0.25);
+    // 0 = natural colour, 1 = white.
+    const whiteness = reduced
+      ? HARVEST_REDUCED_WHITENESS
+      : 0.5 - 0.5 * Math.cos((clock.elapsedTime * Math.PI * 2) / HARVEST_BLINK_PERIOD_SECONDS);
+    harvestVines.forEach((vine, i) => {
+      const blinking = puzzle.canopyFocused && !puzzle.canopyVines[i];
+      if (blinking !== harvestBlinking.current[i]) {
+        harvestBlinking.current[i] = blinking;
+        // The camera's occlusion fade would swap in its own translucent
+        // clone and hide the blink, so it leaves a blinking vine alone.
+        if (vine.group) vine.group.userData.cameraOccluder = !blinking;
+        if (blinking)
+          for (const entry of vine.materials) entry.material.emissive.copy(HARVEST_WHITE);
+        else
+          for (const entry of vine.materials) {
+            entry.material.emissive.copy(entry.emissive);
+            entry.material.emissiveIntensity = entry.intensity;
+          }
+      }
+      if (blinking)
+        for (const entry of vine.materials) entry.material.emissiveIntensity = whiteness;
     });
   });
   const white = PHASE_FOUR_CUBE_PIECE_SPAWNS[0];
@@ -133,13 +171,6 @@ export default function CanopyCooperation({ scene, running }: { scene: Group; ru
           </mesh>
         </group>
       )}
-      {CANOPY_HARVESTS.map((site, i) => !puzzle.canopyVines[i] && puzzle.canopyFocused && (
-        <mesh key={site.id} name={`harvest-marker-${site.id}`}
-          ref={node => { harvestGlows.current[i] = node; }}
-          geometry={harvestMarkers[i]} userData={{ cameraOccluder: false }}>
-          <meshBasicMaterial color="#c4ef89" />
-        </mesh>
-      ))}
       {Object.entries(CANOPY_STUMPS).map(([name, position]) => (
         <RigidBody key={name} type="fixed" colliders={false} position={position}>
           <CylinderCollider args={[0.5, 0.28]} position={[0, 0.5, 0]} />

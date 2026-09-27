@@ -121,6 +121,23 @@ const OPAQUE_LOWER_BRANCHES = new Set([
     .filter((path) => path.kind === "branch" && path.points.every((point) => point[1] < FIRST_VINE_PLATEAU_Y))
     .map((path) => `bough-${path.id}`),
 ]);
+// The high-plateau tree holds the first pendulum vine (its rear end) and the
+// pull vine's upper anchor. Its trunk, limbs and crown fade together as one
+// unit, so the player can see the swing route through the whole tree while
+// grabbing that vine. Other trees keep their per-part fading.
+export const PHASE_FOUR_WHOLE_FADE_TREE = `tree-${
+  PHASE_FOUR_TREES[PHASE_FOUR_SWING_SITES[0].vine.twoPoint!.rearTreeIndex].seed
+}`;
+// Seeds of the two trees each swing span's wooden attachments grow from.
+const SWING_SUPPORT_TREE_SEEDS = new Map(
+  PHASE_FOUR_SWING_SITES.map((site) => [
+    `swing-support-${site.id}`,
+    [
+      PHASE_FOUR_TREES[site.vine.twoPoint!.rearTreeIndex].seed,
+      PHASE_FOUR_TREES[site.vine.twoPoint!.frontTreeIndex].seed,
+    ],
+  ]),
+);
 function clearsSummitShrine(x: number, z: number) {
   return Math.hypot(x - SUMMIT_SHRINE_XZ[0], z - SUMMIT_SHRINE_XZ[1]) >= SUMMIT_SHRINE_CLEARANCE;
 }
@@ -325,13 +342,23 @@ class AssetBuilder {
         !OPAQUE_LOWER_BRANCHES.has(batch.namespace);
       mesh.userData.canopySupport = /^(support-|swing-support-|bough-)/.test(batch.namespace);
       mesh.userData.canopyCrown = /^tree-\d+$/.test(batch.namespace) && batch.layers.has("tree-crown");
+      if (/^tree-\d+$/.test(batch.namespace)) {
+        mesh.userData.canopyTreeSeed = Number(batch.namespace.slice(5));
+        mesh.userData.canopyBranch = [...batch.layers].some((layer) =>
+          layer.startsWith("tree-branch-"),
+        );
+      }
+      const swingSupportSeeds = SWING_SUPPORT_TREE_SEEDS.get(batch.namespace);
+      if (swingSupportSeeds) mesh.userData.swingSupportTreeSeeds = swingSupportSeeds;
       if (mesh.userData.cameraOccluder) accelerateStaticRaycast(mesh);
       mesh.castShadow = hasSolid;
       mesh.receiveShadow = true;
       if (batch.namespace)
-        mesh.userData.cameraOcclusionGroup = /^tree-\d+$/.test(batch.namespace)
-          ? `${parent.uuid}/${drawKey}`
-          : parent.uuid;
+        mesh.userData.cameraOcclusionGroup =
+          /^tree-\d+$/.test(batch.namespace) &&
+          batch.namespace !== PHASE_FOUR_WHOLE_FADE_TREE
+            ? `${parent.uuid}/${drawKey}`
+            : parent.uuid;
       parent.add(mesh);
     }
     return group;
@@ -514,21 +541,6 @@ export function canopyHarvestCurve(id: string) {
   return new CatmullRomCurve3(treeVineCurvePoints(
     tree.position, tree.radius, tree.height, tree.seed, harvest.vine,
   ).map(point));
-}
-
-export function createCanopyHarvestMarkerGeometry(id: string, position: Point3) {
-  const curve = canopyHarvestCurve(id);
-  // Use the same rings and frames as the harvested mesh. The cuff's surface
-  // clears its bark by 0.015, with no scale/rotation animation to cut into it.
-  const geometry = new TubeGeometry(curve, 20, 0.125, 6, false);
-  const target = point(position);
-  let nearest = 0, distance = Infinity;
-  for (let segment = 0; segment < 20; segment++) {
-    const d = curve.getPointAt((segment + 0.5) / 20).distanceToSquared(target);
-    if (d < distance) { distance = d; nearest = segment; }
-  }
-  geometry.setDrawRange(nearest * 6 * 6, 6 * 6);
-  return geometry;
 }
 
 function giantTree(

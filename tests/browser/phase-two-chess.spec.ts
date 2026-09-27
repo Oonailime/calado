@@ -192,10 +192,11 @@ test("chess tab solves the puzzle, restores monkeys, persists and starts free ga
     .toBe("r");
   await clickSquare("g7");
   await clickSquare("g8");
-  await expect(
-    page.getByText("A combinação exige", { exact: false }),
-  ).toBeVisible();
+  // The wrong move is shown and refuted on the board; skipping restores it.
+  await expect(cell("g8")).toHaveAttribute("data-piece", "wr");
+  await tab.getByRole("button", { name: "Pular demonstração" }).click();
   await expect(cell("g7")).toHaveAttribute("data-piece", "wr");
+  await expect(cell("g8")).toHaveAttribute("data-piece", "");
   await tab.getByRole("button", { name: "Reiniciar" }).click();
   await expect(cell("g1")).toHaveAttribute("data-piece", "wr");
   await expect(cell("e5")).toHaveAttribute("data-piece", "wq");

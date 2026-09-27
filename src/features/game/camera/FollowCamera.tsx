@@ -12,9 +12,18 @@ import {
 } from "three";
 import { runtime, useGame } from "../state/store";
 import { ZOOM_MIN } from "../controls/useControls";
-import { PHASE_FOUR_PLATFORMS, PHASE_FOUR_TREES } from "../world/phaseFourLayout";
+import {
+  PHASE_FOUR_CLEAR_VIEW_MIN_Y,
+  PHASE_FOUR_CLEAR_VIEW_TREES,
+  PHASE_FOUR_PLATFORMS,
+  PHASE_FOUR_TREES,
+} from "../world/phaseFourLayout";
 import { occlusionRaycast } from "./occlusionRaycast";
-import { cameraInsideTreeCrown, cameraNearCanopySupport } from "./canopyCameraZone";
+import {
+  cameraInsideTreeCrown,
+  cameraNearCanopySupport,
+  playerNearCanopyTree,
+} from "./canopyCameraZone";
 import { InstanceOcclusion } from "./instanceOcclusion";
 import { PHASE_TWO_TABLE, phaseTwoGroundHeight } from "../world/phaseTwoLayout";
 import { phase2Chess } from "../world/phase2Chess";
@@ -22,6 +31,13 @@ import { phase2Chess } from "../world/phase2Chess";
 const SHRINE_FOCUS = PHASE_FOUR_PLATFORMS.find(
   (deck) => deck.id === "summit-shrine",
 )!.center;
+// Cube puzzle framing: 35 degrees around toward the viewer's right (under 45,
+// so the front face stays the dominant one) and about 30 degrees above the
+// cube's center at the 3.6 m framing distance.
+const CUBE_VIEW_DIAGONAL = (35 * Math.PI) / 180;
+const CUBE_VIEW_RISE = 2.1;
+// Screen width taken by the cube puzzle's sidebar (width + right margin).
+const CUBE_SIDEBAR_SPACE = 330;
 
 // The volcanic map's camera fades between the standard close, character-
 // hugging framing every other map uses (at minimum zoom, so scrolling all
@@ -42,6 +58,8 @@ const OCCLUSION_SAMPLE_SECONDS = 0.06;
 const OCCLUDER_CACHE_SECONDS = 0.5;
 const RESTORE_DELAY_SECONDS = 0.08;
 const RESTORE_SECONDS = 0.24;
+/** Hand-offs between pendulums count as swinging for this long. */
+const SWING_GRACE_SECONDS = 1.5;
 
 type MaterialSnapshot = {
   opacity: number;
@@ -163,6 +181,11 @@ export default function FollowCamera({ running }: { running: boolean }) {
   const occluderGroups = useRef(new Map<string, Mesh[]>());
   const canopyTrees = useRef(new Map<number, Mesh[]>());
   const canopySupports = useRef(new Map<Mesh, Box3>());
+  // Per tree seed: every crown (leaf) mesh, and every limb that clears the
+  // view while swinging (the tree's own branches and the vine attachments).
+  const treeLeaves = useRef(new Map<number, Mesh[]>());
+  const treeLimbs = useRef(new Map<number, Mesh[]>());
+  const sinceSwing = useRef(Infinity);
   const blocked = useRef(new Set<Mesh>());
   const faded = useRef(new Map<Mesh, FadeEntry>());
   const instances = useRef(new InstanceOcclusion());
@@ -179,6 +202,8 @@ export default function FollowCamera({ running }: { running: boolean }) {
       occluderGroups.current.clear();
       canopyTrees.current.clear();
       canopySupports.current.clear();
+      treeLeaves.current.clear();
+      treeLimbs.current.clear();
     },
     [],
   );
@@ -195,8 +220,12 @@ export default function FollowCamera({ running }: { running: boolean }) {
     if (camera instanceof PerspectiveCamera) {
       // Leave the right-hand tab clear while retaining the animated board
       // in the visible portion of the map. Clear the offset on exit.
+      // The cube's sidebar (.cubeSidebar: 300px wide, 30px from the right)
+      // gets the same treatment, so the cube's right face isn't hidden.
       if (focusingChess && size.width > 760)
         camera.setViewOffset(size.width, size.height, Math.min(420, size.width * 0.92) / 2, 0, size.width, size.height);
+      else if (focusingCube && size.width > 760)
+        camera.setViewOffset(size.width, size.height, CUBE_SIDEBAR_SPACE / 2, 0, size.width, size.height);
       else if (camera.view?.enabled) camera.clearViewOffset();
     }
     // Left at 1x while focusing the shrine — that view keeps its own fixed,
@@ -238,18 +267,23 @@ export default function FollowCamera({ running }: { running: boolean }) {
       player.current.z -= Math.cos(runtime.yaw) * pull;
     }
     look.current.lerp(player.current, 1 - Math.exp(-dt * 7));
-    const riseBase = focusingCube
-      ? 0.9
-      : focusingChess
+    const riseBase = focusingChess
         ? 0.25
       : state.map === "phase2"
         ? STANDARD_RISE_BASE + (PHASE2_RISE_BASE - STANDARD_RISE_BASE) * phase2Blend
         : 2.1;
-    const rise = (riseBase + pitch * (focusingCube ? 2 : 5)) * zoom;
+    // The shrine cube is framed from a three-quarter view: swung toward the
+    // viewer's right and raised by fixed amounts, so the front, right and
+    // top faces all show. runtime.yaw (squared to a face when the puzzle
+    // opens, see RubiksCubePuzzle.tsx) still names which face is "F".
+    const rise = focusingCube
+      ? CUBE_VIEW_RISE
+      : (riseBase + pitch * 5) * zoom;
+    const viewYaw = focusingCube ? runtime.yaw + CUBE_VIEW_DIAGONAL : runtime.yaw;
     target.current.set(
-      p.x + Math.sin(runtime.yaw) * distance,
+      p.x + Math.sin(viewYaw) * distance,
       p.y + height + rise,
-      p.z + Math.cos(runtime.yaw) * distance,
+      p.z + Math.cos(viewYaw) * distance,
     );
     if (focusingChess) target.current.set(p.x, p.y + 2.6, p.z + (phase2Chess.getSnapshot().playerColor === "w" ? -1.25 : 1.25));
     camera.position.lerp(
@@ -315,6 +349,13 @@ export default function FollowCamera({ running }: { running: boolean }) {
         occluderGroups.current.clear();
         canopyTrees.current.clear();
         canopySupports.current.clear();
+        treeLeaves.current.clear();
+        treeLimbs.current.clear();
+        const collect = (map: Map<number, Mesh[]>, seed: number, mesh: Mesh) => {
+          const meshes = map.get(seed) ?? [];
+          meshes.push(mesh);
+          map.set(seed, meshes);
+        };
         scene.traverse((object) => {
           if (
             object instanceof Mesh &&
@@ -336,6 +377,15 @@ export default function FollowCamera({ running }: { running: boolean }) {
               const treeMeshes = canopyTrees.current.get(seed) ?? [];
               treeMeshes.push(object);
               canopyTrees.current.set(seed, treeMeshes);
+            }
+            if (state.map === "phase3") {
+              const seed = object.userData.canopyTreeSeed as number | undefined;
+              if (seed !== undefined && object.userData.canopyCrown)
+                collect(treeLeaves.current, seed, object);
+              if (seed !== undefined && object.userData.canopyBranch)
+                collect(treeLimbs.current, seed, object);
+              for (const supportSeed of (object.userData.swingSupportTreeSeeds as number[] | undefined) ?? [])
+                collect(treeLimbs.current, supportSeed, object);
             }
             if (state.map === "phase3" && object.userData.canopySupport) {
               if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
@@ -393,13 +443,32 @@ export default function FollowCamera({ running }: { running: boolean }) {
       // intersect that ray.
       for (const tree of PHASE_FOUR_TREES) {
         if (!cameraInsideTreeCrown(camera.position, tree)) continue;
-        for (const mesh of canopyTrees.current.get(tree.seed) ?? [])
-          blocked.current.add(mesh);
+        // A tree grouped as one unit (the high-plateau tree) fades trunk
+        // and limbs with its crown; others resolve to the crown alone.
+        for (const mesh of canopyTrees.current.get(tree.seed) ?? []) {
+          const members = occluderGroups.current.get(
+            mesh.userData.cameraOcclusionGroup as string,
+          );
+          (members ?? [mesh]).forEach((member) => blocked.current.add(member));
+        }
       }
       // A support limb can fill the foreground while missing the narrow ray
       // toward the player. Fade it when the lens approaches its actual bounds.
       for (const [mesh, bounds] of canopySupports.current)
         if (cameraNearCanopySupport(camera.position, player.current, bounds)) blocked.current.add(mesh);
+      // Around the first pendulum's two trees, leaves clear while the player
+      // moves near them; while swinging, their branches clear too.
+      const hands = runtime.vineContacts[state.puzzle.selected];
+      if ([hands.left, hands.right].some((hand) => hand?.siteId.startsWith("phase4-swing-")))
+        sinceSwing.current = 0;
+      else sinceSwing.current += dt;
+      const swinging = sinceSwing.current < SWING_GRACE_SECONDS;
+      for (const tree of PHASE_FOUR_CLEAR_VIEW_TREES) {
+        if (!playerNearCanopyTree(player.current, tree, PHASE_FOUR_CLEAR_VIEW_MIN_Y)) continue;
+        for (const mesh of treeLeaves.current.get(tree.seed) ?? []) blocked.current.add(mesh);
+        if (swinging)
+          for (const mesh of treeLimbs.current.get(tree.seed) ?? []) blocked.current.add(mesh);
+      }
     }
 
     for (const mesh of blocked.current) {

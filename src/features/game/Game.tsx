@@ -233,7 +233,12 @@ export default function Game({ active, locale, onExit }: GameProps) {
       phase2Chess.stop();
       runtime.clear();
       runtime.phase2Restore.fill(null);
-      state.configure({ map: next, phase2FromCanopy: state.map === "phase3" });
+      state.configure({
+        map: next,
+        phase2FromCanopy: state.map === "phase3",
+        // ?skip only applies to the map the link opened.
+        finalPuzzleSkip: null,
+      });
       runtime.yaw =
         next === "phase2"
           ? (state.map === "phase3" ? Math.PI : PHASE_TWO_START_YAW)

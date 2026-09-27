@@ -55,8 +55,10 @@
 .chessSquare:disabled { cursor: default; }
 .chessLight { background: #e6c38b; }
 .chessDark { background: #99643e; }
-.chessWhitePiece { color: #fffdf5; text-shadow: 1px 0 #25201c, -1px 0 #25201c, 0 1px #25201c, 0 -1px #25201c; }
-.chessBlackPiece { color: #191510; text-shadow: 0 1px #fff9; }
+.chessLight.chessLastMove { background: #eed27a; }
+.chessDark.chessLastMove { background: #c09a45; }
+.chessWhitePiece { color: #fffdf5; text-shadow: 1px 0 #25201c, -1px 0 #25201c, 0 1px #25201c, 0 -1px #25201c, 1px 1px #25201c, -1px -1px #25201c, 1px -1px #25201c, -1px 1px #25201c; }
+.chessBlackPiece { color: #16120e; text-shadow: 1px 0 #fff6, -1px 0 #fff6, 0 1px #fff6, 0 -1px #fff6; }
 .chessSquare:focus-visible { outline: 3px solid white; outline-offset: -3px; z-index: 1; }
 .chessSelected { box-shadow: inset 0 0 0 4px #ffe082; }
 .chessLegal { box-shadow: inset 0 0 0 4px #76d6ff99; }

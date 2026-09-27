@@ -87,7 +87,10 @@ export default function Experience() {
     document.documentElement.lang = locale === "pt" ? "pt-BR" : "en";
   }, [locale]);
   useEffect(() => {
-    if (!["phase2", "phase3", "phase4"].includes(new URLSearchParams(window.location.search).get("map") ?? "")) return;
+    // Direct phase links, and ?skip (which also works on the islands), open
+    // the game right away instead of the story.
+    const query = new URLSearchParams(window.location.search);
+    if (!["phase2", "phase3", "phase4"].includes(query.get("map") ?? "") && !query.has("skip")) return;
     let cancelled = false;
     import("@/features/game/Game").then((module) => {
       if (cancelled) return;

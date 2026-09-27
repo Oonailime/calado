@@ -156,3 +156,84 @@ test("the tab publishes the move before the 3D animation finishes; exit cancels 
   assert.equal(phase2Chess.getSnapshot().mode, "idle");
   unregister();
 });
+
+/** Minimal UCI worker: answers the handshake and one scripted analysis. */
+function fakeStockfish(info: string, bestmove: string) {
+  return class {
+    onmessage: ((event: { data: string }) => void) | null = null;
+    onerror: (() => void) | null = null;
+    postMessage(command: string) {
+      const reply = (data: string) =>
+        setTimeout(() => this.onmessage?.({ data }), 0);
+      if (command === "uci") reply("uciok");
+      else if (command === "isready") reply("readyok");
+      else if (command.startsWith("go ")) reply(`${info}\nbestmove ${bestmove}`);
+    }
+    terminate() {}
+  };
+}
+
+async function reachSecondPly() {
+  phase2Chess.stop();
+  useGame.setState({ phase2Pieces: [true, true, true] });
+  phase2Chess.startHistorical();
+  sit(0, 0);
+  await phase2Chess.choose("g1");
+  await phase2Chess.choose("g7");
+  return phase2Chess.getSnapshot().fen;
+}
+
+test("a wrong move is replayed slowly with Stockfish's refutation, then undone", async () => {
+  const globals = globalThis as { Worker?: unknown };
+  const previous = globals.Worker;
+  globals.Worker = fakeStockfish("info depth 12 score cp 420 pv f8g8 d1g1", "f8g8");
+  const played: { san: string; pace: number }[] = [];
+  const unregister = phase2Chess.registerAnimator(async (move, pace) => {
+    played.push({ san: move.san, pace });
+  });
+  try {
+    const before = await reachSecondPly();
+    played.length = 0;
+    await phase2Chess.choose("g7");
+    await phase2Chess.choose("g8");
+    assert.deepEqual(played, [
+      { san: "Rg8+", pace: 3 },
+      { san: "Kxg8", pace: 3 },
+      { san: "Rg1+", pace: 3 },
+    ]);
+    const after = phase2Chess.getSnapshot();
+    assert.equal(after.fen, before);
+    assert.equal(after.demo, false);
+    assert.equal(after.thinking, false);
+    assert.equal(after.lastMove?.san, "fxe5");
+    assert.match(after.message, /Melhor defesa das pretas: 23…Kxg8 24\.Rg1\+\./);
+  } finally {
+    unregister();
+    phase2Chess.stop();
+    globals.Worker = previous;
+  }
+});
+
+test("skipping the demonstration restores the real position at once", async () => {
+  const globals = globalThis as { Worker?: unknown };
+  const previous = globals.Worker;
+  globals.Worker = fakeStockfish("info depth 12 score cp 420 pv f8g8 d1g1", "f8g8");
+  try {
+    const before = await reachSecondPly();
+    await phase2Chess.choose("g7");
+    const pending = phase2Chess.choose("g8");
+    assert.equal(phase2Chess.getSnapshot().demo, true);
+    assert.equal(new Chess(phase2Chess.getSnapshot().fen).get("g8")?.type, "r");
+    phase2Chess.skipDemo();
+    assert.equal(phase2Chess.getSnapshot().fen, before);
+    assert.equal(phase2Chess.getSnapshot().demo, false);
+    await pending;
+    assert.equal(phase2Chess.getSnapshot().fen, before);
+    await phase2Chess.choose("g7");
+    await phase2Chess.choose("f7");
+    assert.match(phase2Chess.getSnapshot().message, /^Boa!/);
+  } finally {
+    phase2Chess.stop();
+    globals.Worker = previous;
+  }
+});

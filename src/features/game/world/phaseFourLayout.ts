@@ -96,6 +96,15 @@ export const PHASE_FOUR_PLATFORMS = [
   },
 ] as const;
 
+/**
+ * `?skip` start: on the summit shrine deck, facing the cube (-z) from just
+ * outside its pedestal and within the range where E opens it.
+ */
+export function phaseFourShrineSpawn(id: CharacterId): Vec3 {
+  const [x, y, z] = PHASE_FOUR_PLATFORMS.find((deck) => deck.id === "summit-shrine")!.center;
+  return { x: x + (id - 1) * 1.3, y: y + PHASE_FOUR_FEET_OFFSET + 0.1, z: z + 2 };
+}
+
 function deckCenter(id: string): Point3 {
   return PHASE_FOUR_PLATFORMS.find((deck) => deck.id === id)!.center;
 }
@@ -409,6 +418,18 @@ export const PHASE_FOUR_SWING_SITES: ArborealSite[] = SWING_SPANS.map(
     };
   },
 );
+// The first pendulum hangs between the high-plateau tree (rear) and the tree
+// right in front of it. Near them, on the plateau or swinging the upper
+// route, their leaves (and, while swinging, their branches) turn
+// transparent so the path ahead stays visible.
+const FIRST_SWING_SPAN = SWING_SPANS[0];
+export const PHASE_FOUR_CLEAR_VIEW_TREES = [
+  PHASE_FOUR_TREES[FIRST_SWING_SPAN.rearTreeIndex],
+  PHASE_FOUR_TREES[FIRST_SWING_SPAN.frontTreeIndex],
+] as const;
+/** Below this height (lower decks, arrival) those trees stay opaque. */
+export const PHASE_FOUR_CLEAR_VIEW_MIN_Y =
+  PHASE_FOUR_PLATFORMS.find((deck) => deck.id === "vine-plateau")!.center[1] - 4;
 export const PHASE_FOUR_SITES: readonly ArborealSite[] = [
   PHASE_FOUR_LADDER_SITE,
   ...PHASE_FOUR_SWING_SITES,

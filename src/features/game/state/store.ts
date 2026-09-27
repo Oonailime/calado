@@ -21,6 +21,7 @@ import {
   construct,
   collectLog,
   eatBanana,
+  finalPuzzleSkipState,
   finishCubeTurn,
   initialPuzzle,
   interactCanopy,
@@ -59,7 +60,22 @@ export function phase2SkipWalk(): boolean {
   if (typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).has("skip");
 }
+
+// The same URL flag on the islands (?skip or ?map=islands&skip) or phase 3
+// (?map=phase3&skip) starts at that map's final puzzle instead: the puzzle
+// state comes from finalPuzzleSkipState and the monkeys spawn beside it
+// (see finalPuzzleSpawn in Character.tsx). Portals clear it, so only the
+// map opened by the link is skipped.
+function initialFinalPuzzleSkip(): "islands" | "phase3" | null {
+  if (typeof window === "undefined") return null;
+  if (!new URLSearchParams(window.location.search).has("skip")) return null;
+  const map = initialGameMap();
+  return map === "phase2" ? null : map;
+}
+const FINAL_PUZZLE_SKIP = initialFinalPuzzleSkip();
+
 type Store = {
+  finalPuzzleSkip: "islands" | "phase3" | null;
   phase2FromCanopy: boolean;
   phase2Pieces: [boolean, boolean, boolean];
   collectChessPiece: (index: number) => void;
@@ -105,6 +121,7 @@ type Store = {
     patch: Partial<
       Pick<
         Store,
+        | "finalPuzzleSkip"
         | "phase2FromCanopy"
         | "paused"
         | "muted"
@@ -124,6 +141,7 @@ type Store = {
   ) => void;
 };
 export const useGame = create<Store>((set) => ({
+  finalPuzzleSkip: FINAL_PUZZLE_SKIP,
   phase2FromCanopy: phase2SkipWalk(),
   phase2Pieces: phase2SkipWalk() ? [true, true, true] : [false, false, false],
   collectChessPiece: (index) => set(s => {
@@ -156,7 +174,7 @@ export const useGame = create<Store>((set) => ({
     });
     return awarded;
   },
-  puzzle: initialPuzzle(),
+  puzzle: FINAL_PUZZLE_SKIP ? finalPuzzleSkipState(FINAL_PUZZLE_SKIP) : initialPuzzle(),
   paused: false,
   muted: false,
   quality: "high",
@@ -166,7 +184,10 @@ export const useGame = create<Store>((set) => ({
   ambientVolume: 0.3,
   effectsVolume: 0.4,
   abilityKey: "KeyF",
-  learned: {},
+  // Skipping to the islands' final puzzle also skips the opening tutorial hints.
+  learned: (FINAL_PUZZLE_SKIP === "islands"
+    ? { move: true, camera: true, jump: true }
+    : {}) as Record<string, boolean>,
   zone: 0,
   lockOpen: false,
   cubePuzzleOpen: false,

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BoxGeometry, Mesh, MeshStandardMaterial, Raycaster, TubeGeometry, Vector3 } from "three";
+import { BoxGeometry, Mesh, MeshStandardMaterial, Raycaster, Vector3, type Material } from "three";
 import { accelerateStaticRaycast } from "../src/features/game/camera/staticRaycast";
 import { islandFollowerTarget } from "../src/features/game/characters/followerNavigation";
 import { CANOPY_BRIDGE_CURVE, CANOPY_BRIDGE_SITE, CANOPY_HARVESTS, CANOPY_PRISM_SOCKETS, CANOPY_STUMPS } from "../src/features/game/world/canopyCooperationLayout";
-import { canopyHarvestCurve, createCanopyHarvestMarkerGeometry, phaseFourBranchVinePoints, phaseFourPathCurve, PHASE_FOUR_BRANCH_CLEARANCE } from "../src/features/game/world/phaseFourAssets";
+import { canopyHarvestCurve, createPhaseFourEnvironment, phaseFourBranchVinePoints, phaseFourPathCurve, PHASE_FOUR_BRANCH_CLEARANCE } from "../src/features/game/world/phaseFourAssets";
 import { PHASE_FOUR_PATHS, PHASE_FOUR_PLATFORMS } from "../src/features/game/world/phaseFourLayout";
 
 test("built vine stays straight and connects the left corners of both decks", () => {
@@ -36,22 +36,30 @@ test("prism centres lie on the pedestal's three front faces", () => {
   }
 });
 
-test("harvest cuffs follow the same polygonal surface without crossing the vine", () => {
+test("each harvestable vine is its own scenery group, so its whole length can blink alone", () => {
+  const scene = createPhaseFourEnvironment();
+  const materials = new Map<Material, number>();
+  scene.traverse(object => {
+    if (object instanceof Mesh) materials.set(object.material as Material, (materials.get(object.material as Material) ?? 0) + 1);
+  });
   for (const site of CANOPY_HARVESTS) {
+    const group = scene.getObjectByName(`Phase4_CanopyVillage_liana-${site.id}`);
+    assert.ok(group, `${site.id} vine group`);
+    const meshes = group.children.filter((child): child is Mesh => child instanceof Mesh);
+    assert.ok(meshes.length > 0);
+    // Fading its material must not fade any other scenery.
+    for (const mesh of meshes) assert.equal(materials.get(mesh.material as Material), 1);
+    // The grab spot sits on that same vine.
     const curve = canopyHarvestCurve(site.id);
-    const bark = new TubeGeometry(curve, 20, 0.11, 6, false);
-    const cuff = createCanopyHarvestMarkerGeometry(site.id, site.position);
-    const vertices = cuff.getAttribute("position"), barkVertices = bark.getAttribute("position");
-    const indices = cuff.index!;
-    for (let i = cuff.drawRange.start; i < cuff.drawRange.start + cuff.drawRange.count; i++) {
-      const index = indices.getX(i);
-      const a = new Vector3().fromBufferAttribute(vertices, index);
-      const b = new Vector3().fromBufferAttribute(barkVertices, index);
-      assert.ok(Math.abs(a.distanceTo(b) - 0.015) < 0.00001);
-      assert.ok(a.distanceTo(new Vector3(...site.position)) < 1.5);
-    }
-    cuff.dispose(); bark.dispose();
+    const grab = new Vector3(...site.position);
+    const nearest = Math.min(...curve.getSpacedPoints(200).map(p => p.distanceTo(grab)));
+    assert.ok(nearest < 1.5);
   }
+  scene.traverse(object => {
+    if (!(object instanceof Mesh)) return;
+    object.geometry.dispose();
+    (Array.isArray(object.material) ? object.material : [object.material]).forEach(material => material.dispose());
+  });
 });
 
 test("decorative lianas spiral around each walking bough outside its bark", () => {

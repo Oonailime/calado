@@ -186,9 +186,9 @@ export default function Controls({
   else if (!state.learned.jump && state.zone === 0)
     hint = instruction(
       "Aprenda a pular",
-      "Pressione Espaço para pular obstáculos. Depois, siga até o símbolo dourado próximo à ponte.",
+      "Pressione Espaço para pular obstáculos. Depois, siga até o círculo dourado próximo à ponte.",
       "Learn to jump",
-      "Press Space to jump over obstacles. Then follow the path to the golden symbol near the bridge.",
+      "Press Space to jump over obstacles. Then follow the path to the golden circle near the bridge.",
     );
   else if (!p.bridge) {
     if (!p.powers[1])
@@ -239,9 +239,9 @@ export default function Controls({
   } else if (!p.unlocked && state.zone < 3)
     hint = instruction(
       "Atravesse para a segunda ilha",
-      "A ponte está pronta. Atravesse-a e siga em frente até encontrar o cadeado e os símbolos dourado e prateado.",
+      "A ponte está pronta. Atravesse-a e siga em frente até encontrar o cadeado, o triângulo prateado e o círculo dourado.",
       "Cross to the second island",
-      "The bridge is ready. Cross it and continue until you find the padlock and the golden and silver symbols.",
+      "The bridge is ready. Cross it and continue until you find the padlock, the silver triangle and the golden circle.",
     );
   else if (!p.unlocked && state.zone === 3) {
     if (!p.powers[0])
@@ -249,30 +249,30 @@ export default function Controls({
         p.selected !== 0
           ? instruction(
               "Revele a mensagem escondida",
-              "Pressione 2 para controlar Mizaru, o macaco prateado, e leve-o até o símbolo prateado.",
+              "Pressione 2 para controlar Mizaru, o macaco prateado, e leve-o até o triângulo prateado.",
               "Reveal the hidden message",
-              "Press 2 to control Mizaru, the silver monkey, and take him to the silver symbol.",
+              "Press 2 to control Mizaru, the silver monkey, and take him to the silver triangle.",
             )
           : instruction(
               "Ative o poder de Mizaru (2)",
-              `Fique sobre o símbolo prateado e pressione ${f}. Ao trocar de personagem, o poder continuará ativo.`,
+              `Posicione Mizaru (2) dentro do triângulo prateado e pressione ${f}. Ao trocar de personagem, o poder continuará ativo.`,
               "Activate Mizaru's power (2)",
-              `Stand on the silver symbol and press ${f}. His power will remain active when you switch characters.`,
+              `Place Mizaru (2) inside the silver triangle and press ${f}. His power will remain active when you switch characters.`,
             );
     else if (!p.powers[1])
       hint =
         p.selected !== 1
           ? instruction(
               "Silencie a barreira",
-              "Mantenha o poder de Mizaru (2) ativo e pressione 1 para controlar Kikazaru. Leve-o ao símbolo dourado.",
+              "Mantenha o poder de Mizaru (2) ativo e pressione 1 para controlar Kikazaru. Leve-o ao círculo dourado.",
               "Silence the barrier",
-              "Keep Mizaru (2)'s power active and press 1 to control Kikazaru. Take him to the golden symbol.",
+              "Keep Mizaru (2)'s power active and press 1 to control Kikazaru. Take him to the golden circle.",
             )
           : instruction(
               "Ative o poder de Kikazaru (1)",
-              `Fique sobre o símbolo dourado e pressione ${f}. Com os dois poderes ativos, Mizaru (2) poderá perceber a sequência.`,
+              `Posicione Kikazaru (1) dentro do círculo dourado e pressione ${f}. Com os dois poderes ativos, Mizaru (2) poderá perceber a sequência.`,
               "Activate Kikazaru's power (1)",
-              `Stand on the golden symbol and press ${f}. With both powers active, Mizaru (2) will be able to perceive the sequence.`,
+              `Place Kikazaru (1) inside the golden circle and press ${f}. With both powers active, Mizaru (2) will be able to perceive the sequence.`,
             );
     else if (p.selected === 0)
       hint = instruction(

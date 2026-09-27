@@ -1,3 +1,5 @@
+import { parseStockfishInfo, type StockfishAnalysis } from "./chessRefutation";
+
 export type StockfishElo = 800 | 1600 | 2000;
 
 export class StockfishEngine {
@@ -11,6 +13,8 @@ export class StockfishEngine {
     reject: (error: Error) => void;
   }>();
   private searching = false;
+  /** Full strength (no Elo cap) is used to analyse the historical challenge. */
+  constructor(private readonly limitStrength = true) {}
   get effectiveElo() {
     return Math.max(this.range.min, Math.min(this.range.max, this.elo));
   }
@@ -55,7 +59,9 @@ export class StockfishEngine {
       const uci = this.wait((line) => line === "uciok");
       this.worker!.postMessage("uci");
       await uci;
-      this.setElo(this.elo);
+      if (this.limitStrength) this.setElo(this.elo);
+      else
+        this.worker!.postMessage("setoption name UCI_LimitStrength value false");
       const ready = this.wait((line) => line === "readyok");
       this.worker!.postMessage("isready");
       await ready;
@@ -78,6 +84,26 @@ export class StockfishEngine {
       this.worker!.postMessage(`position fen ${fen}`);
       this.worker!.postMessage("go movetime 700");
       return (await reply).split(/\s+/)[1];
+    } finally {
+      this.searching = false;
+    }
+  }
+  /** Searches `fen` and returns the final score and principal variation. */
+  async analyse(fen: string, movetime = 1500): Promise<StockfishAnalysis> {
+    if (this.searching) throw new Error("Já existe uma busca ativa.");
+    this.searching = true;
+    try {
+      await this.initialize();
+      let latest: StockfishAnalysis = { pv: [] };
+      const done = this.wait((line) => {
+        const info = parseStockfishInfo(line);
+        if (info) latest = info;
+        return line.startsWith("bestmove ");
+      });
+      this.worker!.postMessage(`position fen ${fen}`);
+      this.worker!.postMessage(`go movetime ${movetime}`);
+      await done;
+      return latest;
     } finally {
       this.searching = false;
     }

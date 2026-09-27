@@ -307,7 +307,8 @@ export default function PhaseFour({ running, onPortalEnter }: { running: boolean
     return data;
   }, []);
   useLayoutEffect(() => {
-    runtime.yaw = -0.47;
+    // A ?skip start (phaseFourShrineSpawn) faces the shrine cube instead.
+    runtime.yaw = useGame.getState().finalPuzzleSkip === "phase3" ? 0 : -0.47;
     runtime.pitch = 0.28;
   }, []);
   useEffect(

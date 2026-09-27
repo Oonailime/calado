@@ -59,6 +59,28 @@ export const initialPuzzle = (): PuzzleState => ({
   mizaruSightRestored: false,
   kikazaruHearingRestored: false,
 });
+/**
+ * The `?skip` dev shortcut on the islands and phase 3: every step before that
+ * map's final puzzle is already done. Islands: the bridge is built, leaving
+ * the padlock and final totem. Phase 3: the canopy cooperation is complete
+ * and all three prisms are delivered, leaving the shrine cube.
+ */
+export function finalPuzzleSkipState(map: "islands" | "phase3"): PuzzleState {
+  const state = initialPuzzle();
+  if (map === "islands")
+    return { ...state, logs: [true, true, true], bridge: true };
+  return {
+    ...state,
+    canopyFocused: true,
+    canopyVines: [true, true, true],
+    canopyGoldTied: true,
+    canopyBridgeBuilt: true,
+    cubePieces: [true, true, true],
+    cubeDelivered: [true, true, true],
+    mizaruSightRestored: true,
+    kikazaruHearingRestored: true,
+  };
+}
 export function restoreMizaruSight(state: PuzzleState): PuzzleState {
   return state.mizaruSightRestored ? state : { ...state, mizaruSightRestored: true };
 }

@@ -30,18 +30,15 @@ const LEAF_OPACITY = 0.5;
 const LEAF_OPACITY_POWER = 0.5;
 
 // While actually rising through a jump (see LocomotionState "JUMP" in
-// monkeyMotion.ts), the vine wreath is swapped for a ring of leaves and
-// pebbles that circles the character instead. On the way back down neither
-// is shown, per the brief.
+// monkeyMotion.ts), the vine wreath is swapped for a ring of leaves that
+// circles the character instead. On the way back down neither is shown, per
+// the brief.
 const SPIRAL_HEIGHT = 2.05;
 const SPIRAL_RADIUS = 1.52;
 const SPIRAL_BULGE = 0.16;
 const SPIRAL_SPIN_RADIANS_PER_SECOND = 5;
-const SPIRAL_LEAF_COUNT = 8;
+const SPIRAL_LEAF_COUNT = 15;
 const SPIRAL_LEAF_SCALE = 0.15;
-const SPIRAL_PEBBLE_COUNT = 7;
-const SPIRAL_PEBBLE_SCALE = 0.045;
-const SPIRAL_PEBBLE_COLOR = "#c7b494";
 const SPIRAL_DEBRIS_OPACITY = 0.85;
 const SPIRAL_BOB_AMPLITUDE = 0.045;
 const SPIRAL_BOB_SPEED = 1.3;
@@ -81,13 +78,13 @@ function braidStrandCurve(seed: number, phase: number) {
 
 type Debris = {
   position: Vector3;
-  quaternion?: Quaternion;
+  quaternion: Quaternion;
   scale: number;
   color: string;
   phase: number;
 };
 
-function scatterDebris(seed: number, count: number, scale: number, withRotation: boolean) {
+function scatterDebris(seed: number, count: number, scale: number) {
   const rng = random(seed);
   return Array.from({ length: count }, (): Debris => {
     const t = rng();
@@ -95,9 +92,7 @@ function scatterDebris(seed: number, count: number, scale: number, withRotation:
     const radius = SPIRAL_RADIUS * (1 + Math.sin(t * Math.PI) * SPIRAL_BULGE) * (0.55 + rng() * 0.5);
     return {
       position: new Vector3(Math.sin(angle) * radius, t * SPIRAL_HEIGHT, Math.cos(angle) * radius),
-      quaternion: withRotation
-        ? new Quaternion().setFromAxisAngle(UP, rng() * Math.PI * 2)
-        : undefined,
+      quaternion: new Quaternion().setFromAxisAngle(UP, rng() * Math.PI * 2),
       scale: scale * (0.7 + rng() * 0.6),
       color: "",
       phase: rng() * Math.PI * 2,
@@ -128,7 +123,6 @@ export default function SelectionVine({
   const spiralGroup = useRef<Group>(null);
   const prewarmed = useRef(false);
   const leafRefs = useRef<(Mesh | null)[]>([]);
-  const pebbleRefs = useRef<(Mesh | null)[]>([]);
 
   const { strandGeometries, leafGeometry, leafPlacements } = useMemo(() => {
     const seed = id * 37 + 11;
@@ -162,14 +156,10 @@ export default function SelectionVine({
   const spiralLeafGeometry = useMemo(() => createPhaseFourVineLeafGeometry(), []);
   const spiralLeaves = useMemo(
     () =>
-      scatterDebris(id * 61 + 5, SPIRAL_LEAF_COUNT, SPIRAL_LEAF_SCALE, true).map((leaf, i) => ({
+      scatterDebris(id * 61 + 5, SPIRAL_LEAF_COUNT, SPIRAL_LEAF_SCALE).map((leaf, i) => ({
         ...leaf,
         color: PHASE_FOUR_VINE_LEAF_COLORS[i % PHASE_FOUR_VINE_LEAF_COLORS.length],
       })),
-    [id],
-  );
-  const spiralPebbles = useMemo(
-    () => scatterDebris(id * 83 + 9, SPIRAL_PEBBLE_COUNT, SPIRAL_PEBBLE_SCALE, false),
     [id],
   );
 
@@ -228,13 +218,6 @@ export default function SelectionVine({
             node.position.y =
               leaf.position.y + Math.sin(elapsed * SPIRAL_BOB_SPEED + leaf.phase) * SPIRAL_BOB_AMPLITUDE;
         });
-        spiralPebbles.forEach((pebble, i) => {
-          const node = pebbleRefs.current[i];
-          if (node)
-            node.position.y =
-              pebble.position.y +
-              Math.sin(elapsed * SPIRAL_BOB_SPEED * 1.3 + pebble.phase) * SPIRAL_BOB_AMPLITUDE;
-        });
       }
     }
   });
@@ -280,23 +263,6 @@ export default function SelectionVine({
             scale={leaf.scale}
           >
             <meshBasicMaterial color={leaf.color} transparent opacity={SPIRAL_DEBRIS_OPACITY} />
-          </mesh>
-        ))}
-        {spiralPebbles.map((pebble, i) => (
-          <mesh
-            key={i}
-            ref={(node) => {
-              pebbleRefs.current[i] = node;
-            }}
-            position={pebble.position}
-            scale={pebble.scale}
-          >
-            <icosahedronGeometry args={[1, 0]} />
-            <meshBasicMaterial
-              color={SPIRAL_PEBBLE_COLOR}
-              transparent
-              opacity={SPIRAL_DEBRIS_OPACITY}
-            />
           </mesh>
         ))}
       </group>

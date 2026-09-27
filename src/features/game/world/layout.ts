@@ -57,6 +57,11 @@ export const CHARACTER_SPAWN_Y =
   CHARACTER_CAPSULE_RADIUS +
   0.1;
 
+/** `?skip` start: on island 2, just short of the silver and golden symbols. */
+export function islandFinalPuzzleSpawn(id: CharacterId): Vec3 {
+  return { x: (id - 1) * 1.45, y: CHARACTER_SPAWN_Y, z: -21.5 };
+}
+
 export function characterSpawn(id: CharacterId, checkpoint = false): Vec3 {
   return {
     x: (id - 1) * 1.45,

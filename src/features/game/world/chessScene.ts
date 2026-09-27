@@ -14,7 +14,12 @@ const KINDS: Record<PieceSymbol, ChessPieceKind> = {
   k: "king",
 };
 const activeAnimations = new WeakMap<Mesh, () => void>();
-export function animateChessMove(piece: Mesh, from: string, to: string) {
+export function animateChessMove(
+  piece: Mesh,
+  from: string,
+  to: string,
+  pace = 1,
+) {
   activeAnimations.get(piece)?.();
   const start = squareToWorldPosition(from),
     end = squareToWorldPosition(to);
@@ -26,14 +31,14 @@ export function animateChessMove(piece: Mesh, from: string, to: string) {
     };
     const timeline = gsap
       .timeline({ onComplete: finish, onInterrupt: finish })
-      .to(piece.position, { y: start.y + 0.12, duration: 0.06 })
+      .to(piece.position, { y: start.y + 0.12, duration: 0.06 * pace })
       .to(piece.position, {
         x: end.x,
         z: end.z,
-        duration: 0.16,
+        duration: 0.16 * pace,
         ease: "power1.inOut",
       })
-      .to(piece.position, { y: end.y, duration: 0.06 });
+      .to(piece.position, { y: end.y, duration: 0.06 * pace });
     activeAnimations.set(piece, () => {
       timeline.kill();
       finish();
@@ -105,7 +110,8 @@ export class ChessScene {
     this.squares = next;
     this.group.userData.fen = fen;
   }
-  async animate(move: Move) {
+  /** `pace` > 1 slows the slide (used to demonstrate refutations). */
+  async animate(move: Move, pace = 1) {
     const generation = this.generation;
     const mesh = this.squares.get(move.from);
     if (!mesh) return;
@@ -117,7 +123,7 @@ export class ChessScene {
       captured.visible = false;
       this.squares.delete(capturedSquare);
     }
-    const jobs = [animateChessMove(mesh, move.from, move.to)];
+    const jobs = [animateChessMove(mesh, move.from, move.to, pace)];
     this.squares.delete(move.from);
     this.squares.set(move.to, mesh);
     if (move.isKingsideCastle() || move.isQueensideCastle()) {
@@ -125,7 +131,7 @@ export class ChessScene {
         to = `${move.isKingsideCastle() ? "f" : "d"}${move.from[1]}`;
       const rook = this.squares.get(from);
       if (rook) {
-        jobs.push(animateChessMove(rook, from, to));
+        jobs.push(animateChessMove(rook, from, to, pace));
         this.squares.delete(from);
         this.squares.set(to, rook);
       }
