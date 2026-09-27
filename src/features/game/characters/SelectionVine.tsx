@@ -23,11 +23,11 @@ const STRAND_RADIUS = 0.008;
 const STRAND_COUNT = 10;
 const LEAF_COUNT = 16;
 const BARK_TONES = ["#5c4327", "#6b4f2c", "#4a3620"];
-const SPIN_RADIANS_PER_SECOND = 0.1;
-const STRAND_OPACITY = 0.5;
-const STRAND_OPACITY_POWER = 0.5;
-const LEAF_OPACITY = 0.5;
-const LEAF_OPACITY_POWER = 0.5;
+const SPIN_RADIANS_PER_SECOND = 0.3;
+const STRAND_OPACITY = 1;
+const STRAND_OPACITY_POWER = 1;
+const LEAF_OPACITY = 1;
+const LEAF_OPACITY_POWER = 1;
 
 // While actually rising through a jump (see LocomotionState "JUMP" in
 // monkeyMotion.ts), the vine wreath is swapped for a ring of leaves that
@@ -38,8 +38,8 @@ const SPIRAL_RADIUS = 1.52;
 const SPIRAL_BULGE = 0.16;
 const SPIRAL_SPIN_RADIANS_PER_SECOND = 5;
 const SPIRAL_LEAF_COUNT = 15;
-const SPIRAL_LEAF_SCALE = 0.15;
-const SPIRAL_DEBRIS_OPACITY = 0.85;
+const SPIRAL_LEAF_SCALE = 0.3;
+const SPIRAL_DEBRIS_OPACITY = 1;
 const SPIRAL_BOB_AMPLITUDE = 0.045;
 const SPIRAL_BOB_SPEED = 1.3;
 
