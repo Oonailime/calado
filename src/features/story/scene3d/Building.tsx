@@ -10,7 +10,7 @@ import {
   buildingIndex,
   type BuildingId,
 } from "./buildings";
-import { PATH_POINTS, houseYaw, houseDoorOpenness } from "./cameraRig";
+import { houseYaw, houseDoorOpenness, ORIGINAL_ROUTE, type StoryRoute } from "./cameraRig";
 import { letteringTexture } from "./signage";
 import type { Locale } from "@/content/story";
 
@@ -52,11 +52,14 @@ export default function Building({
   progress,
   reduced,
   locale,
+  route = ORIGINAL_ROUTE,
 }: {
   id: BuildingId;
   progress: number;
   reduced: boolean;
   locale: Locale;
+  // Where the houses stand and how large they are drawn (design2 has its own).
+  route?: StoryRoute;
 }) {
   const parts = BUILDINGS[id];
   const gltfs = useLoader(GLTFLoader, [
@@ -127,15 +130,15 @@ export default function Building({
     return pivot;
   }, [gltfs]);
   const index = buildingIndex(id);
-  const point = PATH_POINTS[index];
+  const point = route.points[index];
   const doorRef = useRef<Group>(null);
   useFrame(() => {
     if (!doorRef.current) return;
-    const openness = houseDoorOpenness(index, progress, reduced);
+    const openness = houseDoorOpenness(index, progress, reduced, route);
     doorRef.current.rotation.y = DOOR_OPEN_ANGLE * openness;
   });
   return (
-    <group position={[point.x, 0, point.z]} rotation={[0, houseYaw(index), 0]}>
+    <group position={[point.x, 0, point.z]} rotation={[0, houseYaw(index, route), 0]} scale={route.houseScale}>
       <primitive object={fixed} />
       <primitive ref={doorRef} object={doorPivot} />
       {/* Transparent lettering integrated into the +Z entrance facade. */}

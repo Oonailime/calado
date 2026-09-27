@@ -12,6 +12,7 @@ npm run dev
 ```
 
 - `http://localhost:3000`: história interativa de oito cenas, portfólio de projetos e entrada para o jogo.
+- `http://localhost:3000/design2`: alternativa experimental da abertura, com o mesmo percurso e scroll em um cenário vulcânico com cerejeiras, xadrez e lareira.
 - `http://localhost:3000/?map=phase2`: abre diretamente a região vulcânica e o desafio de xadrez.
 - `http://localhost:3000/?map=phase3`: abre diretamente a região da copa, com platôs e cipós.
 - `http://localhost:3000/?map=phase4`: alias compatível de `phase3`.

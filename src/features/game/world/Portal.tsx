@@ -25,6 +25,8 @@ import {
   portalPieceProgress,
 } from "./portalAnimation";
 
+import { batchPortalParts, createPortalSurfaceMaterial } from "./portalRendering";
+
 export const PORTAL_MODEL_URL = "/assets/models/portal/zen-portal.glb";
 
 type PortalPart = {
@@ -36,6 +38,8 @@ type PortalPart = {
 
 type PreparedPortal = {
   structure: PortalPart[];
+  settled: ReturnType<typeof batchPortalParts>;
+  materials: Material[];
   inner: PortalPart[];
   vegetation: PortalPart[];
   innerBase: number;
@@ -56,6 +60,15 @@ function preparePortal(gltf: GLTF): PreparedPortal {
   const vegetation: PortalPart[] = [];
   const bounds = new Box3();
   const geometries: BufferGeometry[] = [];
+  const surfaceMaterials = new Map<Material, Material>();
+  const prepareSurface = (source: Material) => {
+    let material = surfaceMaterials.get(source);
+    if (!material) {
+      material = createPortalSurfaceMaterial(source);
+      surfaceMaterials.set(source, material);
+    }
+    return material;
+  };
 
   gltf.scene.traverse((child) => {
     if (!(child as Mesh).isMesh) return;
@@ -76,9 +89,12 @@ function preparePortal(gltf: GLTF): PreparedPortal {
       material: mesh.material,
       center: partBounds.getCenter(new Vector3()),
     };
-    if (mesh.name === "PortalSurface" || mesh.name === "PortalGelHighlights")
+    if (mesh.name === "PortalSurface" || mesh.name === "PortalGelHighlights") {
+      part.material = Array.isArray(part.material)
+        ? part.material.map(prepareSurface)
+        : prepareSurface(part.material);
       inner.push(part);
-    else if (mesh.name.startsWith("Grass")) vegetation.push(part);
+    } else if (mesh.name.startsWith("Grass")) vegetation.push(part);
     else structure.push(part);
   });
 
@@ -87,19 +103,25 @@ function preparePortal(gltf: GLTF): PreparedPortal {
       portalPartOrder(left.name) - portalPartOrder(right.name) ||
       left.name.localeCompare(right.name),
   );
+  const settled = batchPortalParts(structure);
+  const batchedVegetation = batchPortalParts(vegetation);
+  const ownedGeometries = new Set(geometries);
+  for (const part of [...settled, ...batchedVegetation]) ownedGeometries.add(part.geometry);
   const center = bounds.getCenter(new Vector3());
   const innerBase = Math.min(
     ...inner.map((part) => part.geometry.boundingBox?.min.z ?? 0),
   );
   return {
     structure,
+    settled,
+    materials: [...surfaceMaterials.values()],
     inner,
-    vegetation,
+    vegetation: batchedVegetation.map((part, index) => ({ ...part, name: `grass-batch-${index}`, center: new Vector3() })),
     innerBase,
     // The asset is Z-up. Its rotated lowest point becomes local Y=0, while X
     // and depth are centered over the physical foundation.
     normalization: [-center.x, -bounds.min.z, center.y],
-    geometries,
+    geometries: [...ownedGeometries],
   };
 }
 
@@ -179,6 +201,8 @@ export default function Portal({
 }) {
   const model = useMemo(() => preparePortal(gltf), [gltf]);
   const pieces = useRef<(Group | null)[]>([]);
+  const animatedStructure = useRef<Group>(null);
+  const settledStructure = useRef<Group>(null);
   const letters = useRef<(Group | null)[]>([]);
   const inner = useRef<Group>(null);
   const vegetation = useRef<Group>(null);
@@ -189,7 +213,10 @@ export default function Portal({
   const wasInside = useRef(false);
 
   useEffect(
-    () => () => model.geometries.forEach((geometry) => geometry.dispose()),
+    () => () => {
+      model.geometries.forEach((geometry) => geometry.dispose());
+      model.materials.forEach((material) => material.dispose());
+    },
     [model],
   );
   useEffect(() => {
@@ -210,7 +237,10 @@ export default function Portal({
     const progress = construction.current;
     const totalPieces = model.structure.length + LETTER_MARKS.length;
 
-    model.structure.forEach((part, index) => {
+    const settled = built && progress >= 1;
+    if (animatedStructure.current) animatedStructure.current.visible = built && !settled;
+    if (settledStructure.current) settledStructure.current.visible = settled;
+    if (!settled) model.structure.forEach((part, index) => {
       const piece = pieces.current[index];
       if (!piece) return;
       const local = portalPieceProgress(index, totalPieces, progress);
@@ -291,6 +321,12 @@ export default function Portal({
         </RigidBody>
       )}
       <group rotation={[-Math.PI / 2, 0, 0]} position={model.normalization}>
+        <group ref={settledStructure} name="portal-settled-structure" visible={false}>
+          {model.settled.map((part, index) => (
+            <mesh key={index} geometry={part.geometry} material={part.material} castShadow receiveShadow />
+          ))}
+        </group>
+        <group ref={animatedStructure} name="portal-construction-pieces">
         {model.structure.map((part, index) => (
           <group
             key={part.name}
@@ -309,6 +345,7 @@ export default function Portal({
             />
           </group>
         ))}
+        </group>
         <group ref={vegetation} visible={built && reduced}>
           {model.vegetation.map((part) => (
             <mesh

@@ -13,7 +13,7 @@ import {
   buildingIndex,
   type BuildingId,
 } from "./buildings";
-import { PATH_POINTS, houseYaw, houseDoorOpenness } from "./cameraRig";
+import { houseYaw, houseDoorOpenness, ORIGINAL_ROUTE, type StoryRoute } from "./cameraRig";
 import { letteringTexture } from "./signage";
 import type { Locale } from "@/content/story";
 
@@ -50,19 +50,22 @@ export default function BusinessBuilding({
   progress,
   reduced,
   locale,
+  route = ORIGINAL_ROUTE,
 }: {
   id: BuildingId;
   progress: number;
   reduced: boolean;
   locale: Locale;
+  // Where the houses stand and how large they are drawn (design2 has its own).
+  route?: StoryRoute;
 }) {
   const gltf = useLoader(GLTFLoader, BUSINESS_URL);
   const index = buildingIndex(id);
-  const point = PATH_POINTS[index];
+  const point = route.points[index];
   useFrame(() => {
     const rig = businessRig(gltf.scene, gltf.animations);
     rig.door.time =
-      houseDoorOpenness(index, progress, reduced) * rig.door.getClip().duration;
+      houseDoorOpenness(index, progress, reduced, route) * rig.door.getClip().duration;
     rig.mixer.update(0);
   });
   // The authored asset is already grounded, 2.9m tall, and aligned by its
@@ -71,7 +74,8 @@ export default function BusinessBuilding({
     <group
       name="story-business"
       position={[point.x, 0, point.z]}
-      rotation={[0, houseYaw(index), 0]}
+      rotation={[0, houseYaw(index, route), 0]}
+      scale={route.houseScale}
     >
       <primitive object={businessRig(gltf.scene, gltf.animations).scene} />
       <mesh position={[0, 1.04, 1.225]}>

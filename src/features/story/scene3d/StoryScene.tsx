@@ -136,7 +136,7 @@ function Atmosphere({ progress }: { progress: number }) {
     </>
   );
 }
-function Cast({ progress, reduced }: { progress: number; reduced: boolean }) {
+export function Cast({ progress, reduced }: { progress: number; reduced: boolean }) {
   const calado = calladoState(progress, reduced);
   const mizaru = companionState(-1, progress, reduced);
   const kikazaru = companionState(1, progress, reduced);

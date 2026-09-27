@@ -232,9 +232,9 @@ export default function Controls({
             )
           : instruction(
               "Construa a ponte",
-              "Leve Iwazaru (3) ao totem à direita da ponte e pressione E ou Enter para usar as madeiras.",
+              "Leve Iwazaru (3) ao toco com martelo à direita da ponte e pressione E ou Enter para usar as madeiras.",
               "Build the bridge",
-              "Take Iwazaru (3) to the totem on the right of the bridge and press E or Enter to use the timber.",
+              "Take Iwazaru (3) to the stump with a hammer on the right of the bridge and press E or Enter to use the timber.",
             );
   } else if (!p.unlocked && state.zone < 3)
     hint = instruction(
@@ -313,9 +313,9 @@ export default function Controls({
   else if (p.built)
     hint = instruction(
       "O portal foi construído",
-      "O ritual ergueu um portal no extremo da segunda ilha. Siga além do mecanismo final para encontrá-lo.",
+      "O portal abriu no tronco da árvore grande à direita da segunda ilha. Siga até a abertura azul para atravessar.",
       "The portal has been built",
-      "The ritual raised a portal at the far end of the second island. Continue beyond the final mechanism to find it.",
+      "The portal opened in the large tree on the right of the second island. Walk into the blue opening to cross.",
     );
   return (
     <>

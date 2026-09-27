@@ -10,7 +10,8 @@ import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { story, type Locale } from "@/content/story";
 import { buildingIndex } from "./scene3d/buildings";
-import { houseDoorOpenness } from "./scene3d/cameraRig";
+import { houseDoorOpenness, ORIGINAL_ROUTE } from "./scene3d/cameraRig";
+import { VOLCANIC_ROUTE } from "./scene3d/volcanicStoryRoute";
 import { MonkeyGlyph } from "./SceneArt";
 import styles from "./Experience.module.css";
 import WorkPortfolio from "./WorkPortfolio";
@@ -22,7 +23,7 @@ function subscribeMotion(callback: () => void) {
   media.addEventListener("change", callback);
   return () => media.removeEventListener("change", callback);
 }
-export default function Experience() {
+export default function Experience({ variant = "original" }: { variant?: "original" | "volcanic" }) {
   const root = useRef<HTMLDivElement>(null);
   const loading = useRef(false);
   const [progress, setProgress] = useState(0);
@@ -45,6 +46,8 @@ export default function Experience() {
     buildingIndex("mobility"),
     progress,
     reduced,
+    // design2 has its own, longer route with larger houses.
+    variant === "volcanic" ? VOLCANIC_ROUTE : ORIGINAL_ROUTE,
   );
   const portfolioIsVisible = (scene === 3 && phase >= 0.5) || scene === 4;
   const portfolioEntry = reduced
@@ -101,10 +104,15 @@ export default function Experience() {
     return () => { cancelled = true; };
   }, []);
   useEffect(() => {
-    import("./scene3d/StoryScene").then((module) =>
-      setStoryScene(() => module.default),
-    );
-  }, []);
+    let cancelled = false;
+    const sceneModule = variant === "volcanic"
+      ? import("./scene3d/VolcanicStoryScene")
+      : import("./scene3d/StoryScene");
+    sceneModule.then((module) => {
+      if (!cancelled) setStoryScene(() => module.default);
+    });
+    return () => { cancelled = true; };
+  }, [variant]);
   useEffect(() => {
     if (!playing) return;
     const previous = document.body.style.overflow;
@@ -116,7 +124,7 @@ export default function Experience() {
   const pt = locale === "pt";
   return (
     <>
-      <div className={styles.mobile}>
+      <div className={`${styles.mobile} ${variant === "volcanic" ? styles.volcanicMobile : ""}`}>
         <svg viewBox="-60 -80 160 180" aria-hidden="true">
           <MonkeyGlyph />
         </svg>
@@ -128,7 +136,7 @@ export default function Experience() {
       </div>
       <main
         ref={root}
-        className={styles.journey}
+        className={`${styles.journey} ${variant === "volcanic" ? styles.volcanic : ""}`}
         aria-hidden={playing || undefined}
         inert={playing || undefined}
       >

@@ -22,9 +22,6 @@ export default function Lock({
     Array.from({ length: LOCK_CODE.length }, () => 0),
   );
   const digitsRef = useRef(digits);
-  useEffect(() => {
-    digitsRef.current = digits;
-  }, [digits]);
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     panel.current?.focus();
@@ -32,12 +29,11 @@ export default function Lock({
   // wrongAttempts persists across opening/closing the dial, so a fresh
   // mount must not treat an already-nonzero count as a brand-new miss.
   const [shake, setShake] = useState(false);
-  const mounted = useRef(false);
+  const previousWrongAttempts = useRef(wrongAttempts);
   useEffect(() => {
-    if (!mounted.current) {
-      mounted.current = true;
-      return;
-    }
+    // Compare the counter itself: Strict Mode replays mount effects.
+    if (wrongAttempts === previousWrongAttempts.current) return;
+    previousWrongAttempts.current = wrongAttempts;
     setShake(true);
     const timeout = setTimeout(() => setShake(false), 900);
     return () => clearTimeout(timeout);
@@ -47,31 +43,48 @@ export default function Lock({
   // otherwise be handled by a stale closure from before React re-subscribes.
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      const progress = useGame.getState().puzzle.codeProgress;
+      const state = useGame.getState();
+      if (!state.lockOpen) return;
+      const progress = state.puzzle.codeProgress;
       if (e.code === "Escape") {
         e.preventDefault();
         useGame.getState().configure({ lockOpen: false });
         return;
       }
+      if (e.ctrlKey || e.metaKey || e.altKey || progress >= LOCK_CODE.length) return;
+      const chooseDigit = (digit: number) => {
+        const next = digitsRef.current.map((value, index) =>
+          index === progress ? digit : value,
+        );
+        // Keep the next Enter correct even before React renders this change.
+        digitsRef.current = next;
+        setDigits(next);
+      };
+      // Read the keypad's physical code too, including when Num Lock is off.
+      const typedDigit = /^[0-9]$/.test(e.key)
+        ? e.key
+        : /^Numpad[0-9]$/.test(e.code)
+          ? e.code.slice(-1)
+          : null;
+      if (typedDigit !== null) {
+        e.preventDefault();
+        chooseDigit(Number(typedDigit));
+        panel.current?.focus();
+        return;
+      }
       if (e.target instanceof HTMLElement && e.target.closest("button")) return;
       if (e.code === "ArrowUp" || e.code === "KeyW") {
         e.preventDefault();
-        setDigits((current) =>
-          current.map((value, index) =>
-            index === progress ? (value + 1) % 10 : value,
-          ),
-        );
+        chooseDigit((digitsRef.current[progress] + 1) % 10);
       }
       if (e.code === "ArrowDown" || e.code === "KeyS") {
         e.preventDefault();
-        setDigits((current) =>
-          current.map((value, index) =>
-            index === progress ? (value + 9) % 10 : value,
-          ),
-        );
+        chooseDigit((digitsRef.current[progress] + 9) % 10);
       }
-      if (e.code === "Enter" || e.code === "Space") {
+      if (e.key === "Enter" || e.code === "Space") {
         e.preventDefault();
+        // Holding Enter to open the panel must not submit the initial zero.
+        if (e.repeat) return;
         useGame
           .getState()
           .submitLockDigit(runtime.positions[2], digitsRef.current[progress]);
@@ -94,8 +107,8 @@ export default function Lock({
         <h2>{pt ? "Cadeado" : "Padlock"}</h2>
         <p className={styles.lockHint}>
           {pt
-            ? `Você está resolvendo o algarismo ${codeProgress + 1} de ${LOCK_CODE.length}. Use ↑ ou ↓ para escolher um número, Enter para confirmar e Esc para fechar.`
-            : `You are solving digit ${codeProgress + 1} of ${LOCK_CODE.length}. Use ↑ or ↓ to choose a number, Enter to confirm, and Esc to close.`}
+            ? `Você está resolvendo o algarismo ${codeProgress + 1} de ${LOCK_CODE.length}. Digite um número no teclado ou use ↑ e ↓ para escolher. Pressione Enter para confirmar e Esc para fechar.`
+            : `You are solving digit ${codeProgress + 1} of ${LOCK_CODE.length}. Type a number on your keyboard or use ↑ and ↓ to choose. Press Enter to confirm and Esc to close.`}
         </p>
         <div
           className={`${styles.lockDigits} ${shake ? styles.lockDigitsShake : ""}`}

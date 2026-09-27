@@ -236,3 +236,26 @@
 .workCopy { top: 30%; width: 32%; }
 .workCopy h1 { font-size: clamp(30px, 3.8vw, 60px); }
 .steps { margin-left: auto; }
+
+.volcanic .art { background: #343438; }
+.volcanic .vignette {
+  background:
+    linear-gradient(90deg, #141518df 0%, #17181a91 28%, #17181a15 54%, transparent 72%),
+    linear-gradient(0deg, #121315b0, transparent 27%),
+    linear-gradient(180deg, #10111355, transparent 18%);
+}
+.volcanic .copy { left: 6vw; top: 36%; width: 33%; max-width: 500px; }
+.volcanic .brand { color: #eae6df; }
+.volcanic .eyebrow { color: #d4b394; }
+.volcanic .copy h1 { color: #f4f0e9; font-size: clamp(34px, 4.2vw, 66px); text-shadow: 0 3px 24px #11111166; }
+.volcanic .copy p { color: #c4c0ba; }
+.volcanic .rule { background: #bd9571; width: 48px; }
+.volcanic .tools button { border-color: #ded2c244; }
+.volcanic .tools button[aria-pressed="true"] { background: #d7c2a9; color: #202022; }
+.volcanic .step { background: #ddd0bd44; }
+.volcanic .active { background: #d6a97a; box-shadow: 0 0 8px #d6a97a44; }
+.volcanic .count, .volcanic .preview, .volcanic .scroll { color: #bcb6ae; }
+.volcanic .start { background: #ceb291; border-color: #e0c7aa; color: #242322; box-shadow: 0 16px 35px #00000055; }
+.volcanic .workCopy { top: 29%; width: 30%; }
+.volcanic .workCopy h1 { font-size: clamp(30px, 3.8vw, 60px); }
+.volcanicMobile { background: radial-gradient(circle, #414044, #1e1f22); }

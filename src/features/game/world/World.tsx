@@ -47,10 +47,10 @@ import {
   buildDigitSequence,
   PULSE_ZERO,
 } from "./soundCode";
-import WisdomTotem from "./Totem";
+import BridgeBuildStump, { BRIDGE_STUMP_MODEL_URL } from "./BridgeBuildStump";
+import WisdomTotem, { TOTEM_MODEL_URL } from "./Totem";
 import Padlock, { PADLOCK_MODEL_URL } from "./Padlock";
 import BananaGroves from "./BananaGroves";
-import Portal, { PORTAL_MODEL_URL } from "./Portal";
 import { powerAnchorVisibility } from "./powerAnchorVisibility";
 import Forest from "./Forest";
 import { QUALITY_PROFILES } from "../quality";
@@ -742,7 +742,8 @@ export default function World({
   // whole Physics/Character subtree mid-game and reset everyone to spawn.
   const bridgeModel = useLoader(GLTFLoader, BRIDGE_MODEL_URL);
   const padlockModel = useLoader(GLTFLoader, PADLOCK_MODEL_URL);
-  const portalModel = useLoader(GLTFLoader, PORTAL_MODEL_URL);
+  const totemModel = useLoader(GLTFLoader, TOTEM_MODEL_URL);
+  const stumpModel = useLoader(GLTFLoader, BRIDGE_STUMP_MODEL_URL);
   const visibleAnchors = powerAnchorVisibility(puzzle);
   return (
     <>
@@ -753,7 +754,8 @@ export default function World({
           denseVegetation={QUALITY_PROFILES[quality].denseVegetation}
         />
       ))}
-      <Forest ultra={QUALITY_PROFILES[quality].denseVegetation} running={running} />
+      <Forest ultra={QUALITY_PROFILES[quality].denseVegetation} running={running}
+        portalBuilt={puzzle.built} onPortalEnter={onPortalEnter} />
       <BananaGroves />
       <group position={[0, ISLAND_SURFACE_Y, 0]}>
         <Bridge
@@ -765,13 +767,6 @@ export default function World({
           running={running}
           reduced={reduced}
           contrast={contrast}
-        />
-        <Portal
-          gltf={portalModel}
-          built={puzzle.built}
-          running={running}
-          reduced={reduced}
-          onEnter={onPortalEnter}
         />
         {!puzzle.powers[1] && !puzzle.bridge && (
           <BridgePlaceholder contrast={contrast} />
@@ -807,17 +802,8 @@ export default function World({
             />
           </>
         )}
-        <WisdomTotem
-          x={anchors.bridgeBuild.x}
-          z={anchors.bridgeBuild.z}
-          complete={puzzle.bridge}
-          running={running}
-        />
-        <WisdomTotem
-          z={anchors.finalBuild.z}
-          complete={puzzle.built}
-          running={running}
-        />
+        <BridgeBuildStump template={stumpModel.scene} />
+        <WisdomTotem template={totemModel.scene} z={anchors.finalBuild.z} />
         {puzzle.bridge && !puzzle.built && (
           <>
             {!puzzle.unlocked && (

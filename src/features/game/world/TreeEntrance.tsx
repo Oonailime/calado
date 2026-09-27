@@ -236,7 +236,7 @@ export default function TreeEntrance({
           <mesh key={i} geometry={geometry} material={materials[i % materials.length]} castShadow />
         ))}
       </group>
-      <group ref={roots}>
+      <group ref={roots} visible={false}>
         {rootGeometries.map((geometry, i) => <mesh key={i} geometry={geometry} material={materials[i % materials.length]} castShadow receiveShadow />)}
       </group>
       <pointLight ref={light} position={[0, TREE_PORTAL_CENTER_Y, 0.6]} color="#09eaff" intensity={0} distance={6} decay={2} />

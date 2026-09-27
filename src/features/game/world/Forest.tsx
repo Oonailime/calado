@@ -16,6 +16,8 @@ import {
   type BufferGeometry,
   type Material,
 } from "three";
+import TreeEntrance from "./TreeEntrance";
+import { fitIslandTreePortal, ISLAND_TREE_PORTAL } from "./islandTreePortal";
 import { ISLAND_SURFACE_Y } from "./layout";
 import { SwingingVine } from "./PhaseFour";
 import { runtime } from "../state/store";
@@ -400,26 +402,30 @@ const PHASE_ONE_ANCHOR_TREES: readonly AnchorTree[] = ARBOREAL_SITES.map(
 const PHASE_ONE_VINE_LENGTH = 3.6;
 const PHASE_ONE_VINE_SEED = 11;
 
+export function createPhaseOneTreeAsset(): ForestAsset {
+  // Same buried-buttress treatment as phase four's own giant trees
+  // (ROOT_EMBED_DEPTH) - a shallow, constant sink rather than one scaled
+  // to this tree's own radius, so only the flat cylinder base disappears
+  // into the ground and the buttress flare above it stays visible.
+  return {
+    parts: partsFromMeshes(
+      collectMeshes(
+        createPhaseFourTreeGroup(
+          PHASE_ONE_TREE_RADIUS,
+          PHASE_ONE_TREE_HEIGHT,
+          PHASE_ONE_TREE_SEED,
+          true,
+        ),
+      ),
+      -ROOT_EMBED_DEPTH,
+    ),
+  };
+}
+
 function usePhaseOneForestAssets() {
   return useMemo(
     () => ({
-      // Same buried-buttress treatment as phase four's own giant trees
-      // (ROOT_EMBED_DEPTH) - a shallow, constant sink rather than one scaled
-      // to this tree's own radius, so only the flat cylinder base disappears
-      // into the ground and the buttress flare above it stays visible.
-      tree: {
-        parts: partsFromMeshes(
-          collectMeshes(
-            createPhaseFourTreeGroup(
-              PHASE_ONE_TREE_RADIUS,
-              PHASE_ONE_TREE_HEIGHT,
-              PHASE_ONE_TREE_SEED,
-              true,
-            ),
-          ),
-          -ROOT_EMBED_DEPTH,
-        ),
-      },
+      tree: createPhaseOneTreeAsset(),
       vine: prepareAsset(
         createPhaseFourVineGroup(PHASE_ONE_VINE_LENGTH, PHASE_ONE_VINE_SEED),
       ),
@@ -502,7 +508,22 @@ export function ArborealSites({
   );
 }
 
-export default function Forest({ ultra, running }: { ultra: boolean; running: boolean }) {
+function IslandTreeEntrance({ asset, open, running, onEnter }: {
+  asset: ForestAsset; open: boolean; running: boolean; onEnter: () => void;
+}) {
+  // Fit once while the map loads, so completing the puzzle creates no mesh work.
+  const surfaceFit = useMemo(() => fitIslandTreePortal(asset.parts), [asset]);
+  return (
+    <group name="phase1-tree-portal">
+      <TreeEntrance anchor={ISLAND_TREE_PORTAL} surfaceFit={surfaceFit}
+        open={open} running={running} onEnter={onEnter} />
+    </group>
+  );
+}
+
+export default function Forest({ ultra, running, portalBuilt, onPortalEnter }: {
+  ultra: boolean; running: boolean; portalBuilt: boolean; onPortalEnter: () => void;
+}) {
   const assets = usePhaseOneForestAssets();
   // Always defined in practice (a procedurally-built group always has
   // geometry) - the check just satisfies ForestAsset's shared, loader-aware
@@ -512,6 +533,7 @@ export default function Forest({ ultra, running }: { ultra: boolean; running: bo
   const vineAsset = assets.vine;
   return (
     <>
+      <IslandTreeEntrance asset={treeAsset} open={portalBuilt} running={running} onEnter={onPortalEnter} />
       <ArborealSites
         sites={ARBOREAL_SITES}
         treeAsset={treeAsset}

@@ -27,6 +27,7 @@ npm run dev
 ```
 
 - `/` abre a história e o portfólio. A rolagem conduz até o botão **Jogar**.
+- `/design2` abre uma alternativa experimental da história com cenário inspirado na região vulcânica; a rota principal permanece disponível para comparação.
 - `/?map=phase2` abre diretamente a região vulcânica.
 - `/?map=phase3` abre diretamente a região da copa.
 - `/?map=phase4` continua aceito como alias de `phase3`.

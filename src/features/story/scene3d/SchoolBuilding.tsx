@@ -18,7 +18,7 @@ import {
   buildingIndex,
   type BuildingId,
 } from "./buildings";
-import { PATH_POINTS, houseYaw, houseDoorOpenness } from "./cameraRig";
+import { houseYaw, houseDoorOpenness, ORIGINAL_ROUTE, type StoryRoute } from "./cameraRig";
 import { letteringTexture } from "./signage";
 import type { Locale } from "@/content/story";
 
@@ -133,15 +133,18 @@ export default function SchoolBuilding({
   progress,
   reduced,
   locale,
+  route = ORIGINAL_ROUTE,
 }: {
   id: BuildingId;
   progress: number;
   reduced: boolean;
   locale: Locale;
+  // Where the houses stand and how large they are drawn (design2 has its own).
+  route?: StoryRoute;
 }) {
   const gltf = useLoader(GLTFLoader, SCHOOL_URL);
   const index = buildingIndex(id);
-  const point = PATH_POINTS[index];
+  const point = route.points[index];
 
   // Looked up fresh inside the callback (and again below for the JSX), same
   // as Monkey.tsx's own getRig(...) calls — a value merely read during
@@ -150,7 +153,7 @@ export default function SchoolBuilding({
   // rule above.
   useFrame((_, delta) => {
     const rig = getSchoolRig(gltf.scene, id, locale, gltf.animations);
-    const openness = houseDoorOpenness(index, progress, reduced);
+    const openness = houseDoorOpenness(index, progress, reduced, route);
     if (rig.doorAction)
       rig.doorAction.time = openness * rig.doorAction.getClip().duration;
     if (rig.bellAction)
@@ -159,7 +162,7 @@ export default function SchoolBuilding({
   });
 
   return (
-    <group position={[point.x, 0, point.z]} rotation={[0, houseYaw(index), 0]}>
+    <group position={[point.x, 0, point.z]} rotation={[0, houseYaw(index, route), 0]} scale={route.houseScale}>
       <primitive
         object={getSchoolRig(gltf.scene, id, locale, gltf.animations).scene}
       />

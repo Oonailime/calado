@@ -92,8 +92,8 @@ export const anchors = {
   bridge: { x: 0, y: ISLAND_SURFACE_Y, z: -2 },
   reveal: { x: 3, y: ISLAND_SURFACE_Y, z: -23 },
   silence: { x: -3, y: ISLAND_SURFACE_Y, z: -23 },
-  // First totem: on the first island, to the right of the bridge approach.
-  bridgeBuild: { x: 3.4, y: ISLAND_SURFACE_Y, z: -1.7 },
+  // Construction stump: on the first island, to the right of the bridge approach.
+  bridgeBuild: { x: 2.54, y: ISLAND_SURFACE_Y, z: -3.88 },
   padlock: { x: 0, y: ISLAND_SURFACE_Y, z: -23.8 },
   finalBuild: { x: 0, y: ISLAND_SURFACE_Y, z: -28 },
   logs: [

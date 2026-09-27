@@ -1,7 +1,8 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Group, MathUtils } from "three";
+import { Group, MathUtils, Vector3, type Bone } from "three";
 import Monkey from "@/features/game/characters/Monkey";
+import { monkeyRigBone, resolveMonkeyRig } from "@/features/game/characters/monkeyRig";
 import type { CharacterId } from "@/features/game/types";
 import {
   STORY_METERS_PER_STRIDE,
@@ -26,6 +27,9 @@ export default function StoryMonkey({
   yaw,
   walking,
   power,
+  scale = 1,
+  y = 0,
+  centered = false,
 }: {
   id: CharacterId;
   x: number;
@@ -34,13 +38,23 @@ export default function StoryMonkey({
   yaw: number;
   walking: boolean;
   power: boolean;
+  // Model size (design2 draws the monkeys larger); strides grow with it.
+  scale?: number;
+  // Height of the surface under the feet, e.g. a chess stool (design2).
+  y?: number;
+  // Keep the body itself over (x, z), e.g. seated on a stool (design2): the
+  // idle pose carries the pelvis away from the model's origin, which would
+  // otherwise leave the monkey perched on the stool's edge.
+  centered?: boolean;
 }) {
   const group = useRef<Group>(null);
+  const pelvis = useRef<Bone | null>(null);
+  const pelvisWorld = useMemo(() => new Vector3(), []);
   const locomotion = useRef({
     speed: 0,
     grounded: true,
     distance,
-    metersPerStride: STORY_METERS_PER_STRIDE,
+    metersPerStride: STORY_METERS_PER_STRIDE * scale,
   });
   const previous = useRef({ x, z });
   const previousDistance = useRef(distance);
@@ -59,7 +73,9 @@ export default function StoryMonkey({
       z - previous.current.z,
     );
     previous.current = { x, z };
-    const instantSpeed = Math.min(MAX_SPEED, stepDistance / dt);
+    // Measured in the model's own size, so a larger monkey blends into its
+    // walk at the same pace as the original one.
+    const instantSpeed = Math.min(MAX_SPEED, stepDistance / dt / scale);
     const target = walking ? instantSpeed : 0;
     smoothedSpeed.current +=
       (target - smoothedSpeed.current) * Math.min(1, dt * SPEED_RESPONSE);
@@ -70,7 +86,8 @@ export default function StoryMonkey({
     );
     traveledDistance.current += Math.abs(distance - previousDistance.current);
     previousDistance.current = distance;
-    node.position.set(x, GROUND_OFFSET, z);
+    node.position.set(x, y + GROUND_OFFSET * scale, z);
+    node.scale.setScalar(scale);
     const targetYaw = travelYaw(yaw, direction.current, walking);
     const angle =
       MathUtils.euclideanModulo(
@@ -78,6 +95,16 @@ export default function StoryMonkey({
         Math.PI * 2,
       ) - Math.PI;
     node.rotation.y += angle * (1 - Math.exp(-TURN_RESPONSE * dt));
+    if (centered) {
+      // The model loads asynchronously; look the pelvis up once it exists.
+      pelvis.current ??= monkeyRigBone(resolveMonkeyRig(node), "Hips") ?? null;
+      if (pelvis.current) {
+        node.updateMatrixWorld(true);
+        pelvis.current.getWorldPosition(pelvisWorld);
+        node.position.x -= pelvisWorld.x - x;
+        node.position.z -= pelvisWorld.z - z;
+      }
+    }
     locomotion.current.speed = smoothedSpeed.current;
     locomotion.current.grounded = true;
     // Count actual route meters in either direction. On the return the model

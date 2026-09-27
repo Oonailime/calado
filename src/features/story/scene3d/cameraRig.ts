@@ -35,6 +35,21 @@ export const GROUND_Y = -0.02;
 export const STAND_OFFSET = 1.7;
 export const FAR_OFFSET = 9;
 
+// Everything a page needs to lay the walk out: the six houses, the meeting
+// point, and how large the houses, monkeys and path are drawn. The original
+// page uses ORIGINAL_ROUTE (the default everywhere below); design2 has its
+// own, longer one (volcanicStoryRoute.ts).
+export type StoryRoute = {
+  points: readonly Point[];
+  convergence: Point;
+  // Scale of the houses, the monkeys and the stone path.
+  houseScale: number;
+  standOffset: number;
+  farOffset: number;
+  // Where the path along the last hop stops, in metres short of the meeting point.
+  pathEndsBeforeMeeting: number;
+};
+
 // Clears each house's own footprint instead of running under it — the path
 // reads as segments between houses, not one continuous ribbon — and stops
 // well short of the sand-colored clearing rather than touching it. Shared
@@ -47,26 +62,42 @@ export const WORK_PATH_CLEARANCE = 3.1;
 // 9-unit radius, so both the rock tiles and anything scattered along this
 // segment (grass) ended up on the sand.
 const FINAL_HOP_COVERAGE = 0.28;
-export function pathSegments(): [Point, Point][] {
+const FINAL_HOP_LENGTH = Math.hypot(
+  CONVERGENCE_POINT.x - PATH_POINTS[5].x,
+  CONVERGENCE_POINT.z - PATH_POINTS[5].z,
+);
+export const ORIGINAL_ROUTE: StoryRoute = {
+  points: PATH_POINTS,
+  convergence: CONVERGENCE_POINT,
+  houseScale: 1,
+  standOffset: STAND_OFFSET,
+  farOffset: FAR_OFFSET,
+  pathEndsBeforeMeeting: FINAL_HOP_LENGTH * (1 - FINAL_HOP_COVERAGE),
+};
+
+export function pathSegments(route: StoryRoute = ORIGINAL_ROUTE): [Point, Point][] {
   const segments: [Point, Point][] = [];
-  for (let i = 0; i < PATH_POINTS.length - 1; i++) {
-    const a = PATH_POINTS[i];
-    const b = PATH_POINTS[i + 1];
+  const { points, convergence } = route;
+  const house = HOUSE_CLEARANCE * route.houseScale;
+  const work = WORK_PATH_CLEARANCE * route.houseScale;
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i];
+    const b = points[i + 1];
     const length = Math.hypot(b.x - a.x, b.z - a.z);
-    const startT = (i === 4 ? WORK_PATH_CLEARANCE : HOUSE_CLEARANCE) / length;
-    const endT = 1 - (i + 1 === 4 ? WORK_PATH_CLEARANCE : HOUSE_CLEARANCE) / length;
+    const startT = (i === 4 ? work : house) / length;
+    const endT = 1 - (i + 1 === 4 ? work : house) / length;
     if (endT > startT)
       segments.push([lerpPoint(a, b, startT), lerpPoint(a, b, endT)]);
   }
-  const last = PATH_POINTS[PATH_POINTS.length - 1];
+  const last = points[points.length - 1];
   const toClearing = Math.hypot(
-    CONVERGENCE_POINT.x - last.x,
-    CONVERGENCE_POINT.z - last.z,
+    convergence.x - last.x,
+    convergence.z - last.z,
   );
-  const startT = HOUSE_CLEARANCE / toClearing;
+  const startT = house / toClearing;
   segments.push([
-    lerpPoint(last, CONVERGENCE_POINT, startT),
-    lerpPoint(last, CONVERGENCE_POINT, FINAL_HOP_COVERAGE),
+    lerpPoint(last, convergence, startT),
+    lerpPoint(last, convergence, 1 - route.pathEndsBeforeMeeting / toClearing),
   ]);
   return segments;
 }
@@ -118,44 +149,56 @@ export function sceneAndPhase(progress: number, reduced = false) {
 // House rotation so its front door (the kit's local +Z face) points back
 // toward the point the character arrives from — the first house faces
 // forward, toward the second, since nothing precedes it.
-export function houseYaw(index: number) {
-  if (index <= 0) return angleTo(PATH_POINTS[0], PATH_POINTS[1]);
-  const from = PATH_POINTS[index];
-  const to = PATH_POINTS[index - 1];
+export function houseYaw(index: number, route: StoryRoute = ORIGINAL_ROUTE) {
+  const { points } = route;
+  if (index <= 0) return angleTo(points[0], points[1]);
+  const from = points[index];
+  const to = points[index - 1];
   return angleTo(from, to);
 }
 
 // A single continuous function of progress across scenes 0-5 (each scene's
 // end exactly equals the next scene's start), so anything built on top of it
 // — the camera, the walk — never has to reset/jump at a scene boundary.
-export function walkPoint(progress: number, reduced = false): Point {
+export function walkPoint(progress: number, reduced = false, route: StoryRoute = ORIGINAL_ROUTE): Point {
   const { scene, t } = sceneAndPhase(progress, reduced);
+  const { points, convergence } = route;
   if (scene <= 4)
-    return lerpPoint(PATH_POINTS[scene], PATH_POINTS[scene + 1], t);
-  if (scene === 5) return lerpPoint(PATH_POINTS[5], CONVERGENCE_POINT, t);
-  return CONVERGENCE_POINT;
+    return lerpPoint(points[scene], points[scene + 1], t);
+  if (scene === 5) return lerpPoint(points[5], convergence, t);
+  return convergence;
 }
 
-const WALK_POINTS = [...PATH_POINTS, CONVERGENCE_POINT];
-const WALK_SEGMENT_LENGTHS = WALK_POINTS.slice(0, -1).map((point, index) => {
-  const next = WALK_POINTS[index + 1];
-  return Math.hypot(next.x - point.x, next.z - point.z);
-});
+function segmentLengths(route: StoryRoute) {
+  const walk = [...route.points, route.convergence];
+  return walk.slice(0, -1).map((point, index) => {
+    const next = walk[index + 1];
+    return Math.hypot(next.x - point.x, next.z - point.z);
+  });
+}
+const WALK_SEGMENT_LENGTHS = segmentLengths(ORIGINAL_ROUTE);
 export const WALK_PATH_LENGTH = WALK_SEGMENT_LENGTHS.reduce(
   (total, length) => total + length,
   0,
 );
+const ROUTE_SEGMENT_LENGTHS = new WeakMap<StoryRoute, number[]>();
 
 // Absolute meters covered from the beginning of the route. Unlike a
 // frame-by-frame accumulator, this always returns the same value for the
 // same scroll position and decreases naturally when the visitor scrolls up.
-export function walkDistance(progress: number, reduced = false): number {
+export function walkDistance(progress: number, reduced = false, route: StoryRoute = ORIGINAL_ROUTE): number {
   const { scene, t } = sceneAndPhase(progress, reduced);
-  if (scene >= WALK_SEGMENT_LENGTHS.length) return WALK_PATH_LENGTH;
+  let lengths = ROUTE_SEGMENT_LENGTHS.get(route);
+  if (!lengths) {
+    lengths = route === ORIGINAL_ROUTE ? WALK_SEGMENT_LENGTHS : segmentLengths(route);
+    ROUTE_SEGMENT_LENGTHS.set(route, lengths);
+  }
+  if (scene >= lengths.length)
+    return lengths.reduce((total, length) => total + length, 0);
   let completed = 0;
   for (let index = 0; index < scene; index += 1)
-    completed += WALK_SEGMENT_LENGTHS[index];
-  return completed + WALK_SEGMENT_LENGTHS[scene] * t;
+    completed += lengths[index];
+  return completed + lengths[scene] * t;
 }
 
 export type TravelDirection = -1 | 1;
@@ -238,10 +281,12 @@ export function cameraForProgress(progress: number, reduced = false): Pose {
 // open while he enters. The same spatial timing works when scrolling back.
 export const STORY_DOOR_OPEN_DISTANCE = 6;
 export const STORY_DOOR_FULL_OPEN_DISTANCE = 2.4;
-export function houseDoorOpenness(index: number, progress: number, reduced = false) {
-  const position = walkPoint(progress, reduced);
-  const house = PATH_POINTS[index];
-  const distance = Math.hypot(position.x - house.x, position.z - house.z);
+// Distances stretch with the route's house scale, so larger houses still
+// open before the monkey reaches their (further out) facade.
+export function houseDoorOpenness(index: number, progress: number, reduced = false, route: StoryRoute = ORIGINAL_ROUTE) {
+  const position = walkPoint(progress, reduced, route);
+  const house = route.points[index];
+  const distance = Math.hypot(position.x - house.x, position.z - house.z) / route.houseScale;
   if (reduced) return distance < STORY_DOOR_OPEN_DISTANCE ? 1 : 0;
   return smoothstep((STORY_DOOR_OPEN_DISTANCE - distance) /
     (STORY_DOOR_OPEN_DISTANCE - STORY_DOOR_FULL_OPEN_DISTANCE));
@@ -250,15 +295,16 @@ export function houseDoorOpenness(index: number, progress: number, reduced = fal
 // Calado walks the whole path and stops in the clearing; he never doubles
 // back through the houses once there (that was the "walked through every
 // house" bug) — from scene 6 on his position is pinned to the clearing.
-export function calladoState(progress: number, reduced = false) {
+export function calladoState(progress: number, reduced = false, route: StoryRoute = ORIGINAL_ROUTE) {
   const { scene, t } = sceneAndPhase(progress, reduced);
-  const position = walkPoint(progress, reduced);
-  const distance = walkDistance(progress, reduced);
+  const { points, convergence } = route;
+  const position = walkPoint(progress, reduced, route);
+  const distance = walkDistance(progress, reduced, route);
   const settled = scene > 6 || (scene === 6 && t > 0.6);
   let yaw: number;
-  if (scene <= 4) yaw = angleTo(PATH_POINTS[scene], PATH_POINTS[scene + 1]);
-  else if (scene === 5) yaw = angleTo(PATH_POINTS[5], CONVERGENCE_POINT);
-  else yaw = settled ? 0 : angleTo(PATH_POINTS[5], CONVERGENCE_POINT);
+  if (scene <= 4) yaw = angleTo(points[scene], points[scene + 1]);
+  else if (scene === 5) yaw = angleTo(points[5], convergence);
+  else yaw = settled ? 0 : angleTo(points[5], convergence);
   const walking = scene <= 5;
   return { position, distance, yaw, walking, settled };
 }
@@ -269,24 +315,26 @@ export function companionState(
   side: -1 | 1,
   progress: number,
   reduced = false,
+  route: StoryRoute = ORIGINAL_ROUTE,
 ) {
   const { scene, rawPhase } = sceneAndPhase(progress, reduced);
+  const { convergence } = route;
   if (scene < 6)
     return {
       visible: false,
-      position: CONVERGENCE_POINT,
+      position: convergence,
       distance: 0,
       yaw: 0,
       walking: false,
       settled: false,
     };
   const far: Point = {
-    x: CONVERGENCE_POINT.x + side * FAR_OFFSET,
-    z: CONVERGENCE_POINT.z,
+    x: convergence.x + side * route.farOffset,
+    z: convergence.z,
   };
   const stand: Point = {
-    x: CONVERGENCE_POINT.x + side * STAND_OFFSET,
-    z: CONVERGENCE_POINT.z,
+    x: convergence.x + side * route.standOffset,
+    z: convergence.z,
   };
   const distanceToStand = Math.abs(stand.x - far.x);
   if (scene === 6) {
