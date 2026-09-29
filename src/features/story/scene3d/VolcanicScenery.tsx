@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { useFrame, useLoader } from "@react-three/fiber";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { AdditiveBlending, BufferGeometry, DoubleSide, Mesh, PointLight, ShaderMaterial, UniformsLib, UniformsUtils } from "three";
@@ -37,7 +37,11 @@ function StoryChess() {
   </mesh>;
 }
 
-export default function VolcanicScenery({ active, reduced, progress }: { active: boolean; reduced: boolean; progress: number }) {
+export default function VolcanicScenery({ active, reduced, progress, chessLoaded }: {
+  active: boolean; reduced: boolean; progress: number;
+  // Rendered beside the chess set, inside its Suspense boundary.
+  chessLoaded?: ReactNode;
+}) {
   const assets = useMemo(() => createVolcanicStoryAssets(), []);
   const lava = useRef<ShaderMaterial>(null);
   const flame = useRef<ShaderMaterial>(null);
@@ -92,7 +96,7 @@ export default function VolcanicScenery({ active, reduced, progress }: { active:
       </mesh>
       <pointLight ref={light} position={[0, 0.85, 0]} color="#ff9c50" intensity={20} distance={12} decay={2} />
     </group>
-    <Suspense fallback={null}><StoryChess /></Suspense>
+    <Suspense fallback={null}><StoryChess />{chessLoaded}</Suspense>
     {/* One lamp beside each (larger) house, sized with it. */}
     {VOLCANIC_ROUTE.points.map((point, index) => <group key={index}
       position={[point.x + 2.25 * VOLCANIC_STORY_SCALE, 0, point.z + 0.6 * VOLCANIC_STORY_SCALE]}

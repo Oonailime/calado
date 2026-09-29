@@ -2,6 +2,13 @@
   height: 820vh;
   position: relative;
 }
+/* VineScrollbar replaces the native bar on this page. */
+:global(html):has(.journey) {
+  scrollbar-width: none;
+}
+:global(html):has(.journey)::-webkit-scrollbar {
+  display: none;
+}
 .stage {
   position: sticky;
   top: 0;
@@ -62,6 +69,25 @@
 .tools button[aria-pressed="true"] {
   background: #ccb88a;
   color: #1a2921;
+}
+.tools .themeToggle {
+  display: grid;
+  place-items: center;
+  margin-right: 8px;
+}
+/* Pressed only means "dark"; unlike PT/EN it isn't a selected option. */
+.journey .tools button.themeToggle[aria-pressed="true"] {
+  background: transparent;
+  color: inherit;
+}
+.themeToggle svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .copy {
   position: absolute;

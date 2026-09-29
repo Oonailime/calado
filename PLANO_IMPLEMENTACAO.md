@@ -26,8 +26,9 @@ npm ci
 npm run dev
 ```
 
-- `/` abre a história e o portfólio. A rolagem conduz até o botão **Jogar**.
-- `/design2` abre uma alternativa experimental da história com cenário inspirado na região vulcânica; a rota principal permanece disponível para comparação.
+- `/` abre a história e o portfólio. A rolagem conduz até o botão **Jogar**. Uma tela de carregamento com a coroa de cipó de seleção cobre a página até a cena 3D carregar, e a barra de rolagem é um tronco com um cipó.
+- Modo claro é a história original; modo escuro é a história no cenário vulcânico. O tema segue a preferência do sistema até o visitante escolher no botão de sol/lua, e a escolha fica salva no navegador.
+- `/design2` abre direto no modo escuro, sem alterar a escolha salva.
 - `/?map=phase2` abre diretamente a região vulcânica.
 - `/?map=phase3` abre diretamente a região da copa.
 - `/?map=phase4` continua aceito como alias de `phase3`.

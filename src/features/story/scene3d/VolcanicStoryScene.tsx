@@ -18,6 +18,9 @@ import {
   VOLCANIC_WATCH_YAW,
 } from "./volcanicStoryRoute";
 import { calladoState, sceneAndPhase, walkPoint } from "./cameraRig";
+import { BoundaryLoaded, SceneReady } from "./sceneReady";
+
+const BOUNDARIES = ["buildings", "cast", "chess"] as const;
 
 // design2's cast: Mizaru and Kikazaru are already at the chess table,
 // playing, while Calado walks the whole way and stops beside the board to
@@ -56,7 +59,8 @@ function View({ progress, reduced }: Pick<StorySceneProps, "progress" | "reduced
     shadow-bias={-0.00015} shadow-normalBias={0.045} />;
 }
 
-export default function VolcanicStoryScene({ progress, reduced, active, locale }: StorySceneProps) {
+export default function VolcanicStoryScene({ progress, reduced, active, locale, onReady }: StorySceneProps) {
+  const loaded = useRef(new Set<string>());
   return <Canvas shadows={{ type: PCFShadowMap }} dpr={[1, 1.5]} camera={{ position: [4, 6.4, 13], fov: 50, near: 0.1, far: 550 }}
     frameloop={active ? "always" : "demand"} gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
     onCreated={state => {
@@ -67,7 +71,8 @@ export default function VolcanicStoryScene({ progress, reduced, active, locale }
     <fog attach="fog" args={["#535256", 35, 245]} />
     <hemisphereLight args={["#c7c9ce", "#211c1a", 1.7]} />
     <View progress={progress} reduced={reduced} />
-    <VolcanicScenery progress={progress} active={active} reduced={reduced} />
+    <VolcanicScenery progress={progress} active={active} reduced={reduced}
+      chessLoaded={<BoundaryLoaded id="chess" loaded={loaded} />} />
     <Suspense fallback={null}>
       {BUILDING_ORDER.map(id => {
         const props = { id, progress, reduced, locale, route: VOLCANIC_ROUTE };
@@ -76,7 +81,12 @@ export default function VolcanicStoryScene({ progress, reduced, active, locale }
         if (kind === "business") return <BusinessBuilding key={id} {...props} />;
         return <Building key={id} {...props} />;
       })}
+      <BoundaryLoaded id="buildings" loaded={loaded} />
     </Suspense>
-    <Suspense fallback={null}><VolcanicCast progress={progress} reduced={reduced} /></Suspense>
+    <Suspense fallback={null}>
+      <VolcanicCast progress={progress} reduced={reduced} />
+      <BoundaryLoaded id="cast" loaded={loaded} />
+    </Suspense>
+    <SceneReady boundaries={BOUNDARIES} loaded={loaded} onReady={onReady} />
   </Canvas>;
 }

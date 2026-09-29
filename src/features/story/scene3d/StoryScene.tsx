@@ -19,6 +19,7 @@ import BusinessBuilding from "./BusinessBuilding";
 import Grass from "./Grass";
 import RockPath from "./RockPath";
 import StoryMonkey from "./StoryMonkey";
+import { BoundaryLoaded, SceneReady } from "./sceneReady";
 import type { Locale } from "@/content/story";
 
 export type StorySceneProps = {
@@ -26,7 +27,11 @@ export type StorySceneProps = {
   reduced: boolean;
   active: boolean;
   locale: Locale;
+  // Called once the houses and the monkeys are loaded and drawn.
+  onReady?: () => void;
 };
+
+const BOUNDARIES = ["buildings", "cast"] as const;
 
 function CameraRig({
   progressRef,
@@ -181,8 +186,10 @@ export default function StoryScene({
   reduced,
   active,
   locale,
+  onReady,
 }: StorySceneProps) {
   const progressRef = useRef(progress);
+  const loaded = useRef(new Set<string>());
   useLayoutEffect(() => {
     progressRef.current = progress;
   }, [progress]);
@@ -212,10 +219,13 @@ export default function StoryScene({
       <Hills />
       <Suspense fallback={null}>
         <Buildings progress={progress} reduced={reduced} locale={locale} />
+        <BoundaryLoaded id="buildings" loaded={loaded} />
       </Suspense>
       <Suspense fallback={null}>
         <Cast progress={progress} reduced={reduced} />
+        <BoundaryLoaded id="cast" loaded={loaded} />
       </Suspense>
+      <SceneReady boundaries={BOUNDARIES} loaded={loaded} onReady={onReady} />
     </Canvas>
   );
 }

@@ -1,0 +1,134 @@
+.scrollbar {
+  --bark: #6b4f2c;
+  --bark-furrow: #2b1d1255;
+  --bark-edge: #1a110b99;
+  --bark-light: #c09a6b22;
+  --vine: #5c4327;
+  --vine-light: #a9834f;
+  --tendril: #6e9a3c;
+  position: fixed;
+  top: 10px;
+  right: 6px;
+  bottom: 10px;
+  z-index: 10;
+  width: 30px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+:global([data-theme="dark"]) .scrollbar {
+  --bark: #4a4441;
+  --bark-furrow: #120f0e66;
+  --bark-edge: #0b0a0aaa;
+  --bark-light: #d8c8bc1c;
+  --vine: #5a4531;
+  --vine-light: #9c7f5d;
+  --tendril: #7b9447;
+}
+.trunk,
+.crown,
+.hanging,
+.thumb {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.trunk {
+  height: 100%;
+  overflow: visible;
+}
+.bark {
+  fill: var(--bark);
+}
+.furrows path,
+.furrows ellipse {
+  fill: none;
+  stroke: var(--bark-furrow);
+  stroke-width: 0.9;
+}
+.furrows ellipse {
+  fill: var(--bark-furrow);
+  stroke: none;
+}
+.shadeEdge {
+  stop-color: var(--bark-edge);
+}
+.shadeLight {
+  stop-color: var(--bark-light);
+}
+.crown {
+  top: -8px;
+  pointer-events: none;
+}
+.crown svg,
+.hanging svg,
+.thumb svg {
+  display: block;
+  overflow: visible;
+}
+.hanging {
+  top: 6px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.vineStrand,
+.vineTendril {
+  fill: none;
+  stroke-linecap: round;
+}
+.vineStrand {
+  stroke: var(--vine);
+  stroke-width: 2.2;
+}
+.vineTendril {
+  stroke: var(--tendril);
+  stroke-width: 1.1;
+}
+.thumb {
+  width: 30px;
+  cursor: grab;
+  will-change: transform;
+}
+.thumb:active {
+  cursor: grabbing;
+}
+.coil0,
+.coil1,
+.coil2,
+.coilLight {
+  fill: none;
+  stroke-linecap: round;
+}
+.coil0,
+.coil1,
+.coil2 {
+  stroke-width: 4.2;
+}
+.coil0 {
+  stroke: #5c4327;
+}
+.coil1 {
+  stroke: #6b4f2c;
+}
+.coil2 {
+  stroke: #4a3620;
+}
+.coilLight {
+  stroke: var(--vine-light);
+  stroke-width: 0.9;
+  opacity: 0.6;
+}
+.leaf {
+  transform-box: fill-box;
+  transform-origin: 0% 50%;
+  transition: scale 0.25s ease;
+}
+.thumb:hover .leaf,
+.thumb:active .leaf {
+  scale: 1.18;
+}
+@media (max-width: 760px), (pointer: coarse) {
+  .scrollbar {
+    display: none;
+  }
+}
