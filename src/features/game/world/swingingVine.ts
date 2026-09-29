@@ -514,7 +514,7 @@ export function hoistSwingingVine(
  * instead of leaning to a tilted rest. Energy is capped at a 150 degree
  * swing so a held key never loops the pendulum over its support.
  */
-export const PENDULUM_PUMP_ACCELERATION = 3;
+export const PENDULUM_PUMP_ACCELERATION = 2.2;
 export const PENDULUM_PUMP_MAX_ANGLE = (100 * Math.PI) / 180;
 export function pendulumPumpAllowed(
   position: Readonly<Vec3>,

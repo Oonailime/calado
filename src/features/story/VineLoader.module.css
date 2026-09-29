@@ -39,28 +39,60 @@
   border-radius: 50%;
   background: radial-gradient(circle, var(--loader-glow) 0%, transparent 70%);
 }
+/* Animated boxes are HTML elements moving only by transform or opacity, so
+   they keep playing while loading blocks the main thread (see VineLoader). */
 .wreath {
   position: absolute;
   inset: 0;
+  animation: turn 9s linear infinite;
+}
+.bark,
+.piece svg,
+.leaf svg {
+  display: block;
   width: 100%;
   height: 100%;
   overflow: visible;
+}
+.bark {
+  position: absolute;
+  inset: 0;
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
-  animation: turn 9s linear infinite;
 }
+/* The tendril withers as one group, so the overlapping round ends of its
+   pieces never show through a shared fade. */
 .tendril {
+  position: absolute;
+  inset: 0;
+  animation: wither var(--wave) ease-in-out infinite;
+}
+/* Its own keyframes (--grow) fade each piece in as the growth reaches it. */
+.piece {
+  position: absolute;
+  opacity: 0;
+  animation: var(--grow) var(--wave) linear infinite;
+}
+.piece path {
+  fill: none;
   stroke: #8aaa42;
   stroke-width: 1.1;
-  stroke-dasharray: 100;
-  stroke-dashoffset: 100;
-  animation: grow 2.6s ease-in-out infinite;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.leafSlot {
+  position: absolute;
+  width: 11%;
+  height: 6%;
+  transform-origin: 0 50%;
 }
 .leaf {
-  transform-box: fill-box;
-  transform-origin: 0% 50%;
-  animation: sway 2.6s ease-in-out infinite;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 50%;
+  animation: sway var(--wave) ease-in-out infinite;
 }
 .monkey {
   position: absolute;
@@ -89,18 +121,12 @@
     transform: rotate(360deg);
   }
 }
-@keyframes grow {
-  0% {
-    stroke-dashoffset: 100;
-    opacity: 1;
-  }
-  60%,
+@keyframes wither {
+  0%,
   78% {
-    stroke-dashoffset: 0;
     opacity: 1;
   }
   100% {
-    stroke-dashoffset: 0;
     opacity: 0;
   }
 }
@@ -117,12 +143,13 @@
    infinite loops flicker; show the finished wreath at rest instead. */
 @media (prefers-reduced-motion: reduce) {
   .wreath,
+  .tendril,
   .leaf {
     animation: none;
   }
-  .tendril {
+  .piece {
     animation: none;
-    stroke-dashoffset: 0;
+    opacity: 1;
   }
 }
 @media (max-width: 760px), (pointer: coarse) {

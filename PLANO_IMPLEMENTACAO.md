@@ -29,6 +29,7 @@ npm run dev
 - `/` abre a história e o portfólio. A rolagem conduz até o botão **Jogar**. Uma tela de carregamento com a coroa de cipó de seleção cobre a página até a cena 3D carregar, e a barra de rolagem é um tronco com um cipó.
 - Modo claro é a história original; modo escuro é a história no cenário vulcânico. O tema segue a preferência do sistema até o visitante escolher no botão de sol/lua, e a escolha fica salva no navegador.
 - `/design2` abre direto no modo escuro, sem alterar a escolha salva.
+- O cabeçalho da história e a barra do jogo têm um botão de tela cheia. Ele vale para a página inteira, então sair do jogo para a história mantém a tela cheia.
 - `/?map=phase2` abre diretamente a região vulcânica.
 - `/?map=phase3` abre diretamente a região da copa.
 - `/?map=phase4` continua aceito como alias de `phase3`.

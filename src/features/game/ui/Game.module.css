@@ -114,6 +114,10 @@
 .icon[aria-pressed="true"] {
   border-color: #e0be78;
 }
+.icon svg {
+  width: 18px;
+  height: 18px;
+}
 .inventory {
   position: absolute;
   top: 25px;

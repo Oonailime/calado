@@ -70,17 +70,21 @@
   background: #ccb88a;
   color: #1a2921;
 }
-.tools .themeToggle {
+.tools .iconToggle {
   display: grid;
   place-items: center;
-  margin-right: 8px;
 }
-/* Pressed only means "dark"; unlike PT/EN it isn't a selected option. */
-.journey .tools button.themeToggle[aria-pressed="true"] {
+/* Sets the icon toggles apart from the PT/EN pair. */
+.tools .iconToggle + button:not(.iconToggle) {
+  margin-left: 8px;
+}
+/* Pressed only means "on" (dark, fullscreen); unlike PT/EN it isn't a
+   selected option. */
+.journey .tools button.iconToggle[aria-pressed="true"] {
   background: transparent;
   color: inherit;
 }
-.themeToggle svg {
+.iconToggle svg {
   width: 17px;
   height: 17px;
   fill: none;

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { MonkeyGlyph } from "@/features/story/SceneArt";
+import { FullscreenIcon, toggleFullscreen, useFullscreen } from "@/features/story/fullscreen";
 import { runtime, useGame, type Quality } from "../state/store";
 import { CHARACTERS, CHARACTER_KEY_BINDINGS, type CharacterId } from "../types";
 import type { Locale } from "@/content/story";
@@ -79,6 +80,7 @@ export default function Controls({
 }) {
   const state = useGame();
   const pt = locale === "pt";
+  const fullscreen = useFullscreen();
   const first = useRef<HTMLButtonElement>(null);
   const pause = useRef<HTMLButtonElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
@@ -359,6 +361,16 @@ export default function Controls({
         >
           ∿
         </button>
+        {fullscreen.available && (
+          <button
+            className={styles.icon}
+            aria-label={pt ? "Tela cheia" : "Fullscreen"}
+            aria-pressed={fullscreen.active}
+            onClick={toggleFullscreen}
+          >
+            <FullscreenIcon active={fullscreen.active} />
+          </button>
+        )}
         <button
           ref={pause}
           className={styles.icon}

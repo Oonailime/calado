@@ -19,6 +19,7 @@ import WorkPortfolio from "./WorkPortfolio";
 import VineLoader from "./VineLoader";
 import VineScrollbar from "./VineScrollbar";
 import { applyTheme, readTheme, restoreTheme, subscribeTheme, type Theme } from "./theme";
+import { FullscreenIcon, toggleFullscreen, useFullscreen } from "./fullscreen";
 import type { GameProps } from "@/features/game/types";
 import type { StorySceneProps } from "./scene3d/StoryScene";
 
@@ -54,6 +55,7 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
     () => matchMedia("(prefers-reduced-motion: reduce)").matches,
     () => false,
   );
+  const fullscreen = useFullscreen();
   const scene = Math.min(7, Math.floor(progress * 8));
   const phase = Math.min(1, progress * 8 - scene);
   const ufmgDoorOpenness = houseDoorOpenness(
@@ -186,8 +188,20 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
               EMILIANO CALADO
             </div>
             <div className={styles.tools}>
+              {fullscreen.available && (
+                <button
+                  className={styles.iconToggle}
+                  onClick={toggleFullscreen}
+                  aria-label={pt ? "Tela cheia" : "Fullscreen"}
+                  title={pt ? (fullscreen.active ? "Sair da tela cheia" : "Tela cheia")
+                    : (fullscreen.active ? "Exit fullscreen" : "Fullscreen")}
+                  aria-pressed={fullscreen.active}
+                >
+                  <FullscreenIcon active={fullscreen.active} />
+                </button>
+              )}
               <button
-                className={styles.themeToggle}
+                className={styles.iconToggle}
                 onClick={() => applyTheme(dark ? "light" : "dark")}
                 aria-label={pt ? "Modo escuro" : "Dark mode"}
                 title={pt ? (dark ? "Mudar para o modo claro" : "Mudar para o modo escuro")
