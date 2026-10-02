@@ -62,6 +62,13 @@ export function phase2SkipWalk(): boolean {
   return new URLSearchParams(window.location.search).has("skip");
 }
 
+// Another URL-only dev switch: ?debug (or &debug next to ?map or ?skip)
+// brings the movement debug tool into the game, its HUD button and the `
+// key. Without it the tool stays hidden.
+export const DEBUG_TOOLS =
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).has("debug");
+
 // The same URL flag on the islands (?skip or ?map=islands&skip) or phase 3
 // (?map=phase3&skip) starts at that map's final puzzle instead: the puzzle
 // state comes from finalPuzzleSkipState and the monkeys spawn beside it

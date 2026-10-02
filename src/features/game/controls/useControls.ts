@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { runtime, useGame } from "../state/store";
+import { DEBUG_TOOLS, runtime, useGame } from "../state/store";
 import { anchors, distance, LOCK_RANGE, nearCubeShrine } from "../state/rules";
 import { CHARACTER_KEY_BINDINGS } from "../types";
 import { phase2Chess } from "../world/phase2Chess";
@@ -77,7 +77,7 @@ export function useControls(active: boolean, onExit: () => void) {
         "Digit1",
         "Digit2",
         "Digit3",
-        "Backquote",
+        ...(DEBUG_TOOLS ? ["Backquote"] : []),
         "ShiftLeft",
         "ShiftRight",
         "AltLeft",

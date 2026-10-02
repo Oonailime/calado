@@ -1,11 +1,31 @@
 .layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; touch-action: none; }
 .view { position: absolute; right: 0; top: 12%; bottom: 0; width: 50%; pointer-events: auto; touch-action: none; }
-.joystick { position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom)); width: 140px; height: 140px; border: 2px solid #f3e2b699; border-radius: 50%; background: #12261baa; pointer-events: auto; touch-action: none; }
-.joystick span { position: absolute; left: 43px; top: 43px; width: 50px; height: 50px; border-radius: 50%; background: #e2c88bbb; box-shadow: 0 0 0 2px #fff7; }
-.actions { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(2, minmax(66px, 1fr)); gap: 8px; pointer-events: auto; }
-.action, .pause { min-width: 58px; min-height: 48px; padding: 8px; border: 1px solid #e5c88f; border-radius: 12px; background: #19372ddc; color: #fff0c9; font: 600 12px/1.2 sans-serif; touch-action: none; user-select: none; }
-.action:active { background: #bd9b5e; color: #17291e; }
-.vineActions { grid-column: 1 / -1; display: flex; gap: 8px; }
-.vineActions .action { flex: 1; }
-.pause { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); pointer-events: auto; }
-@media (max-height: 430px) { .joystick { width: 112px; height: 112px; } .joystick span { left: 30px; top: 30px; } .actions { gap: 5px; } .action { min-height: 44px; } }
+/* Corner and size come from the game root (Game.module.css), which also
+   centres the help button above the stick. */
+.joystick { position: absolute; left: var(--touch-left, 18px); bottom: var(--touch-bottom, 18px); width: var(--stick-size, 140px); height: var(--stick-size, 140px); border: 2px solid #f3e2b699; border-radius: 50%; background: #12261baa; pointer-events: auto; touch-action: none; }
+.joystick span { position: absolute; left: calc(50% - 25px); top: calc(50% - 25px); width: 50px; height: 50px; border-radius: 50%; background: #e2c88bbb; box-shadow: 0 0 0 2px #fff7; }
+/* Round icon buttons in the stick knob's gold. Jump, the most used, sits in
+   the corner under the thumb; climb and descend fill the left column while
+   the monkey holds a vine; the camera toggle sits above Interact. Empty cells
+   let camera drags through. */
+.actions {
+  --action-size: 56px;
+  position: absolute;
+  right: max(18px, env(safe-area-inset-right));
+  bottom: var(--touch-bottom, 18px);
+  display: grid;
+  grid-template-columns: repeat(3, var(--action-size));
+  grid-template-rows: repeat(2, var(--action-size));
+  grid-template-areas: "climb camera ability" "descend interact jump";
+  gap: 10px;
+  pointer-events: none;
+}
+.action { display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: #e2c88bbb; box-shadow: 0 0 0 2px #fff7; color: #17291e; pointer-events: auto; touch-action: none; user-select: none; -webkit-user-select: none; transition: transform 0.08s, background-color 0.08s; }
+.action:active { background: #f0d79ee6; transform: scale(0.92); }
+/* A view control rather than an action: the stick's dark base, gold while
+   the camera is pulled back. */
+.camera { display: grid; place-items: center; padding: 0; border: 2px solid #f3e2b699; border-radius: 50%; background: #12261baa; color: #f3e2b6; pointer-events: auto; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.camera[aria-pressed="true"] { border-color: #fff7; background: #e2c88bbb; color: #17291e; }
+.action svg, .camera svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pause { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); min-width: 58px; min-height: 48px; padding: 8px; border: 1px solid #e5c88f; border-radius: 12px; background: #19372ddc; color: #fff0c9; font: 600 12px/1.2 sans-serif; pointer-events: auto; touch-action: none; user-select: none; }
+@media (max-height: 430px) { .actions { --action-size: 50px; gap: 8px; } }

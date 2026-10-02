@@ -4,12 +4,27 @@ import { useEffect, useRef, useState, type PointerEvent } from "react";
 import type { Locale } from "@/content/story";
 import { useTouchDevice } from "@/features/story/useTouchDevice";
 import { runtime, useGame } from "../state/store";
-import { JOYSTICK_RADIUS, joystickKeys, pinchZoom } from "./touchInput";
+import { cameraButtonZoom, cameraIsFar, JOYSTICK_RADIUS, joystickKeys, pinchZoom } from "./touchInput";
 import styles from "./TouchControls.module.css";
 
 function sendKey(type: "keydown" | "keyup", code: string) {
   window.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true }));
 }
+
+// Drawn for these buttons on a 24px grid; an action's key is also its grid area.
+const ICONS = {
+  // An arrow lifting off the ground.
+  jump: <><path d="M12 16V4" /><path d="m7 9 5-5 5 5" /><path d="M6 20h12" /></>,
+  // An open hand, to grab or use what is near.
+  interact: <><path d="M8.5 12V6.5a1.5 1.5 0 0 1 3 0V11" /><path d="M11.5 11V5a1.5 1.5 0 0 1 3 0v6" /><path d="M14.5 11V7a1.5 1.5 0 0 1 3 0v6.5a7 7 0 0 1-7 7h-.6a5.5 5.5 0 0 1-4.2-2l-1.9-2.6a1.5 1.5 0 0 1 2.3-1.9L8.5 16v-4" /></>,
+  // A four-point spark: the selected monkey's power.
+  ability: <path d="M12 3q1 8 9 9-8 1-9 9-1-8-9-9 8-1 9-9Z" fill="currentColor" />,
+  climb: <path d="m6 15 6-6 6 6" />,
+  descend: <path d="m6 9 6 6 6-6" />,
+  // A magnifier: minus pulls the camera back, plus brings it in again.
+  zoomOut: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 5 5" /><path d="M7.5 10.5h6" /></>,
+  zoomIn: <><circle cx="10.5" cy="10.5" r="6.5" /><path d="m15.5 15.5 5 5" /><path d="M7.5 10.5h6M10.5 7.5v6" /></>,
+};
 
 export default function TouchControls({ active, locale }: { active: boolean; locale: Locale }) {
   const touchDevice = useTouchDevice();
@@ -19,6 +34,9 @@ export default function TouchControls({ active, locale }: { active: boolean; loc
   const abilityKey = useGame(s => s.abilityKey);
   const selected = useGame(s => s.puzzle.selected);
   const [vine, setVine] = useState(false);
+  // Zoom lives in `runtime` and pinching changes it too; polled with the vine state.
+  const [cameraFar, setCameraFar] = useState(false);
+  const zoomBeforeFar = useRef(1);
   const [stick, setStick] = useState({ x: 0, y: 0 });
   const stickPointer = useRef<number | null>(null);
   const held = useRef(new Set<string>());
@@ -28,7 +46,10 @@ export default function TouchControls({ active, locale }: { active: boolean; loc
 
   useEffect(() => {
     if (!enabled) return;
-    const update = () => setVine(["vine-swing", "vine-grab", "vine-walk"].includes(runtime.motions[useGame.getState().puzzle.selected] ?? ""));
+    const update = () => {
+      setVine(["vine-swing", "vine-grab", "vine-walk"].includes(runtime.motions[useGame.getState().puzzle.selected] ?? ""));
+      setCameraFar(cameraIsFar(runtime.zoom));
+    };
     update();
     const timer = window.setInterval(update, 120);
     return () => window.clearInterval(timer);
@@ -100,9 +121,10 @@ export default function TouchControls({ active, locale }: { active: boolean; loc
     viewPointers.current.delete(event.pointerId);
     pinchDistance.current = distance();
   };
-  const action = (code: string, label: string, className = "") => (
+  const action = (code: string, label: string, icon: keyof typeof ICONS) => (
     <button
-      className={`${styles.action} ${className}`}
+      className={styles.action}
+      style={{ gridArea: icon }}
       aria-label={label}
       disabled={!enabled}
       onPointerDown={event => { event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); press(code); }}
@@ -110,7 +132,7 @@ export default function TouchControls({ active, locale }: { active: boolean; loc
       onPointerCancel={() => release(code)}
       onLostPointerCapture={() => release(code)}
       type="button"
-    >{label}</button>
+    ><svg viewBox="0 0 24 24" aria-hidden="true">{ICONS[icon]}</svg></button>
   );
   return <div className={styles.layer} aria-label={pt ? "Controles de toque" : "Touch controls"}>
     {enabled && <>
@@ -135,13 +157,25 @@ export default function TouchControls({ active, locale }: { active: boolean; loc
         onPointerMove={viewMove} onPointerUp={viewEnd} onPointerCancel={viewEnd} onLostPointerCapture={viewEnd}
       />
       <div className={styles.actions}>
-        {vine && <div className={styles.vineActions}>
-          {action("ShiftLeft", pt ? "Subir" : "Climb")}
-          {action("AltLeft", pt ? "Descer" : "Descend")}
-        </div>}
-        {action("Space", pt ? "Pular" : "Jump")}
-        {action("KeyE", pt ? "Agarrar / interagir" : "Grab / interact")}
-        {action(abilityKey, pt ? "Habilidade" : "Ability")}
+        <button
+          className={styles.camera}
+          style={{ gridArea: "camera" }}
+          aria-label={pt ? "Afastar câmera" : "Pull camera back"}
+          aria-pressed={cameraFar}
+          onClick={() => {
+            if (!cameraIsFar(runtime.zoom)) zoomBeforeFar.current = runtime.zoom;
+            runtime.zoom = cameraButtonZoom(runtime.zoom, zoomBeforeFar.current);
+            setCameraFar(cameraIsFar(runtime.zoom));
+          }}
+          type="button"
+        ><svg viewBox="0 0 24 24" aria-hidden="true">{cameraFar ? ICONS.zoomIn : ICONS.zoomOut}</svg></button>
+        {vine && <>
+          {action("ShiftLeft", pt ? "Subir" : "Climb", "climb")}
+          {action("AltLeft", pt ? "Descer" : "Descend", "descend")}
+        </>}
+        {action("Space", pt ? "Pular" : "Jump", "jump")}
+        {action("KeyE", pt ? "Agarrar / interagir" : "Grab / interact", "interact")}
+        {action(abilityKey, pt ? "Habilidade" : "Ability", "ability")}
       </div>
     </>}
     {!paused && <button className={styles.pause} type="button" aria-label={pt ? "Pausar" : "Pause"}

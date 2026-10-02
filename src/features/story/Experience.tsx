@@ -19,7 +19,7 @@ import WorkPortfolio from "./WorkPortfolio";
 import VineLoader from "./VineLoader";
 import VineScrollbar from "./VineScrollbar";
 import { applyTheme, readTheme, restoreTheme, subscribeTheme, type Theme } from "./theme";
-import { FullscreenIcon, toggleFullscreen, useFullscreen } from "./fullscreen";
+import { FullscreenButton } from "./fullscreen";
 import type { GameProps } from "@/features/game/types";
 import type { StorySceneProps } from "./scene3d/StoryScene";
 import { useMobileGraphics } from "./useMobileGraphics";
@@ -58,7 +58,6 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
     () => matchMedia("(prefers-reduced-motion: reduce)").matches,
     () => false,
   );
-  const fullscreen = useFullscreen();
   const mobile = useMobileGraphics();
   const touchDevice = useTouchDevice();
   const [mobileNotice, setMobileNotice] = useState<"intro" | "rotate" | null>("intro");
@@ -124,7 +123,10 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
   }, []);
   useLayoutEffect(() => restoreTheme(initialTheme), [initialTheme]);
   useEffect(() => {
-    if (!variant) return;
+    // On a phone the notice comes first. Loading the scene behind it blocks
+    // the main thread for seconds at a time, and its buttons stop answering
+    // taps; the scene starts loading once the notice is closed.
+    if (!variant || noticeOpen) return;
     let cancelled = false;
     const sceneModule = variant === "volcanic"
       ? import("./scene3d/VolcanicStoryScene")
@@ -133,12 +135,12 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
       if (!cancelled) setStoryScene({ variant, Component: module.default });
     });
     return () => { cancelled = true; };
-  }, [variant]);
+  }, [variant, noticeOpen]);
   useEffect(() => {
-    if (!variant || ready) return;
+    if (!variant || ready || noticeOpen) return;
     const timeout = setTimeout(() => setReadyVariant(variant), LOADER_TIMEOUT_MS);
     return () => clearTimeout(timeout);
-  }, [variant, ready]);
+  }, [variant, ready, noticeOpen]);
   useEffect(() => {
     if (!playing) return;
     const previous = document.body.style.overflow;
@@ -211,18 +213,7 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
               EMILIANO CALADO
             </div>
             <div className={styles.tools}>
-              {fullscreen.available && (
-                <button
-                  className={styles.iconToggle}
-                  onClick={toggleFullscreen}
-                  aria-label={pt ? "Tela cheia" : "Fullscreen"}
-                  title={pt ? (fullscreen.active ? "Sair da tela cheia" : "Tela cheia")
-                    : (fullscreen.active ? "Exit fullscreen" : "Fullscreen")}
-                  aria-pressed={fullscreen.active}
-                >
-                  <FullscreenIcon active={fullscreen.active} />
-                </button>
-              )}
+              <FullscreenButton className={styles.iconToggle} locale={locale} />
               <button
                 className={styles.iconToggle}
                 onClick={() => applyTheme(dark ? "light" : "dark")}

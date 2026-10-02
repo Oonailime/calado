@@ -53,10 +53,12 @@ test("jogo móvel oferece controles em paisagem e aviso em retrato", async ({ br
   await expect(page.getByRole("button", { name: "Habilidade" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Pular" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Pausar" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Fechar dica" })).toBeVisible();
-  await page.getByRole("button", { name: "Fechar dica" }).click();
-  await expect(page.getByRole("button", { name: "Mostrar dica" })).toBeVisible();
-  await page.getByRole("button", { name: "Mostrar dica" }).click();
+  // Guidance waits behind the one help button until the player asks for it.
+  await expect(page.getByRole("region", { name: "Ajuda" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Ajuda" }).click();
+  await expect(page.getByRole("region", { name: "Ajuda" })).toBeVisible();
+  await page.getByRole("button", { name: "Fechar ajuda" }).click();
+  await expect(page.getByRole("region", { name: "Ajuda" })).toHaveCount(0);
   const joystick = await page.getByLabel("Mover").boundingBox();
   const view = await page.getByLabel("Arraste para girar a câmera; pince para zoom").boundingBox();
   expect(joystick).not.toBeNull();
@@ -79,6 +81,16 @@ test("jogo móvel oferece controles em paisagem e aviso em retrato", async ({ br
     await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [first, { ...second, x: second.x + 70 }] });
     await expect.poll(() => page.evaluate(() => (window as unknown as { __game: { runtime: { zoom: number } } }).__game.runtime.zoom)).toBeLessThan(zoomBefore);
     await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    // The camera button pulls the view back and, pressed again, returns it.
+    const zoom = () => page.evaluate(() => (window as unknown as { __game: { runtime: { zoom: number } } }).__game.runtime.zoom);
+    const pinched = await zoom();
+    const camera = page.getByRole("button", { name: "Afastar câmera" });
+    await camera.tap();
+    await expect(camera).toHaveAttribute("aria-pressed", "true");
+    expect(await zoom()).toBeCloseTo(1.6);
+    await camera.tap();
+    await expect(camera).toHaveAttribute("aria-pressed", "false");
+    expect(await zoom()).toBeCloseTo(pinched);
     for (const [label, code] of [["Pular", "Space"], ["Agarrar / interagir", "KeyE"], ["Habilidade", "KeyF"]] as const) {
       const button = await page.getByRole("button", { name: label }).boundingBox();
       expect(button).not.toBeNull();
@@ -159,18 +171,29 @@ test("joystick aparece com toque mesmo se o ponteiro principal é preciso", asyn
   await context.close();
 });
 
-test("instruções de xadrez podem ser fechadas e reabertas no toque", async ({ browser }) => {
+test("fase 2 no toque: câmera próxima e xadrez dentro da ajuda", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   await page.goto("/?map=phase2");
   await page.getByRole("button", { name: /Estou ciente/ }).click();
   await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByRole("region", { name: "Ambiente jogável" })).toHaveAttribute("data-ready", "true", { timeout: 90_000 });
-  await expect(page.getByRole("region", { name: "Instruções de xadrez" })).toBeVisible();
-  await page.getByRole("button", { name: "Fechar instruções de xadrez" }).click();
+  // A phone keeps the close framing at rest; the wide valley view is a pinch away.
+  await expect.poll(() => page.evaluate(() => {
+    const w = window as unknown as {
+      __canopyTest: { camera: { position: { x: number; y: number; z: number } } };
+      __game: { runtime: { positions: { x: number; y: number; z: number }[] }; useGame: { getState: () => { puzzle: { selected: number } } } };
+    };
+    const monkey = w.__game.runtime.positions[w.__game.useGame.getState().puzzle.selected];
+    const camera = w.__canopyTest.camera.position;
+    return Math.hypot(camera.x - monkey.x, camera.y - monkey.y, camera.z - monkey.z);
+  })).toBeLessThan(15);
   await expect(page.getByRole("region", { name: "Instruções de xadrez" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Mostrar instruções de xadrez" }).click();
-  await expect(page.getByRole("region", { name: "Instruções de xadrez" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Ajuda" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Ajuda" }).click();
+  await expect(page.getByRole("region", { name: "Ajuda" })).toContainText("Fase 2 · Xadrez");
+  await page.getByRole("button", { name: "Fechar ajuda" }).click();
+  await expect(page.getByRole("region", { name: "Ajuda" })).toHaveCount(0);
   await context.close();
 });
 
@@ -182,4 +205,30 @@ test("desktop conserva a bananeira original e os controles de mouse", async ({ p
   expect(requests.some(url => url.endsWith("/PlantWithBananas.fbx"))).toBe(true);
   expect(requests.some(url => url.endsWith("/PlantWithBananas.glb"))).toBe(false);
   await expect(page.getByLabel("Mover")).toHaveCount(0);
+  // The movement debug tool needs ?debug, like ?skip.
+  await expect(page.getByRole("button", { name: "Debug de movimentação" })).toHaveCount(0);
+});
+
+test("ferramenta de debug aparece só com ?debug", async ({ page }) => {
+  await page.goto("/?skip&debug");
+  await expect(page.getByRole("region", { name: "Ambiente jogável" })).toHaveAttribute("data-ready", "true", { timeout: 90_000 });
+  await page.getByRole("button", { name: "Debug de movimentação" }).click();
+  await expect(page.locator("pre")).toContainText("fps");
+});
+
+test("celular sem API de tela cheia explica a Tela de Início", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
+  // An iPhone's Safari has no fullscreen API for pages.
+  await context.addInitScript(() => Object.defineProperty(Document.prototype, "fullscreenEnabled", { get: () => false }));
+  const page = await context.newPage();
+  await page.goto("/");
+  await expect(page.locator('link[rel="manifest"]')).toHaveCount(1);
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveCount(1);
+  await page.getByRole("button", { name: /Estou ciente/ }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await page.getByRole("button", { name: "Tela cheia" }).click();
+  await expect(page.getByRole("dialog", { name: "Tela cheia pela Tela de Início" })).toBeVisible();
+  await page.getByRole("button", { name: "Entendi" }).click();
+  await expect(page.getByRole("dialog", { name: "Tela cheia pela Tela de Início" })).toHaveCount(0);
+  await context.close();
 });

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { MonkeyGlyph } from "@/features/story/SceneArt";
-import { FullscreenIcon, toggleFullscreen, useFullscreen } from "@/features/story/fullscreen";
-import { runtime, useGame, type Quality } from "../state/store";
+import { FullscreenButton } from "@/features/story/fullscreen";
+import { DEBUG_TOOLS, runtime, useGame, type Quality } from "../state/store";
 import { CHARACTERS, CHARACTER_KEY_BINDINGS, type CharacterId } from "../types";
 import type { Locale } from "@/content/story";
 import Inventory from "./Inventory";
 import { phase2Chess } from "../world/phase2Chess";
+import { useChessGuidance } from "../world/ChessTab";
 import { canopyInteractionHint, type CanopyInteractionHint } from "../state/rules";
 import { PHASE_FOUR_PLATFORMS } from "../world/phaseFourLayout";
 import { brownPrismGuidance, canopyRouteGuidance, onBrownPrismDeck, onShrineDeck, shrineGuidance } from "./canopyGuidance";
@@ -83,8 +84,8 @@ export default function Controls({
   const state = useGame();
   const pt = locale === "pt";
   const touch = useTouchDevice();
-  const [dismissedHint, setDismissedHint] = useState<string | null>(null);
-  const fullscreen = useFullscreen();
+  const [helpOpen, setHelpOpen] = useState(false);
+  const chessGuidance = useChessGuidance(locale, touch);
   const first = useRef<HTMLButtonElement>(null);
   const pause = useRef<HTMLButtonElement>(null);
   const dialog = useRef<HTMLDivElement>(null);
@@ -323,6 +324,9 @@ export default function Controls({
       "The portal has been built",
       "The portal opened in the large tree on the right of the second island. Walk into the blue opening to cross.",
     );
+  const help: Instruction[] = [];
+  if (hint) help.push({ title: hint.title, body: touchHint(hint.body, pt, state.abilityKey) });
+  if (state.map === "phase2" && chessGuidance) help.push(chessGuidance);
   return (
     <>
       <Inventory locale={locale} />
@@ -354,27 +358,20 @@ export default function Controls({
         >
           ↺
         </button>
-        <button
-          className={styles.icon}
-          aria-label={pt ? "Debug de movimentação" : "Movement debug"}
-          aria-pressed={state.movementDebug}
-          aria-keyshortcuts="`"
-          onClick={() =>
-            state.configure({ movementDebug: !state.movementDebug })
-          }
-        >
-          ∿
-        </button>
-        {fullscreen.available && (
+        {DEBUG_TOOLS && (
           <button
             className={styles.icon}
-            aria-label={pt ? "Tela cheia" : "Fullscreen"}
-            aria-pressed={fullscreen.active}
-            onClick={toggleFullscreen}
+            aria-label={pt ? "Debug de movimentação" : "Movement debug"}
+            aria-pressed={state.movementDebug}
+            aria-keyshortcuts="`"
+            onClick={() =>
+              state.configure({ movementDebug: !state.movementDebug })
+            }
           >
-            <FullscreenIcon active={fullscreen.active} />
+            ∿
           </button>
         )}
+        <FullscreenButton className={styles.icon} locale={locale} />
         <button
           ref={pause}
           className={styles.icon}
@@ -387,18 +384,30 @@ export default function Controls({
           Ⅱ
         </button>
       </div>
-      {state.movementDebug && <MovementDebugPanel />}
-      {hint && !state.paused && !state.cubePuzzleOpen && (
-        touch && dismissedHint === `${hint.title}|${hint.body}`
-          ? <button className={styles.hintOpen} type="button" aria-label={pt ? "Mostrar dica" : "Show hint"}
-              onClick={() => setDismissedHint(null)}>?</button>
-          : <div className={styles.hint} role="status">
-              {touch && <button className={styles.hintClose} type="button" aria-label={pt ? "Fechar dica" : "Dismiss hint"}
-                onClick={() => setDismissedHint(`${hint.title}|${hint.body}`)}>×</button>}
-              <strong>{hint.title}</strong>
-              <span>{touch ? touchHint(hint.body, pt, state.abilityKey) : hint.body}</span>
-            </div>
+      {DEBUG_TOOLS && state.movementDebug && <MovementDebugPanel />}
+      {hint && !touch && !state.paused && !state.cubePuzzleOpen && (
+        <div className={styles.hint} role="status">
+          <strong>{hint.title}</strong>
+          <span>{hint.body}</span>
+        </div>
       )}
+      {/* On touch all guidance waits behind one help button above the joystick. */}
+      {touch && help.length > 0 && !state.paused && !state.cubePuzzleOpen && <>
+        <button className={styles.helpButton} type="button" aria-label={pt ? "Ajuda" : "Help"}
+          aria-expanded={helpOpen} onClick={() => setHelpOpen(open => !open)}>?</button>
+        {helpOpen && (
+          <div className={styles.helpPanel} role="region" aria-label={pt ? "Ajuda" : "Help"}>
+            <button className={styles.helpClose} type="button" aria-label={pt ? "Fechar ajuda" : "Close help"}
+              onClick={() => setHelpOpen(false)}>×</button>
+            {help.map(section => (
+              <section key={section.title}>
+                <strong>{section.title}</strong>
+                <span>{section.body}</span>
+              </section>
+            ))}
+          </div>
+        )}
+      </>}
       <div
         className={styles.portraits}
         aria-label={pt ? "Selecionar personagem" : "Select character"}

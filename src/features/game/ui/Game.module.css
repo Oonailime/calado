@@ -24,9 +24,6 @@
 .chessActions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chessPanel button { border: 1px solid #d7b77788; border-radius: 7px; padding: 7px 9px; background: #302b27; color: #ffefd0; cursor: pointer; }
 .chessPanel button:disabled { opacity: .42; cursor: not-allowed; }
-.chessHintOpen { position: absolute; top: 130px; right: 8px; z-index: 5; width: 44px; height: 44px; border: 1px solid #d7bb7b88; border-radius: 50%; background: #242029e8; color: #f9e7ae; font-size: 23px; cursor: pointer; }
-.chessPanel .chessHintClose { position: absolute; top: 0; right: 0; width: 44px; height: 44px; border: 0; background: transparent; color: #f9e7ae; font-size: 23px; }
-.root[data-touch="true"] .chessPanel { padding-right: 44px; }
 .chessStop { margin-top: 8px; }
 .portalButton { width: 100%; margin-top: 10px; background: #614d2b !important; }
 .chessTab {
@@ -735,7 +732,19 @@
   color: #929a8d;
   cursor: default;
 }
-.hintClose, .hintOpen {
+/* The joystick's corner and size (TouchControls.module.css reads these), so
+   the help button can sit centred above it. */
+.root {
+  --touch-left: max(18px, env(safe-area-inset-left));
+  --touch-bottom: max(18px, env(safe-area-inset-bottom));
+  --stick-size: 140px;
+}
+@media (max-height: 430px) {
+  .root { --stick-size: 112px; }
+}
+/* Touch guidance: one help button above the joystick, left of centre, opens
+   the contextual hint (and phase 2's chess instructions) only on request. */
+.helpButton, .helpClose {
   display: grid;
   place-items: center;
   width: 44px;
@@ -747,8 +756,32 @@
   font-size: 23px;
   cursor: pointer;
 }
-.hintClose { position: absolute; top: 0; right: 0; }
-.hintOpen { position: absolute; z-index: 5; top: max(62px, calc(env(safe-area-inset-top) + 50px)); left: 50%; transform: translateX(-50%); }
+.helpButton, .helpPanel {
+  --help-bottom: max(calc(var(--touch-bottom) + var(--stick-size) + 16px), calc(50% - 22px));
+  position: absolute;
+  z-index: 5;
+  bottom: var(--help-bottom);
+}
+.helpButton { left: calc(var(--touch-left) + var(--stick-size) / 2 - 22px); }
+.helpButton[aria-expanded="true"] { background: #e2c88b; color: #17291e; }
+.helpPanel {
+  left: calc(var(--touch-left) + var(--stick-size) / 2 + 32px);
+  width: min(56vw, 400px);
+  max-height: calc(100% - var(--help-bottom) - max(62px, calc(env(safe-area-inset-top) + 50px)));
+  overflow-y: auto;
+  padding: 10px 48px 10px 12px;
+  border: 1px solid #cbbd8855;
+  border-radius: 10px;
+  background: #14291ef2;
+  color: #e2e2ce;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.helpPanel section + section { margin-top: 8px; padding-top: 8px; border-top: 1px solid #cbbd8833; }
+.helpPanel strong, .helpPanel span { display: block; }
+.helpPanel strong { margin-bottom: 2px; color: #f1d79a; }
+.helpClose { position: absolute; top: 0; right: 0; border: 0; background: transparent; }
+.contrast .helpPanel { background: #08140c; color: #fff; border-color: #fff; }
 @media (pointer: coarse), (any-pointer: coarse) and (max-width: 1100px) {
   .root, .canvas { touch-action: none; }
   .bar { top: max(12px, env(safe-area-inset-top)); right: 76px; gap: 5px; }
@@ -759,13 +792,6 @@
   }
   .portrait { width: 50px; height: 50px; padding: 6px; }
   .characterKey { display: none; }
-  .hint, .root[data-map="phase2"] .hint {
-    top: max(62px, calc(env(safe-area-inset-top) + 50px)); bottom: auto;
-    left: 50%; transform: translateX(-50%); width: min(52vw, 420px);
-    box-sizing: border-box; max-height: min(100px, 28svh); overflow-y: auto; padding: 6px 32px 6px 8px; font-size: 10px; line-height: 1.3;
-    text-align: center;
-  }
-  .hint strong { font-size: 10px; margin: 0; }
   .exit { display: none; }
   .inventory, .root[data-map="phase2"] .inventory { top: max(12px, env(safe-area-inset-top)); bottom: auto; left: max(12px, env(safe-area-inset-left)); flex-direction: row; gap: 4px; }
   .inventoryItem { min-width: 76px; height: 44px; }
@@ -781,20 +807,11 @@
   .cubeRow { grid-template-columns: 1fr 44px 44px; }
   .chessTab { top: 8px; right: 8px; bottom: 8px; width: min(420px, 60vw); }
   .chessTabSide button { min-height: 44px; }
-  .chessPanel { top: 130px; right: 8px; bottom: auto; width: min(260px, 34vw); max-height: 35svh; overflow-y: auto; }
   .chessBoardFrame { width: 372px; max-width: 100%; }
   .chessUiBoard { width: 352px; max-width: none; }
   .chessSquare { min-width: 0; min-height: 0 !important; }
 }
 .root[data-touch="true"], .root[data-touch="true"] .canvas { touch-action: none; }
-.root[data-touch="true"] .hint, .root[data-touch="true"][data-map="phase2"] .hint {
-  z-index: 5;
-  top: max(62px, calc(env(safe-area-inset-top) + 50px)); bottom: auto; left: 50%;
-  transform: translateX(-50%); width: min(52vw, 420px); box-sizing: border-box;
-  max-height: min(100px, 28svh); overflow-y: auto; padding: 6px 32px 6px 8px;
-  font-size: 10px; line-height: 1.3; text-align: center;
-}
-.root[data-touch="true"] .hint strong { font-size: 10px; margin: 0; }
 .root[data-portrait="true"] .rotateNotice { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; background: #14291f; text-align: center; font-size: 17px; }
 @media (pointer: fine) { .lockTouch { display: none; } }
 .root[data-touch="true"] .lockTouch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }

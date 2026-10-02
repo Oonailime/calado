@@ -11,7 +11,8 @@ import {
   Vector3,
 } from "three";
 import { runtime, useGame } from "../state/store";
-import { ZOOM_MIN } from "../controls/useControls";
+import { ZOOM_MAX, ZOOM_MIN } from "../controls/useControls";
+import { useTouchDevice } from "@/features/story/useTouchDevice";
 import {
   PHASE_FOUR_CLEAR_VIEW_MIN_Y,
   PHASE_FOUR_CLEAR_VIEW_TREES,
@@ -169,6 +170,7 @@ function advanceRestore(mesh: Mesh, entry: FadeEntry, dt: number) {
 }
 
 export default function FollowCamera({ running }: { running: boolean }) {
+  const touch = useTouchDevice();
   const look = useRef(new Vector3(0, 0.9, 3));
   const target = useRef(new Vector3());
   const player = useRef(new Vector3());
@@ -233,11 +235,15 @@ export default function FollowCamera({ running }: { running: boolean }) {
     const zoom = focusingCube || focusingChess ? 1 : runtime.zoom;
     // 0 at minimum zoom (matches every other map's close framing exactly),
     // 1 at rest and beyond (the volcanic map's own wide valley framing,
-    // scaled up further by `zoom` below exactly as before).
+    // scaled up further by `zoom` below exactly as before). A phone's small
+    // screen loses the monkeys in that valley view, so on touch the rest
+    // position keeps the close framing and pinching out opens the valley.
     const phase2Blend =
-      state.map === "phase2"
-        ? Math.min(1, Math.max(0, (zoom - ZOOM_MIN) / (1 - ZOOM_MIN)))
-        : 0;
+      state.map !== "phase2"
+        ? 0
+        : touch
+          ? Math.min(1, Math.max(0, (zoom - 1) / (ZOOM_MAX - 1)))
+          : Math.min(1, Math.max(0, (zoom - ZOOM_MIN) / (1 - ZOOM_MIN)));
     const p = focusingCube
       ? { x: SHRINE_FOCUS[0], y: SHRINE_FOCUS[1] + 1.85, z: SHRINE_FOCUS[2] }
       : focusingChess
