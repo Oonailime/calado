@@ -1,9 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { runtime, useGame } from "../state/store";
 import { LOCK_CODE } from "../state/rules";
 import type { Locale } from "@/content/story";
 import { LOCK_HINTS, lockHintsForLocale } from "./lockHints";
 import styles from "./Game.module.css";
+
+function subscribeCoarse(callback: () => void) {
+  const media = matchMedia("(pointer: coarse)");
+  media.addEventListener("change", callback);
+  return () => media.removeEventListener("change", callback);
+}
 
 export default function Lock({
   locale,
@@ -15,6 +21,7 @@ export default function Lock({
   onRequestHint: () => void;
 }) {
   const pt = locale === "pt";
+  const touch = useSyncExternalStore(subscribeCoarse, () => matchMedia("(pointer: coarse)").matches, () => false);
   const codeProgress = useGame((state) => state.puzzle.codeProgress);
   const wrongAttempts = useGame((state) => state.puzzle.wrongAttempts);
   const revealedHints = lockHintsForLocale(locale, hintCount);
@@ -106,9 +113,13 @@ export default function Lock({
       >
         <h2>{pt ? "Cadeado" : "Padlock"}</h2>
         <p className={styles.lockHint}>
-          {pt
-            ? `Você está resolvendo o algarismo ${codeProgress + 1} de ${LOCK_CODE.length}. Digite um número no teclado ou use ↑ e ↓ para escolher. Pressione Enter para confirmar e Esc para fechar.`
-            : `You are solving digit ${codeProgress + 1} of ${LOCK_CODE.length}. Type a number on your keyboard or use ↑ and ↓ to choose. Press Enter to confirm and Esc to close.`}
+          {touch
+            ? pt
+              ? `Você está resolvendo o algarismo ${codeProgress + 1} de ${LOCK_CODE.length}. Use os botões abaixo para escolher e confirmar.`
+              : `You are solving digit ${codeProgress + 1} of ${LOCK_CODE.length}. Use the buttons below to choose and confirm.`
+            : pt
+              ? `Você está resolvendo o algarismo ${codeProgress + 1} de ${LOCK_CODE.length}. Digite um número no teclado ou use ↑ e ↓ para escolher. Pressione Enter para confirmar e Esc para fechar.`
+              : `You are solving digit ${codeProgress + 1} of ${LOCK_CODE.length}. Type a number on your keyboard or use ↑ and ↓ to choose. Press Enter to confirm and Esc to close.`}
         </p>
         <div
           className={`${styles.lockDigits} ${shake ? styles.lockDigitsShake : ""}`}
@@ -164,6 +175,22 @@ export default function Lock({
             ? "O algarismo foi transmitido por uma sequência de quatro ondas. Se estiver em dúvida, peça as pistas abaixo."
             : "The digit was transmitted as a sequence of four waves. If you are unsure, ask for the clues below."}
         </p>
+        <div className={styles.lockTouch}>
+          <button type="button" onClick={() => {
+            const next = digitsRef.current.map((value, index) => index === codeProgress ? (value + 9) % 10 : value);
+            digitsRef.current = next;
+            setDigits(next);
+          }} aria-label={pt ? "Diminuir algarismo" : "Decrease digit"}>−</button>
+          <button type="button" onClick={() => {
+            const next = digitsRef.current.map((value, index) => index === codeProgress ? (value + 1) % 10 : value);
+            digitsRef.current = next;
+            setDigits(next);
+          }} aria-label={pt ? "Aumentar algarismo" : "Increase digit"}>+</button>
+          <button type="button" onClick={() => useGame.getState().submitLockDigit(runtime.positions[2], digitsRef.current[codeProgress])}>
+            {pt ? "Confirmar" : "Confirm"}
+          </button>
+          <button type="button" onClick={() => useGame.getState().configure({ lockOpen: false })}>{pt ? "Fechar" : "Close"}</button>
+        </div>
         <div className={styles.lockHelp}>
           <button
             type="button"

@@ -1,0 +1,12 @@
+.layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; touch-action: none; }
+.view { position: absolute; right: 0; top: 12%; bottom: 0; width: 50%; pointer-events: auto; touch-action: none; }
+.joystick { position: absolute; left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom)); width: 140px; height: 140px; border: 2px solid #f3e2b699; border-radius: 50%; background: #12261baa; pointer-events: auto; touch-action: none; }
+.joystick span { position: absolute; left: 43px; top: 43px; width: 50px; height: 50px; border-radius: 50%; background: #e2c88bbb; box-shadow: 0 0 0 2px #fff7; }
+.actions { position: absolute; right: max(18px, env(safe-area-inset-right)); bottom: max(18px, env(safe-area-inset-bottom)); display: grid; grid-template-columns: repeat(2, minmax(66px, 1fr)); gap: 8px; pointer-events: auto; }
+.action, .pause { min-width: 58px; min-height: 48px; padding: 8px; border: 1px solid #e5c88f; border-radius: 12px; background: #19372ddc; color: #fff0c9; font: 600 12px/1.2 sans-serif; touch-action: none; user-select: none; }
+.action:active { background: #bd9b5e; color: #17291e; }
+.vineActions { grid-column: 1 / -1; display: flex; gap: 8px; }
+.vineActions .action { flex: 1; }
+.pause { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); pointer-events: auto; }
+@media (orientation: portrait) { .layer { display: none; } }
+@media (max-height: 430px) { .joystick { width: 112px; height: 112px; } .joystick span { left: 30px; top: 30px; } .actions { gap: 5px; } .action { min-height: 44px; } }

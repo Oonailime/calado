@@ -10,6 +10,13 @@ import { canopyInteractionHint, type CanopyInteractionHint } from "../state/rule
 import { PHASE_FOUR_PLATFORMS } from "../world/phaseFourLayout";
 import { brownPrismGuidance, canopyRouteGuidance, onBrownPrismDeck, onShrineDeck, shrineGuidance } from "./canopyGuidance";
 import styles from "./Game.module.css";
+import { touchHint } from "./touchHints";
+
+function subscribeCoarse(callback: () => void) {
+  const media = matchMedia("(pointer: coarse)");
+  media.addEventListener("change", callback);
+  return () => media.removeEventListener("change", callback);
+}
 
 type Instruction = { title: string; body: string };
 const HIGH_PLATEAU = PHASE_FOUR_PLATFORMS.find(deck => deck.id === "vine-plateau")!;
@@ -80,6 +87,7 @@ export default function Controls({
 }) {
   const state = useGame();
   const pt = locale === "pt";
+  const touch = useSyncExternalStore(subscribeCoarse, () => matchMedia("(pointer: coarse)").matches, () => false);
   const fullscreen = useFullscreen();
   const first = useRef<HTMLButtonElement>(null);
   const pause = useRef<HTMLButtonElement>(null);
@@ -387,7 +395,7 @@ export default function Controls({
       {hint && !state.paused && !state.cubePuzzleOpen && (
         <div className={styles.hint} role="status">
           <strong>{hint.title}</strong>
-          <span>{hint.body}</span>
+          <span>{touch ? touchHint(hint.body, pt, state.abilityKey) : hint.body}</span>
         </div>
       )}
       <div
@@ -468,7 +476,11 @@ export default function Controls({
               </select>
             </label>
             <p className={styles.controlHelp}>
-              {pt
+              {touch
+                ? pt
+                  ? "Fase 2: as bases das árvores são checkpoints. Toque em Interagir no tronco ou cipó; durante o balanço, toque em Pular para saltar. O modo Ultra acrescenta vegetação densa."
+                  : "Stage 2: tree bases are checkpoints. Tap Interact at a trunk or vine; tap Jump to leap while swinging. Ultra adds dense vegetation."
+                : pt
                 ? "Fase 2: as bases das árvores são checkpoints. Pressione E no tronco ou cipó; durante o balanço, use Espaço para saltar e os galhos largos para deslizar. O modo Ultra acrescenta vegetação densa."
                 : "Stage 2: tree bases are checkpoints. Press E at a trunk or vine; while swinging, use Space to jump and broad branches to slide. Ultra mode adds dense vegetation."}
             </p>

@@ -11,5 +11,6 @@ export default defineConfig([
     "playwright-report/**",
     "assets/**",
     "public/assets/stockfish/**",
+    "public/assets/draco/**",
   ]),
 ]);

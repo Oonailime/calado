@@ -1,7 +1,9 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { useLoader, useThree } from "@react-three/fiber";
 import { CylinderCollider, RigidBody } from "@react-three/rapier";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
 import {
   Box3,
   Group,
@@ -26,7 +28,8 @@ function dullMaterial(material: Material) {
   standard.emissive?.set("#000000");
 }
 
-export const BANANA_PLANT_URL = "/assets/models/banana/PlantWithBananas.fbx";
+export const BANANA_PLANT_URL = "/assets/models/banana/PlantWithBananas.glb";
+const DESKTOP_BANANA_PLANT_URL = "/assets/models/banana/PlantWithBananas.fbx";
 export const BANANA_MODEL_URL = "/assets/models/banana/banana.glb";
 export const BANANA_PLANT_HEIGHT = 3.2;
 
@@ -55,9 +58,8 @@ function preparePlant(template: Group) {
   return plant;
 }
 
-export default function BananaGroves() {
+function Groves({ plantSource }: { plantSource: Group }) {
   const { gl, camera, scene } = useThree();
-  const plantSource = useLoader(FBXLoader, BANANA_PLANT_URL);
   const plants = useMemo(
     () => anchors.bananas.map(() => preparePlant(plantSource)),
     [plantSource],
@@ -65,7 +67,7 @@ export default function BananaGroves() {
 
   useEffect(() => {
     // Compile the exact transparent variant ahead of the first obstruction.
-    // This group is never rendered; geometry/textures remain shared with FBX.
+    // This group is never rendered; geometry/textures remain shared with the source.
     const warmup = new Group();
     const materials = new Map<Material, Material>();
     plants[0]?.traverse((child) => {
@@ -131,4 +133,29 @@ export default function BananaGroves() {
       ))}
     </>
   );
+}
+
+function MobileGroves() {
+  const plantSource = useLoader(GLTFLoader, BANANA_PLANT_URL, loader => {
+    const draco = new DRACOLoader();
+    draco.setDecoderPath("/assets/draco/");
+    loader.setDRACOLoader(draco);
+  }).scene;
+  return <Groves plantSource={plantSource} />;
+}
+
+function DesktopGroves() {
+  const plantSource = useLoader(FBXLoader, DESKTOP_BANANA_PLANT_URL);
+  return <Groves plantSource={plantSource} />;
+}
+
+function subscribeCoarse(callback: () => void) {
+  const media = matchMedia("(pointer: coarse)");
+  media.addEventListener("change", callback);
+  return () => media.removeEventListener("change", callback);
+}
+
+export default function BananaGroves() {
+  const mobile = useSyncExternalStore(subscribeCoarse, () => matchMedia("(pointer: coarse)").matches, () => false);
+  return mobile ? <MobileGroves /> : <DesktopGroves />;
 }

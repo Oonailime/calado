@@ -200,7 +200,6 @@
     width: auto;
     max-height: 49svh;
     overflow-y: auto;
-    overscroll-behavior: contain;
     padding: 0 4px 4px;
   }
   .heading { position: sticky; top: 0; z-index: 1; min-height: 44px; margin-bottom: 6px; }

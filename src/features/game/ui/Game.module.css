@@ -3,6 +3,7 @@
   inset: 0;
   background: #1e3026;
 }
+.rotateNotice { display: none; }
 .chessPanel {
   position: absolute;
   right: 28px;
@@ -731,3 +732,45 @@
   color: #929a8d;
   cursor: default;
 }
+@media (pointer: coarse) {
+  .root, .canvas { touch-action: none; }
+  .bar { top: max(12px, env(safe-area-inset-top)); right: 76px; gap: 5px; }
+  .icon { width: 44px; height: 44px; }
+  .bar .icon:last-child { display: none; }
+  .portraits, .root[data-map="phase2"] .portraits {
+    z-index: 4; left: 50%; bottom: max(12px, env(safe-area-inset-bottom)); transform: translateX(-50%); gap: 6px;
+  }
+  .portrait { width: 50px; height: 50px; padding: 6px; }
+  .characterKey { display: none; }
+  .hint, .root[data-map="phase2"] .hint {
+    top: max(62px, calc(env(safe-area-inset-top) + 50px)); bottom: auto;
+    left: 50%; transform: translateX(-50%); width: min(52vw, 420px);
+    max-height: 62px; overflow-y: auto; padding: 5px 8px; font-size: 10px; line-height: 1.25;
+    text-align: center;
+  }
+  .hint strong { font-size: 10px; margin: 0; }
+  .exit { display: none; }
+  .inventory, .root[data-map="phase2"] .inventory { top: max(12px, env(safe-area-inset-top)); bottom: auto; left: max(12px, env(safe-area-inset-left)); flex-direction: row; gap: 4px; }
+  .inventoryItem { min-width: 76px; height: 44px; }
+  .overlay, .chessTab, .cubeSidebar, .panel { touch-action: pan-y; }
+  .panel { width: min(500px, calc(100vw - 24px)); max-height: calc(100svh - 24px); padding: 18px; }
+  .panel label { min-height: 44px; margin: 5px 0; }
+  .panel select { min-height: 44px; }
+  .panel button, .chessPanel button, .chessTab button, .cubeSidebar button { min-height: 44px; }
+  .lockTouch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+  .lockTouch button { border: 1px solid #cfb57988; background: #15291f; color: #f0dfa8; }
+  .cubeSidebar { top: 8px; bottom: 8px; right: 8px; width: min(290px, 46vw); max-width: none; padding: 12px; }
+  .cubeDpad { grid-template-columns: repeat(3, 44px); grid-template-rows: repeat(3, 44px); }
+  .cubeRow { grid-template-columns: 1fr 44px 44px; }
+  .chessTab { top: 8px; right: 8px; bottom: 8px; width: min(420px, 60vw); }
+  .chessTabSide button { min-height: 44px; }
+  .chessPanel { top: 130px; right: 8px; bottom: auto; width: min(260px, 34vw); max-height: 35svh; overflow-y: auto; }
+  .chessBoardFrame { width: 372px; max-width: 100%; }
+  .chessUiBoard { width: 352px; max-width: none; }
+  .chessSquare { min-width: 0; min-height: 0 !important; }
+}
+@media (pointer: coarse) and (orientation: portrait) {
+  .rotateNotice { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; background: #14291f; text-align: center; font-size: 19px; }
+  .rotateNotice span { font-size: 56px; }
+}
+@media (pointer: fine) { .lockTouch { display: none; } }

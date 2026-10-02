@@ -22,6 +22,7 @@ import { applyTheme, readTheme, restoreTheme, subscribeTheme, type Theme } from 
 import { FullscreenIcon, toggleFullscreen, useFullscreen } from "./fullscreen";
 import type { GameProps } from "@/features/game/types";
 import type { StorySceneProps } from "./scene3d/StoryScene";
+import { useMobileGraphics } from "./useMobileGraphics";
 
 type Variant = "original" | "volcanic";
 // If a scene never reports ready (a failed asset), lift the loader anyway.
@@ -56,6 +57,7 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
     () => false,
   );
   const fullscreen = useFullscreen();
+  const mobile = useMobileGraphics();
   const scene = Math.min(7, Math.floor(progress * 8));
   const phase = Math.min(1, progress * 8 - scene);
   const ufmgDoorOpenness = houseDoorOpenness(
@@ -155,7 +157,7 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
       >
         <div className={styles.stage}>
           <div className={styles.art} aria-hidden="true">
-            {storyScene && StoryScene && (
+            {storyScene && StoryScene && (!mobile || !playing) && (
               <StoryScene
                 progress={progress}
                 reduced={reduced}
@@ -311,7 +313,10 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
           <Game
             active={playing}
             locale={locale}
-            onExit={() => setPlaying(false)}
+            onExit={() => {
+              if (mobile) setReadyVariant(null);
+              setPlaying(false);
+            }}
           />
         </div>
       )}

@@ -177,7 +177,7 @@ export const useGame = create<Store>((set) => ({
   puzzle: FINAL_PUZZLE_SKIP ? finalPuzzleSkipState(FINAL_PUZZLE_SKIP) : initialPuzzle(),
   paused: false,
   muted: false,
-  quality: "high",
+  quality: typeof window !== "undefined" && matchMedia("(pointer: coarse)").matches ? "low" : "high",
   contrast: false,
   reduced: false,
   movementDebug: false,

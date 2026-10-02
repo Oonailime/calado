@@ -12,6 +12,7 @@ npm run dev
 ```
 
 - `http://localhost:3000`: história interativa de oito cenas, portfólio de projetos e entrada para o jogo. Abre com uma tela de carregamento (a coroa de cipó de seleção) e tem modo claro (a história original) e modo escuro (o cenário vulcânico com cerejeiras, xadrez e lareira), escolhidos no botão de sol/lua ou pela preferência do sistema.
+- `http://127.0.0.1:3000` também funciona para desenvolvimento local; o Next permite essa origem para os recursos de desenvolvimento.
 - `http://localhost:3000/design2`: abre direto no modo escuro, sem alterar a escolha salva.
 - `http://localhost:3000/?map=phase2`: abre diretamente a região vulcânica e o desafio de xadrez.
 - `http://localhost:3000/?map=phase3`: abre diretamente a região da copa, com platôs e cipós.
@@ -20,6 +21,8 @@ npm run dev
 - `http://localhost:3000/estudo`: caderno e ferramentas internas de pré-produção. Em produção, a rota fica oculta a menos que `ENABLE_STUDIO=1` seja configurado.
 
 No computador e no celular, a história avança com a rolagem. O jogo bloqueia o scroll e é usado na horizontal no celular. No computador, **Esc** abre pausa/configurações, de onde também dá para sair do modo jogo; **Retomar** preserva a progressão.
+
+No celular com tela de toque, use o joystick à esquerda para andar, arraste à direita para girar a câmera e faça uma pinça à direita para aproximar ou afastar. Os botões **Pular**, **Agarrar / interagir**, **Habilidade** e **Pausar** ficam na tela; **Subir** e **Descer** aparecem ao agarrar um cipó. Toque nos retratos para trocar de macaco. O jogo começa em qualidade baixa, que pode ser alterada na pausa.
 
 ## Controles do jogo
 
@@ -37,7 +40,7 @@ No computador e no celular, a história avança com a rolagem. O jogo bloqueia o
 | Reposicionar grupo                                  | R                                              |
 | Pausa/configurações (e sair do modo jogo a partir dali) | Esc                                        |
 
-Os comandos também aparecem de forma contextual dentro do jogo. Áudio começa desligado; pausa oferece qualidade, contraste, movimento reduzido, volumes e remapeamento inicial da habilidade.
+Os comandos também aparecem de forma contextual dentro do jogo, com dicas próprias para toque. Áudio começa desligado; pausa oferece qualidade, contraste, movimento reduzido, volumes e remapeamento inicial da habilidade.
 
 O inventário mostra bananas e, até a construção da ponte, madeiras coletadas em relação ao total, com um aviso visual de cinco segundos para cada coleta. No desafio sonoro, a trilha de Mizaru fica bem baixinha enquanto ele lê a sequência (fora dessa missão ele ouve normalmente): ondas pretas com o som “A” representam `1` e ondas brancas com “Um” representam `0`. Kikazaru ouve a trilha sempre baixa e abafada, e para de ouvir tudo enquanto o poder dele está ativo. Cada bit dura três segundos; depois dos quatro bits há seis segundos de silêncio antes de a sequência recomeçar. O cadeado oferece três dicas progressivas, reveladas somente quando o jogador as solicita, e avisa visualmente quando um algarismo é digitado errado. Como a câmera trava o cursor durante o jogo, o painel de dicas do cadeado e a pausa liberam o mouse automaticamente para poderem ser clicados.
 

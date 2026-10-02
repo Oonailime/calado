@@ -325,9 +325,9 @@ test("a loose rope grabbed low keeps the grab, then climbs back to the designed 
 });
 
 test("holding a direction pumps a pendulum with its motion, up to its capped swing", () => {
-  // Tuned by play-testing: a 100 degree ceiling reached with 3 m/s^2 pushes.
+  // Current play-tested tuning: a 100 degree ceiling with 2.2 m/s^2 pushes.
   assert.equal(Math.round((PENDULUM_PUMP_MAX_ANGLE * 180) / Math.PI), 100);
-  assert.equal(PENDULUM_PUMP_ACCELERATION, 3);
+  assert.equal(PENDULUM_PUMP_ACCELERATION, 2.2);
   const support = { x: 0, y: 10, z: 0 };
   const length = 5;
   const bottom = { x: 0, y: 5, z: 0 };

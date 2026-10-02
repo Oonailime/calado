@@ -176,7 +176,9 @@ export default function RubiksCubePuzzle({ locale }: { locale: Locale }) {
         className={styles.exitPanel}
         onClick={() => useGame.getState().configure({ cubePuzzleOpen: false })}
       >
-        {pt ? "Fechar (Esc)" : "Close (Esc)"}
+        {typeof window !== "undefined" && matchMedia("(pointer: coarse)").matches
+          ? (pt ? "Fechar" : "Close")
+          : (pt ? "Fechar (Esc)" : "Close (Esc)")}
       </button>
     </div>
   );

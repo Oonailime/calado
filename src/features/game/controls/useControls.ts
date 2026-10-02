@@ -3,13 +3,13 @@ import { runtime, useGame } from "../state/store";
 import { anchors, distance, LOCK_RANGE, nearCubeShrine } from "../state/rules";
 import { CHARACTER_KEY_BINDINGS } from "../types";
 import { phase2Chess } from "../world/phase2Chess";
+import { ZOOM_MIN, ZOOM_MAX } from "./touchInput";
 // Multiplier range applied to each map's own base follow distance (see
 // FollowCamera.tsx) — comfortably closer/farther without letting the wheel
 // clip the camera into the character or lose it in the distance.
 // Exported so FollowCamera.tsx can blend the volcanic map's camera between
 // its own wide framing and the other maps' close one across this same range.
-export const ZOOM_MIN = 0.55;
-const ZOOM_MAX = 1.9;
+export { ZOOM_MIN, ZOOM_MAX } from "./touchInput";
 const ZOOM_SPEED = 0.0012;
 export function useControls(active: boolean, onExit: () => void) {
   const paused = useGame((s) => s.paused);
@@ -180,6 +180,7 @@ export function useControls(active: boolean, onExit: () => void) {
       if (document.hidden) blur();
     };
     const mouse = (e: MouseEvent) => {
+      if (matchMedia("(pointer: coarse)").matches) return;
       const state = useGame.getState();
       if (state.paused || runtime.chessActive) return;
       if ((e.target as HTMLElement)?.closest("button,input,select")) return;
@@ -223,6 +224,7 @@ export function useControls(active: boolean, onExit: () => void) {
     // button down. Clicks on any UI chrome (portraits, icons, dialogs) must
     // not trigger this, so it's scoped to the canvas itself as the target.
     const click = (e: MouseEvent) => {
+      if (matchMedia("(pointer: coarse)").matches) return;
       const state = useGame.getState();
       if (state.paused || (state.map === "phase2" && phase2Chess.getSnapshot().tabOpen) || runtime.chessActive || state.lockOpen || state.cubePuzzleOpen || state.puzzle.cubeSolved)
         return;

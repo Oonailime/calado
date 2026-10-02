@@ -36,7 +36,10 @@ npm run dev
 - `/?map=phase2&skip` é um atalho local para inspeção do xadrez; não representa progressão normal.
 - `/estudo` é interno e fica oculto em produção, salvo quando `ENABLE_STUDIO=1` estiver explicitamente definido.
 
-No computador, `Esc` abre as configurações e permite sair. Os atalhos de personagem, interação e habilidade são mostrados contextualmente; a habilidade padrão é remapeável. No celular, o jogo é usado na horizontal, com controles de toque. Mantenha essa interface como fonte de verdade ao editar controles.
+No computador, `Esc` abre as configurações e permite sair. Os atalhos de personagem, interação e habilidade são mostrados contextualmente; a habilidade padrão é remapeável. No celular, o jogo é usado na horizontal: joystick à esquerda, câmera e pinça à direita, botões de pulo, interação, habilidade e pausa, além de Subir/Descer quando o macaco está num cipó. Os retratos trocam de personagem. Na vertical, um aviso pede para girar o aparelho. A qualidade inicial no toque é baixa e pode ser alterada na pausa. Mantenha essa interface como fonte de verdade ao editar controles.
+
+A bananeira usa o FBX original no computador e um GLB com geometria Draco e imagens de até 1024 px no celular. `scripts/prepare-banana-plant.py` reproduz a conversão com Blender 5.2; os arquivos de decodificação Draco ficam em `public/assets/draco/`.
+No celular, o canvas da história é desmontado enquanto o jogo está aberto e recriado ao sair, para não manter os dois cenários 3D na memória ao mesmo tempo.
 
 ## Arquitetura
 

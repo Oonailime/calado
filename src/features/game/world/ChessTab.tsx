@@ -214,21 +214,24 @@ export default function ChessTab() {
 }
 
 
-export function ChessPanel() {
+export function ChessPanel({ locale }: { locale: "pt" | "en" }) {
   const state = useSyncExternalStore(phase2Chess.subscribe, phase2Chess.getSnapshot, phase2Chess.getSnapshot);
   const pieces = useGame(s => s.phase2Pieces);
   const count = pieces.filter(Boolean).length;
+  const touch = typeof window !== "undefined" && matchMedia("(pointer: coarse)").matches;
   const nextPiece = PHASE_TWO_PICKUPS.find((_, index) => !pieces[index]);
   const nextLocation = nextPiece?.id === 0 ? "no início da trilha"
     : nextPiece?.id === 1 ? "adiante no caminho"
       : "na rampa circular";
+  const nextLocationEn = nextPiece?.id === 0 ? "at the start of the trail"
+    : nextPiece?.id === 1 ? "further along the path" : "on the circular ramp";
   return <>
     {!state.tabOpen && (
       <div className={styles.chessPanel} role="region" aria-label="Instruções de xadrez">
         <div className={styles.chessTitle}>Fase 2 · Xadrez</div>
-        {count < 3 ? <p>Próxima peça: {nextPiece?.label} {nextLocation}. {count}/3 coletadas.</p>
-          : !state.historicalSolved ? <p>Pressione E na cepa branca e resolva a combinação no tabuleiro. O portal abre após o desafio.</p>
-          : <p>Você pode jogar xadrez com os outros macacos: E em uma cepa, troque com 1/2/3 e pressione E na outra.</p>}
+        {count < 3 ? <p>{locale === "pt" ? `Próxima peça: ${nextPiece?.label} ${nextLocation}. ${count}/3 coletadas.` : `Next piece: ${nextPiece?.label} ${nextLocationEn}. ${count}/3 collected.`}</p>
+          : !state.historicalSolved ? <p>{locale === "pt" ? (touch ? "Toque em Interagir na cepa branca e resolva a combinação no tabuleiro. O portal abre após o desafio." : "Pressione E na cepa branca e resolva a combinação no tabuleiro. O portal abre após o desafio.") : (touch ? "Tap Interact at the white stump and solve the board combination to open the portal." : "Press E at the white stump and solve the board combination to open the portal.")}</p>
+          : <p>{locale === "pt" ? (touch ? "Toque em Interagir em uma cepa, troque pelo retrato de outro macaco e toque em Interagir na outra." : "Você pode jogar xadrez com os outros macacos: E em uma cepa, troque com 1/2/3 e pressione E na outra.") : (touch ? "Tap Interact at one stump, select another monkey portrait, then tap Interact at the other." : "Press E at one stump, switch monkey with 1/2/3, then press E at the other.")}</p>}
       </div>
     )}
     <ChessTab />
