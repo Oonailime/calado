@@ -14,6 +14,7 @@ export default defineConfig({
     launchOptions: {
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
       args: [
+        "--host-resolver-rules=MAP localhost 127.0.0.1",
         "--use-angle=swiftshader",
         "--enable-unsafe-swiftshader",
         "--disable-dev-shm-usage",

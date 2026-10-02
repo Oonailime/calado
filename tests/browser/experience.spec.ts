@@ -86,6 +86,7 @@ test("animatic avança, retorna e traduz sem carregar o mundo no início", async
   const requests: string[] = [];
   page.on("request", (r) => requests.push(r.url()));
   await page.goto("/");
+  await expect(page.getByText("Preparando a jornada…")).toBeHidden({ timeout: 45_000 });
   await expect(
     page.getByRole("heading", { name: "Meu nome é Emiliano Calado." }),
   ).toBeVisible();
@@ -146,6 +147,7 @@ test("celular percorre a história por scroll e mantém o jogo sob demanda", asy
   const requests: string[] = [];
   page.on("request", (r) => requests.push(r.url()));
   await page.goto(process.env.TEST_BASE_URL || "http://localhost:3000/");
+  await expect(page.getByText("Preparando a jornada…")).toBeHidden({ timeout: 45_000 });
   await expect(page.getByRole("heading", { name: "Meu nome é Emiliano Calado." })).toBeVisible();
   await scrollTo(page, 0.45);
   await expect(page.getByRole("heading", { name: "E comecei a construir minhas próprias respostas." })).toBeVisible();
