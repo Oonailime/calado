@@ -8,7 +8,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type RefObject,
   type ReactNode,
 } from "react";
@@ -38,13 +37,8 @@ import { PHASE_TWO_START_YAW } from "./world/phaseTwoLayout";
 import { phase2Chess } from "./world/phase2Chess";
 import { ChessPanel } from "./world/ChessTab";
 import { TrophyCollection } from "./ui/Inventory";
-
-const portraitQuery = "(pointer: coarse) and (orientation: portrait)";
-function subscribePortrait(callback: () => void) {
-  const media = matchMedia(portraitQuery);
-  media.addEventListener("change", callback);
-  return () => media.removeEventListener("change", callback);
-}
+import { usePortraitViewport, useTouchDevice } from "@/features/story/useTouchDevice";
+import PhoneRotation from "@/features/story/PhoneRotation";
 
 class WorldBoundary extends Component<
   { children: ReactNode; fallback: ReactNode },
@@ -214,7 +208,9 @@ export default function Game({ active, locale, onExit }: GameProps) {
   const [lost, setLost] = useState(false);
   const [lockHintCount, setLockHintCount] = useState(0);
   const [portalNotice, setPortalNotice] = useState(false);
-  const portrait = useSyncExternalStore(subscribePortrait, () => matchMedia(portraitQuery).matches, () => false);
+  const touchDevice = useTouchDevice();
+  const portraitViewport = usePortraitViewport();
+  const portrait = touchDevice && portraitViewport;
   // The "cube solved" panel is a one-time announcement, not a permanent
   // lock screen — once dismissed, exploring and the HUD both come back
   // (see item 1: the arrival portal also reopens once solved, in
@@ -263,7 +259,7 @@ export default function Game({ active, locale, onExit }: GameProps) {
     setPortalNotice(false);
     onExit();
   }, [onExit]);
-  useControls(active && !lost && !portalNotice, exitGame);
+  useControls(active && !portrait && !lost && !portalNotice, exitGame);
   useSound(running);
   useEffect(() => () => {
     if (map === "phase2") {
@@ -336,6 +332,8 @@ export default function Game({ active, locale, onExit }: GameProps) {
       className={`${styles.root} ${contrast ? styles.contrast : ""}`}
       aria-label={locale === "pt" ? "Ambiente jogável" : "Playable environment"}
       data-ready={ready}
+      data-touch={touchDevice}
+      data-portrait={portrait}
       data-selected={puzzle.selected}
       data-bridge={puzzle.bridge}
       data-built={puzzle.built}
@@ -402,8 +400,8 @@ export default function Game({ active, locale, onExit }: GameProps) {
           <TouchControls active={active && !portrait} locale={locale} />
         )}
         <div className={styles.rotateNotice} role="status">
-          <span aria-hidden="true">↻</span>
-          {locale === "pt" ? "Gire o aparelho para jogar na horizontal" : "Rotate your device to play in landscape"}
+          <PhoneRotation />
+          {locale === "pt" ? "Vire o celular para jogar na horizontal" : "Rotate your phone to play in landscape"}
         </div>
         {ready && !lost && map === "phase2" && !portalNotice && (
           <ChessPanel locale={locale} />

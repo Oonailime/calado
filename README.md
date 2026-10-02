@@ -20,9 +20,9 @@ npm run dev
 - `http://localhost:3000/?map=phase2&skip`: atalho local para inspecionar o desafio de xadrez.
 - `http://localhost:3000/estudo`: caderno e ferramentas internas de pré-produção. Em produção, a rota fica oculta a menos que `ENABLE_STUDIO=1` seja configurado.
 
-No computador e no celular, a história avança com a rolagem. O jogo bloqueia o scroll e é usado na horizontal no celular. No computador, **Esc** abre pausa/configurações, de onde também dá para sair do modo jogo; **Retomar** preserva a progressão.
+No computador e no celular, a história avança com a rolagem. Ao abrir em um celular, um aviso explica que a adaptação ainda está em desenvolvimento; quem optar por continuar verá uma orientação animada para girar o aparelho. Os dois avisos podem ser fechados. O jogo bloqueia o scroll e só pode ser jogado na horizontal no celular; ao voltar para a vertical, a simulação pausa até o aparelho ser girado novamente. No computador, **Esc** abre pausa/configurações, de onde também dá para sair do modo jogo; **Retomar** preserva a progressão.
 
-No celular com tela de toque, use o joystick à esquerda para andar, arraste à direita para girar a câmera e faça uma pinça à direita para aproximar ou afastar. Os botões **Pular**, **Agarrar / interagir**, **Habilidade** e **Pausar** ficam na tela; **Subir** e **Descer** aparecem ao agarrar um cipó. Toque nos retratos para trocar de macaco. O jogo começa em qualidade baixa, que pode ser alterada na pausa.
+No celular com tela de toque, use o joystick à esquerda para andar, arraste à direita para girar a câmera e faça uma pinça à direita para aproximar ou afastar. Os botões **Pular**, **Agarrar / interagir**, **Habilidade** e **Pausar** ficam na tela; **Subir** e **Descer** aparecem ao agarrar um cipó. Toque nos retratos para trocar de macaco. As dicas do jogo podem ser fechadas e reabertas pelo botão **?**. O jogo começa em qualidade baixa, que pode ser alterada na pausa.
 
 ## Controles do jogo
 

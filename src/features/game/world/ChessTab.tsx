@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import { useTouchDevice } from "@/features/story/useTouchDevice";
 import { Chess } from "chess.js";
 import { phase2Chess } from "./phase2Chess";
 import { useGame } from "../state/store";
@@ -218,7 +219,9 @@ export function ChessPanel({ locale }: { locale: "pt" | "en" }) {
   const state = useSyncExternalStore(phase2Chess.subscribe, phase2Chess.getSnapshot, phase2Chess.getSnapshot);
   const pieces = useGame(s => s.phase2Pieces);
   const count = pieces.filter(Boolean).length;
-  const touch = typeof window !== "undefined" && matchMedia("(pointer: coarse)").matches;
+  const touch = useTouchDevice();
+  const [dismissedStep, setDismissedStep] = useState<string | null>(null);
+  const step = `${count}:${state.historicalSolved}`;
   const nextPiece = PHASE_TWO_PICKUPS.find((_, index) => !pieces[index]);
   const nextLocation = nextPiece?.id === 0 ? "no início da trilha"
     : nextPiece?.id === 1 ? "adiante no caminho"
@@ -226,8 +229,16 @@ export function ChessPanel({ locale }: { locale: "pt" | "en" }) {
   const nextLocationEn = nextPiece?.id === 0 ? "at the start of the trail"
     : nextPiece?.id === 1 ? "further along the path" : "on the circular ramp";
   return <>
-    {!state.tabOpen && (
+    {!state.tabOpen && touch && dismissedStep === step && (
+      <button className={styles.chessHintOpen} type="button"
+        aria-label={locale === "pt" ? "Mostrar instruções de xadrez" : "Show chess instructions"}
+        onClick={() => setDismissedStep(null)}>?</button>
+    )}
+    {!state.tabOpen && (!touch || dismissedStep !== step) && (
       <div className={styles.chessPanel} role="region" aria-label="Instruções de xadrez">
+        {touch && <button className={styles.chessHintClose} type="button"
+          aria-label={locale === "pt" ? "Fechar instruções de xadrez" : "Dismiss chess instructions"}
+          onClick={() => setDismissedStep(step)}>×</button>}
         <div className={styles.chessTitle}>Fase 2 · Xadrez</div>
         {count < 3 ? <p>{locale === "pt" ? `Próxima peça: ${nextPiece?.label} ${nextLocation}. ${count}/3 coletadas.` : `Next piece: ${nextPiece?.label} ${nextLocationEn}. ${count}/3 collected.`}</p>
           : !state.historicalSolved ? <p>{locale === "pt" ? (touch ? "Toque em Interagir na cepa branca e resolva a combinação no tabuleiro. O portal abre após o desafio." : "Pressione E na cepa branca e resolva a combinação no tabuleiro. O portal abre após o desafio.") : (touch ? "Tap Interact at the white stump and solve the board combination to open the portal." : "Press E at the white stump and solve the board combination to open the portal.")}</p>

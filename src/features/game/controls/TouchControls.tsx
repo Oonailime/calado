@@ -1,23 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import type { Locale } from "@/content/story";
+import { useTouchDevice } from "@/features/story/useTouchDevice";
 import { runtime, useGame } from "../state/store";
 import { JOYSTICK_RADIUS, joystickKeys, pinchZoom } from "./touchInput";
 import styles from "./TouchControls.module.css";
-
-function subscribe(callback: () => void) {
-  const media = matchMedia("(pointer: coarse)");
-  media.addEventListener("change", callback);
-  return () => media.removeEventListener("change", callback);
-}
 
 function sendKey(type: "keydown" | "keyup", code: string) {
   window.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true }));
 }
 
 export default function TouchControls({ active, locale }: { active: boolean; locale: Locale }) {
-  const coarse = useSyncExternalStore(subscribe, () => matchMedia("(pointer: coarse)").matches, () => false);
+  const touchDevice = useTouchDevice();
   const paused = useGame(s => s.paused);
   const lockOpen = useGame(s => s.lockOpen);
   const cubeOpen = useGame(s => s.cubePuzzleOpen);
@@ -29,7 +24,7 @@ export default function TouchControls({ active, locale }: { active: boolean; loc
   const held = useRef(new Set<string>());
   const viewPointers = useRef(new Map<number, { x: number; y: number }>());
   const pinchDistance = useRef(0);
-  const enabled = coarse && active && !paused && !lockOpen && !cubeOpen;
+  const enabled = touchDevice && active && !paused && !lockOpen && !cubeOpen;
 
   useEffect(() => {
     if (!enabled) return;
@@ -52,7 +47,7 @@ export default function TouchControls({ active, locale }: { active: boolean; loc
     held.current.clear();
   }, []);
 
-  if (!coarse || !active) return null;
+  if (!touchDevice || !active) return null;
   const pt = locale === "pt";
   const press = (code: string) => {
     if (!enabled || held.current.has(code)) return;

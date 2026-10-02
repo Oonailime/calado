@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { useTouchDevice } from "./useTouchDevice";
 
 const query = "(max-width: 760px), (pointer: coarse)";
 
@@ -9,5 +10,7 @@ function subscribe(callback: () => void) {
 }
 
 export function useMobileGraphics() {
-  return useSyncExternalStore(subscribe, () => matchMedia(query).matches, () => false);
+  const touch = useTouchDevice();
+  const compact = useSyncExternalStore(subscribe, () => matchMedia(query).matches, () => false);
+  return touch || compact;
 }

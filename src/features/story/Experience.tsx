@@ -23,6 +23,8 @@ import { FullscreenIcon, toggleFullscreen, useFullscreen } from "./fullscreen";
 import type { GameProps } from "@/features/game/types";
 import type { StorySceneProps } from "./scene3d/StoryScene";
 import { useMobileGraphics } from "./useMobileGraphics";
+import { useTouchDevice } from "./useTouchDevice";
+import PhoneRotation from "./PhoneRotation";
 
 type Variant = "original" | "volcanic";
 // If a scene never reports ready (a failed asset), lift the loader anyway.
@@ -58,6 +60,9 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
   );
   const fullscreen = useFullscreen();
   const mobile = useMobileGraphics();
+  const touchDevice = useTouchDevice();
+  const [mobileNotice, setMobileNotice] = useState<"intro" | "rotate" | null>("intro");
+  const noticeOpen = touchDevice && mobileNotice !== null;
   const scene = Math.min(7, Math.floor(progress * 8));
   const phase = Math.min(1, progress * 8 - scene);
   const ufmgDoorOpenness = houseDoorOpenness(
@@ -149,11 +154,41 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
     <>
       <VineLoader visible={!ready} locale={locale} />
       {!playing && <VineScrollbar reduced={reduced} />}
+      {noticeOpen && (
+        <div className={styles.mobileNoticeBackdrop}>
+          <div className={styles.mobileNotice} role="dialog" aria-modal="true" aria-labelledby="mobile-notice-title">
+            <button className={styles.mobileNoticeClose} type="button"
+              aria-label={pt ? "Fechar aviso" : "Close notice"}
+              onClick={() => setMobileNotice(null)}>×</button>
+            {mobileNotice === "intro" ? <>
+              <span className={styles.mobileNoticeEyebrow}>{pt ? "Prévia para celular" : "Mobile preview"}</span>
+              <h2 id="mobile-notice-title">{pt ? "Versão mobile em desenvolvimento" : "Mobile version in progress"}</h2>
+              <p>{pt
+                ? "Esta experiência foi criada para computador. A adaptação para celular ainda está em desenvolvimento. Para aproveitá-la ao máximo, visite novamente em um computador."
+                : "This experience was built for a computer. The mobile adaptation is still in progress. For the best experience, visit again on a computer."}</p>
+              <button className={styles.mobileNoticeAction} type="button" onClick={() => setMobileNotice("rotate")}>
+                {pt
+                  ? "Estou ciente, mas quero ver a versão mobile ainda não acabada"
+                  : "I understand, but I want to see the unfinished mobile version"}
+              </button>
+            </> : <>
+              <PhoneRotation />
+              <h2 id="mobile-notice-title">{pt ? "Vire o celular" : "Rotate your phone"}</h2>
+              <p>{pt
+                ? "Use a tela na horizontal para uma experiência melhor. O jogo só funciona nessa posição."
+                : "Use landscape mode for a better experience. The game only works in this orientation."}</p>
+              <button className={styles.mobileNoticeAction} type="button" onClick={() => setMobileNotice(null)}>
+                {pt ? "Continuar" : "Continue"}
+              </button>
+            </>}
+          </div>
+        </div>
+      )}
       <main
         ref={root}
         className={`${styles.journey} ${variant === "volcanic" ? styles.volcanic : ""}`}
-        aria-hidden={playing || undefined}
-        inert={playing || undefined}
+        aria-hidden={playing || noticeOpen || undefined}
+        inert={playing || noticeOpen || undefined}
       >
         <div className={styles.stage}>
           <div className={styles.art} aria-hidden="true">
@@ -311,7 +346,7 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
           style={{ display: playing ? "block" : "none" }}
         >
           <Game
-            active={playing}
+            active={playing && !noticeOpen}
             locale={locale}
             onExit={() => {
               if (mobile) setReadyVariant(null);

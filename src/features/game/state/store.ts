@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { isTouchDevice } from "@/features/story/useTouchDevice";
 import { CHESS_TROPHIES, CHESS_TROPHIES_STORAGE_KEY, readChessTrophies, type ChessTrophyId } from "./chessTrophies";
 import { BANANA_TROPHY_STORAGE_KEY, readBananaTrophy } from "./trophies";
 import type { CharacterId, Vec3 } from "../types";
@@ -177,7 +178,7 @@ export const useGame = create<Store>((set) => ({
   puzzle: FINAL_PUZZLE_SKIP ? finalPuzzleSkipState(FINAL_PUZZLE_SKIP) : initialPuzzle(),
   paused: false,
   muted: false,
-  quality: typeof window !== "undefined" && matchMedia("(pointer: coarse)").matches ? "low" : "high",
+  quality: isTouchDevice() ? "low" : "high",
   contrast: false,
   reduced: false,
   movementDebug: false,

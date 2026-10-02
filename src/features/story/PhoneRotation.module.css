@@ -1,0 +1,36 @@
+.phone {
+  position: relative;
+  display: block;
+  width: 42px;
+  height: 74px;
+  margin: 18px auto 28px;
+  border: 3px solid #e5c88f;
+  border-radius: 9px;
+  background: #15291f;
+  box-shadow: 0 0 0 8px #e5c88f18;
+  transform-origin: center;
+  animation: turn-phone 3s ease-in-out infinite;
+}
+.screen {
+  position: absolute;
+  inset: 9px 4px 7px;
+  border-radius: 2px;
+  background: linear-gradient(145deg, #47694e, #b6a476);
+}
+.speaker {
+  position: absolute;
+  width: 13px;
+  height: 2px;
+  top: 4px;
+  left: 11px;
+  border-radius: 2px;
+  background: #e5c88f;
+}
+@keyframes turn-phone {
+  0%, 15% { transform: rotate(0deg); }
+  48%, 70% { transform: rotate(90deg); }
+  100% { transform: rotate(0deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .phone { animation: none; transform: rotate(90deg); }
+}

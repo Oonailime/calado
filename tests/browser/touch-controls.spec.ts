@@ -4,6 +4,10 @@ test("história móvel cabe em retrato e paisagem", async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   await page.goto("/");
+  await expect(page.getByRole("dialog", { name: "Versão mobile em desenvolvimento" })).toBeVisible();
+  await page.getByRole("button", { name: /Estou ciente/ }).click();
+  await expect(page.getByRole("dialog", { name: "Vire o celular" })).toBeVisible();
+  await page.getByRole("button", { name: "Continuar" }).click();
   await expect(page.getByText("Preparando a jornada…")).toBeHidden({ timeout: 45_000 });
   await page.waitForTimeout(900);
   await expect.poll(() => page.evaluate(() => {
@@ -33,17 +37,26 @@ test("jogo móvel oferece controles em paisagem e aviso em retrato", async ({ br
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   await page.goto("/?map=phase3");
+  await page.getByRole("button", { name: /Estou ciente/ }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   const game = page.getByRole("region", { name: "Ambiente jogável" });
   await expect(game).toHaveAttribute("data-ready", "true", { timeout: 90_000 });
-  await expect(page.getByText("Gire o aparelho para jogar na horizontal")).toBeVisible();
+  await expect(game).toHaveAttribute("data-portrait", "true");
+  await expect(page.getByText("Vire o celular para jogar na horizontal")).toBeVisible();
+  await expect(page.getByLabel("Mover")).toHaveCount(0);
   await page.screenshot({ path: "test-results/mobile-game-portrait.png" });
   await page.setViewportSize({ width: 844, height: 390 });
-  await expect(page.getByText("Gire o aparelho para jogar na horizontal")).toBeHidden();
+  await expect(page.getByText("Vire o celular para jogar na horizontal")).toBeHidden();
+  await expect(game).toHaveAttribute("data-portrait", "false");
   await expect(page.getByLabel("Mover")).toBeVisible();
   await expect(page.getByRole("button", { name: "Agarrar / interagir" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Habilidade" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Pular" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Pausar" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Fechar dica" })).toBeVisible();
+  await page.getByRole("button", { name: "Fechar dica" }).click();
+  await expect(page.getByRole("button", { name: "Mostrar dica" })).toBeVisible();
+  await page.getByRole("button", { name: "Mostrar dica" }).click();
   const joystick = await page.getByLabel("Mover").boundingBox();
   const view = await page.getByLabel("Arraste para girar a câmera; pince para zoom").boundingBox();
   expect(joystick).not.toBeNull();
@@ -52,7 +65,7 @@ test("jogo móvel oferece controles em paisagem e aviso em retrato", async ({ br
     const before = await page.evaluate(() => (window as unknown as { __game: { runtime: { yaw: number } } }).__game.runtime.yaw);
     const cdp = await context.newCDPSession(page);
     const left = { x: joystick.x + joystick.width / 2, y: joystick.y + joystick.height / 2, id: 1 };
-    const right = { x: view.x + 40, y: view.y + 40, id: 2 };
+    const right = { x: view.x + view.width - 160, y: view.y + 140, id: 2 };
     await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [left, right] });
     await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ ...left, y: left.y - 45 }, { ...right, x: right.x + 90 }] });
     await expect.poll(() => page.evaluate(() => [...(window as unknown as { __game: { runtime: { keys: Set<string> } } }).__game.runtime.keys])).toContain("KeyW");
@@ -60,8 +73,8 @@ test("jogo móvel oferece controles em paisagem e aviso em retrato", async ({ br
     await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     await expect.poll(() => page.evaluate(() => [...(window as unknown as { __game: { runtime: { keys: Set<string> } } }).__game.runtime.keys])).not.toContain("KeyW");
     const zoomBefore = await page.evaluate(() => (window as unknown as { __game: { runtime: { zoom: number } } }).__game.runtime.zoom);
-    const first = { x: view.x + 30, y: view.y + 55, id: 3 };
-    const second = { x: view.x + 100, y: view.y + 55, id: 4 };
+    const first = { x: view.x + view.width - 170, y: view.y + 140, id: 3 };
+    const second = { x: view.x + view.width - 100, y: view.y + 140, id: 4 };
     await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [first, second] });
     await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [first, { ...second, x: second.x + 70 }] });
     await expect.poll(() => page.evaluate(() => (window as unknown as { __game: { runtime: { zoom: number } } }).__game.runtime.zoom)).toBeLessThan(zoomBefore);
@@ -91,6 +104,13 @@ test("jogo móvel oferece controles em paisagem e aviso em retrato", async ({ br
     }
     await page.evaluate(() => window.clearInterval((window as unknown as { __forceVine?: number }).__forceVine));
   }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(game).toHaveAttribute("data-portrait", "true");
+  await expect(page.getByLabel("Mover")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => [...(window as unknown as { __game: { runtime: { keys: Set<string> } } }).__game.runtime.keys])).toEqual([]);
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(game).toHaveAttribute("data-portrait", "false");
+  await expect(page.getByLabel("Mover")).toBeVisible();
   expect(await page.evaluate(() => document.pointerLockElement)).toBeNull();
   await page.screenshot({ path: "test-results/mobile-game-landscape.png" });
   await page.evaluate(() => (window as unknown as { __game: { useGame: { getState: () => { configure: (patch: object) => void } } } }).__game.useGame.getState().configure({ cubePuzzleOpen: true }));
@@ -111,6 +131,8 @@ test("ilhas carregam a bananeira comprimida no toque", async ({ browser }) => {
   const requests: string[] = [];
   page.on("request", request => requests.push(request.url()));
   await page.goto("/?skip");
+  await page.getByRole("button", { name: /Estou ciente/ }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
   const game = page.getByRole("region", { name: "Ambiente jogável" });
   await expect(game).toHaveAttribute("data-ready", "true", { timeout: 90_000 });
   expect(requests.some(url => url.endsWith("/PlantWithBananas.glb"))).toBe(true);
@@ -120,6 +142,35 @@ test("ilhas carregam a bananeira comprimida no toque", async ({ browser }) => {
   await expect(page.getByRole("button", { name: "Aumentar algarismo" })).toBeVisible();
   await page.getByRole("button", { name: "Aumentar algarismo" }).click();
   await expect(page.getByRole("button", { name: "Confirmar" })).toBeVisible();
+  await context.close();
+});
+
+test("joystick aparece com toque mesmo se o ponteiro principal é preciso", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  const page = await context.newPage();
+  await page.goto("/?skip");
+  await expect(page.getByRole("dialog", { name: "Versão mobile em desenvolvimento" })).toBeVisible();
+  await page.getByRole("button", { name: /Estou ciente/ }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  const game = page.getByRole("region", { name: "Ambiente jogável" });
+  await expect(game).toHaveAttribute("data-ready", "true", { timeout: 90_000 });
+  await expect(game).toHaveAttribute("data-touch", "true");
+  await expect(page.getByLabel("Mover")).toBeVisible();
+  await context.close();
+});
+
+test("instruções de xadrez podem ser fechadas e reabertas no toque", async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
+  const page = await context.newPage();
+  await page.goto("/?map=phase2");
+  await page.getByRole("button", { name: /Estou ciente/ }).click();
+  await page.getByRole("button", { name: "Continuar" }).click();
+  await expect(page.getByRole("region", { name: "Ambiente jogável" })).toHaveAttribute("data-ready", "true", { timeout: 90_000 });
+  await expect(page.getByRole("region", { name: "Instruções de xadrez" })).toBeVisible();
+  await page.getByRole("button", { name: "Fechar instruções de xadrez" }).click();
+  await expect(page.getByRole("region", { name: "Instruções de xadrez" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Mostrar instruções de xadrez" }).click();
+  await expect(page.getByRole("region", { name: "Instruções de xadrez" })).toBeVisible();
   await context.close();
 });
 

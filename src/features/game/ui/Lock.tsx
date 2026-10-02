@@ -1,15 +1,10 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useTouchDevice } from "@/features/story/useTouchDevice";
 import { runtime, useGame } from "../state/store";
 import { LOCK_CODE } from "../state/rules";
 import type { Locale } from "@/content/story";
 import { LOCK_HINTS, lockHintsForLocale } from "./lockHints";
 import styles from "./Game.module.css";
-
-function subscribeCoarse(callback: () => void) {
-  const media = matchMedia("(pointer: coarse)");
-  media.addEventListener("change", callback);
-  return () => media.removeEventListener("change", callback);
-}
 
 export default function Lock({
   locale,
@@ -21,7 +16,7 @@ export default function Lock({
   onRequestHint: () => void;
 }) {
   const pt = locale === "pt";
-  const touch = useSyncExternalStore(subscribeCoarse, () => matchMedia("(pointer: coarse)").matches, () => false);
+  const touch = useTouchDevice();
   const codeProgress = useGame((state) => state.puzzle.codeProgress);
   const wrongAttempts = useGame((state) => state.puzzle.wrongAttempts);
   const revealedHints = lockHintsForLocale(locale, hintCount);

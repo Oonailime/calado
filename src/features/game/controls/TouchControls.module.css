@@ -8,5 +8,4 @@
 .vineActions { grid-column: 1 / -1; display: flex; gap: 8px; }
 .vineActions .action { flex: 1; }
 .pause { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); pointer-events: auto; }
-@media (orientation: portrait) { .layer { display: none; } }
 @media (max-height: 430px) { .joystick { width: 112px; height: 112px; } .joystick span { left: 30px; top: 30px; } .actions { gap: 5px; } .action { min-height: 44px; } }

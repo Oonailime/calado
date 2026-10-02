@@ -11,12 +11,7 @@ import { PHASE_FOUR_PLATFORMS } from "../world/phaseFourLayout";
 import { brownPrismGuidance, canopyRouteGuidance, onBrownPrismDeck, onShrineDeck, shrineGuidance } from "./canopyGuidance";
 import styles from "./Game.module.css";
 import { touchHint } from "./touchHints";
-
-function subscribeCoarse(callback: () => void) {
-  const media = matchMedia("(pointer: coarse)");
-  media.addEventListener("change", callback);
-  return () => media.removeEventListener("change", callback);
-}
+import { useTouchDevice } from "@/features/story/useTouchDevice";
 
 type Instruction = { title: string; body: string };
 const HIGH_PLATEAU = PHASE_FOUR_PLATFORMS.find(deck => deck.id === "vine-plateau")!;
@@ -87,7 +82,8 @@ export default function Controls({
 }) {
   const state = useGame();
   const pt = locale === "pt";
-  const touch = useSyncExternalStore(subscribeCoarse, () => matchMedia("(pointer: coarse)").matches, () => false);
+  const touch = useTouchDevice();
+  const [dismissedHint, setDismissedHint] = useState<string | null>(null);
   const fullscreen = useFullscreen();
   const first = useRef<HTMLButtonElement>(null);
   const pause = useRef<HTMLButtonElement>(null);
@@ -393,10 +389,15 @@ export default function Controls({
       </div>
       {state.movementDebug && <MovementDebugPanel />}
       {hint && !state.paused && !state.cubePuzzleOpen && (
-        <div className={styles.hint} role="status">
-          <strong>{hint.title}</strong>
-          <span>{touch ? touchHint(hint.body, pt, state.abilityKey) : hint.body}</span>
-        </div>
+        touch && dismissedHint === `${hint.title}|${hint.body}`
+          ? <button className={styles.hintOpen} type="button" aria-label={pt ? "Mostrar dica" : "Show hint"}
+              onClick={() => setDismissedHint(null)}>?</button>
+          : <div className={styles.hint} role="status">
+              {touch && <button className={styles.hintClose} type="button" aria-label={pt ? "Fechar dica" : "Dismiss hint"}
+                onClick={() => setDismissedHint(`${hint.title}|${hint.body}`)}>×</button>}
+              <strong>{hint.title}</strong>
+              <span>{touch ? touchHint(hint.body, pt, state.abilityKey) : hint.body}</span>
+            </div>
       )}
       <div
         className={styles.portraits}

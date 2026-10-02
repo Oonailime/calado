@@ -26,7 +26,7 @@ npm ci
 npm run dev
 ```
 
-- `/` abre a história e o portfólio também no celular. A rolagem, inclusive por toque, conduz até o botão **Jogar**. Uma tela de carregamento com a coroa de cipó de seleção cobre a página até a cena 3D carregar. No computador, a barra de rolagem é um tronco com um cipó; no toque, ela fica escondida.
+- `/` abre a história e o portfólio também no celular. Antes da navegação, o celular mostra um aviso sobre a adaptação em desenvolvimento; após aceitar, mostra uma animação que orienta a girar o aparelho. Ambos podem ser fechados. A rolagem, inclusive por toque, conduz até o botão **Jogar**. Uma tela de carregamento com a coroa de cipó de seleção cobre a página até a cena 3D carregar. No computador, a barra de rolagem é um tronco com um cipó; no toque, ela fica escondida.
 - Modo claro é a história original; modo escuro é a história no cenário vulcânico. O tema segue a preferência do sistema até o visitante escolher no botão de sol/lua, e a escolha fica salva no navegador.
 - `/design2` abre direto no modo escuro, sem alterar a escolha salva.
 - O cabeçalho da história e a barra do jogo têm um botão de tela cheia. Ele vale para a página inteira, então sair do jogo para a história mantém a tela cheia.
@@ -36,7 +36,7 @@ npm run dev
 - `/?map=phase2&skip` é um atalho local para inspeção do xadrez; não representa progressão normal.
 - `/estudo` é interno e fica oculto em produção, salvo quando `ENABLE_STUDIO=1` estiver explicitamente definido.
 
-No computador, `Esc` abre as configurações e permite sair. Os atalhos de personagem, interação e habilidade são mostrados contextualmente; a habilidade padrão é remapeável. No celular, o jogo é usado na horizontal: joystick à esquerda, câmera e pinça à direita, botões de pulo, interação, habilidade e pausa, além de Subir/Descer quando o macaco está num cipó. Os retratos trocam de personagem. Na vertical, um aviso pede para girar o aparelho. A qualidade inicial no toque é baixa e pode ser alterada na pausa. Mantenha essa interface como fonte de verdade ao editar controles.
+No computador, `Esc` abre as configurações e permite sair. Os atalhos de personagem, interação e habilidade são mostrados contextualmente; a habilidade padrão é remapeável. No celular, o jogo é usado na horizontal: joystick à esquerda, câmera e pinça à direita, botões de pulo, interação, habilidade e pausa, além de Subir/Descer quando o macaco está num cipó. Os retratos trocam de personagem. Na vertical, o jogo pausa e esconde os comandos sob um aviso animado para girar o aparelho. As dicas contextuais no toque podem ser fechadas e reabertas. A qualidade inicial no toque é baixa e pode ser alterada na pausa. Mantenha essa interface como fonte de verdade ao editar controles.
 
 A bananeira usa o FBX original no computador e um GLB com geometria Draco e imagens de até 1024 px no celular. `scripts/prepare-banana-plant.py` reproduz a conversão com Blender 5.2; os arquivos de decodificação Draco ficam em `public/assets/draco/`.
 No celular, o canvas da história é desmontado enquanto o jogo está aberto e recriado ao sair, para não manter os dois cenários 3D na memória ao mesmo tempo.

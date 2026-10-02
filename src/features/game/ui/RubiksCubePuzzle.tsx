@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Locale } from "@/content/story";
+import { useTouchDevice } from "@/features/story/useTouchDevice";
 import { runtime, useGame } from "../state/store";
 import {
   faceMove,
@@ -28,6 +29,7 @@ const FACE_LABELS: Record<FaceName, { pt: string; en: string }> = {
 
 export default function RubiksCubePuzzle({ locale }: { locale: Locale }) {
   const pt = locale === "pt";
+  const touch = useTouchDevice();
   const cubeLayersSolved = useGame((s) => s.puzzle.cubeLayersSolved);
   const cubeTurning = useGame((s) => s.puzzle.cubeTurning);
   const panel = useRef<HTMLDivElement>(null);
@@ -176,7 +178,7 @@ export default function RubiksCubePuzzle({ locale }: { locale: Locale }) {
         className={styles.exitPanel}
         onClick={() => useGame.getState().configure({ cubePuzzleOpen: false })}
       >
-        {typeof window !== "undefined" && matchMedia("(pointer: coarse)").matches
+        {touch
           ? (pt ? "Fechar" : "Close")
           : (pt ? "Fechar (Esc)" : "Close (Esc)")}
       </button>

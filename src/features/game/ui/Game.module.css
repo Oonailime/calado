@@ -24,6 +24,9 @@
 .chessActions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .chessPanel button { border: 1px solid #d7b77788; border-radius: 7px; padding: 7px 9px; background: #302b27; color: #ffefd0; cursor: pointer; }
 .chessPanel button:disabled { opacity: .42; cursor: not-allowed; }
+.chessHintOpen { position: absolute; top: 130px; right: 8px; z-index: 5; width: 44px; height: 44px; border: 1px solid #d7bb7b88; border-radius: 50%; background: #242029e8; color: #f9e7ae; font-size: 23px; cursor: pointer; }
+.chessPanel .chessHintClose { position: absolute; top: 0; right: 0; width: 44px; height: 44px; border: 0; background: transparent; color: #f9e7ae; font-size: 23px; }
+.root[data-touch="true"] .chessPanel { padding-right: 44px; }
 .chessStop { margin-top: 8px; }
 .portalButton { width: 100%; margin-top: 10px; background: #614d2b !important; }
 .chessTab {
@@ -732,7 +735,21 @@
   color: #929a8d;
   cursor: default;
 }
-@media (pointer: coarse) {
+.hintClose, .hintOpen {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #d7bb7b88;
+  border-radius: 50%;
+  background: #19372ded;
+  color: #f9e7ae;
+  font-size: 23px;
+  cursor: pointer;
+}
+.hintClose { position: absolute; top: 0; right: 0; }
+.hintOpen { position: absolute; z-index: 5; top: max(62px, calc(env(safe-area-inset-top) + 50px)); left: 50%; transform: translateX(-50%); }
+@media (pointer: coarse), (any-pointer: coarse) and (max-width: 1100px) {
   .root, .canvas { touch-action: none; }
   .bar { top: max(12px, env(safe-area-inset-top)); right: 76px; gap: 5px; }
   .icon { width: 44px; height: 44px; }
@@ -745,7 +762,7 @@
   .hint, .root[data-map="phase2"] .hint {
     top: max(62px, calc(env(safe-area-inset-top) + 50px)); bottom: auto;
     left: 50%; transform: translateX(-50%); width: min(52vw, 420px);
-    max-height: 62px; overflow-y: auto; padding: 5px 8px; font-size: 10px; line-height: 1.25;
+    box-sizing: border-box; max-height: min(100px, 28svh); overflow-y: auto; padding: 6px 32px 6px 8px; font-size: 10px; line-height: 1.3;
     text-align: center;
   }
   .hint strong { font-size: 10px; margin: 0; }
@@ -769,8 +786,15 @@
   .chessUiBoard { width: 352px; max-width: none; }
   .chessSquare { min-width: 0; min-height: 0 !important; }
 }
-@media (pointer: coarse) and (orientation: portrait) {
-  .rotateNotice { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; background: #14291f; text-align: center; font-size: 19px; }
-  .rotateNotice span { font-size: 56px; }
+.root[data-touch="true"], .root[data-touch="true"] .canvas { touch-action: none; }
+.root[data-touch="true"] .hint, .root[data-touch="true"][data-map="phase2"] .hint {
+  z-index: 5;
+  top: max(62px, calc(env(safe-area-inset-top) + 50px)); bottom: auto; left: 50%;
+  transform: translateX(-50%); width: min(52vw, 420px); box-sizing: border-box;
+  max-height: min(100px, 28svh); overflow-y: auto; padding: 6px 32px 6px 8px;
+  font-size: 10px; line-height: 1.3; text-align: center;
 }
+.root[data-touch="true"] .hint strong { font-size: 10px; margin: 0; }
+.root[data-portrait="true"] .rotateNotice { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; background: #14291f; text-align: center; font-size: 17px; }
 @media (pointer: fine) { .lockTouch { display: none; } }
+.root[data-touch="true"] .lockTouch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
