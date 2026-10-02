@@ -79,28 +79,24 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
   const showPortfolio = portfolioIsVisible && portfolioReveal > 0;
   useEffect(() => {
     gsap.registerPlugin(ScrollTrigger);
-    const media = gsap.matchMedia();
-    media.add("(min-width: 761px) and (pointer: fine)", () => {
-      const trigger = ScrollTrigger.create({
-        trigger: root.current,
-        start: "top top",
-        end: "bottom bottom",
-        onUpdate: (self) => {
-          setProgress(self.progress);
-          if (self.progress > 0.86 && !loading.current) {
-            loading.current = true;
-            import("@/features/game/Game")
-              .then((module) => setGame(() => module.default))
-              .catch(() => {
-                setLoadError(true);
-                loading.current = false;
-              });
-          }
-        },
-      });
-      return () => trigger.kill();
+    const trigger = ScrollTrigger.create({
+      trigger: root.current,
+      start: "top top",
+      end: "bottom bottom",
+      onUpdate: (self) => {
+        setProgress(self.progress);
+        if (self.progress > 0.86 && !loading.current) {
+          loading.current = true;
+          import("@/features/game/Game")
+            .then((module) => setGame(() => module.default))
+            .catch(() => {
+              setLoadError(true);
+              loading.current = false;
+            });
+        }
+      },
     });
-    return () => media.revert();
+    return () => trigger.kill();
   }, []);
   useEffect(() => {
     document.documentElement.lang = locale === "pt" ? "pt-BR" : "en";
@@ -151,16 +147,6 @@ export default function Experience({ initialTheme }: { initialTheme?: Theme }) {
     <>
       <VineLoader visible={!ready} locale={locale} />
       {!playing && <VineScrollbar reduced={reduced} />}
-      <div className={`${styles.mobile} ${variant === "volcanic" ? styles.volcanicMobile : ""}`}>
-        <svg viewBox="-60 -80 160 180" aria-hidden="true">
-          <MonkeyGlyph />
-        </svg>
-        <h1>Emiliano Calado</h1>
-        <p>
-          Esta experiência foi criada para computador. Use um PC com teclado e
-          mouse para explorar o Templo dos Três.
-        </p>
-      </div>
       <main
         ref={root}
         className={`${styles.journey} ${variant === "volcanic" ? styles.volcanic : ""}`}

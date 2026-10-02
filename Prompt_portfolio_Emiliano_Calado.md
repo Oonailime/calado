@@ -22,7 +22,7 @@ O projeto é um portfólio pessoal interativo, em português e inglês, que cont
 - Preserve a identidade e o tom visual já estabelecidos; use referências visuais fornecidas pelo usuário como direção, sem copiar assets de terceiros.
 - Conteúdo biográfico e descrições de projetos devem vir de `src/content/story.ts`, `src/content/portfolio.ts` e das fontes autorizadas. Não invente cargos, datas, resultados, clientes ou links.
 - A história é bilíngue. Mantenha português e inglês sincronizados quando alterar texto visível.
-- A experiência é voltada a computador. Em telas pequenas, a aplicação orienta o visitante a usar um PC; não introduza controles móveis sem solicitação.
+- A experiência funciona em computador e em celulares recentes com navegador e tela de toque. A história e o portfólio acompanham o scroll por toque; o jogo usa controles na tela e orientação horizontal. Preserve os controles, o visual e o desempenho do computador ao adaptar o celular.
 - Mantenha a navegação da história reversível, os controles contextuais e o suporte existente a movimento reduzido, contraste, qualidade gráfica e volume.
 - No jogo, os três macacos têm habilidades complementares. Preserve seleção livre, companheiros, sustentação de habilidades, progresso dos desafios e retorno seguro.
 - Interface de controles, dicas e estado de quebra-cabeças é permitida. Não reintroduza a premissa antiga de que o jogo não pode apresentar qualquer instrução de mecânica.

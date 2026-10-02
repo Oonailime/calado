@@ -19,6 +19,7 @@ import {
 } from "./volcanicStoryRoute";
 import { calladoState, sceneAndPhase, walkPoint } from "./cameraRig";
 import { BoundaryLoaded, SceneReady } from "./sceneReady";
+import { useMobileGraphics } from "../useMobileGraphics";
 
 const BOUNDARIES = ["buildings", "cast", "chess"] as const;
 
@@ -39,7 +40,7 @@ function VolcanicCast({ progress, reduced }: Pick<StorySceneProps, "progress" | 
   </>;
 }
 
-function View({ progress, reduced }: Pick<StorySceneProps, "progress" | "reduced">) {
+function View({ progress, reduced, mobile }: Pick<StorySceneProps, "progress" | "reduced"> & { mobile: boolean }) {
   const camera = useThree(state => state.camera);
   const sun = useRef<DirectionalLight>(null);
   useFrame(() => {
@@ -54,14 +55,15 @@ function View({ progress, reduced }: Pick<StorySceneProps, "progress" | "reduced
     }
   });
   return <directionalLight ref={sun} position={[-16, 26, 12]} color="#e6e1d8" intensity={2.2}
-    castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-23} shadow-camera-right={23}
+    castShadow={!mobile} shadow-mapSize={mobile ? [512, 512] : [2048, 2048]} shadow-camera-left={-23} shadow-camera-right={23}
     shadow-camera-top={23} shadow-camera-bottom={-23} shadow-camera-near={1} shadow-camera-far={100}
     shadow-bias={-0.00015} shadow-normalBias={0.045} />;
 }
 
 export default function VolcanicStoryScene({ progress, reduced, active, locale, onReady }: StorySceneProps) {
+  const mobile = useMobileGraphics();
   const loaded = useRef(new Set<string>());
-  return <Canvas shadows={{ type: PCFShadowMap }} dpr={[1, 1.5]} camera={{ position: [4, 6.4, 13], fov: 50, near: 0.1, far: 550 }}
+  return <Canvas shadows={mobile ? false : { type: PCFShadowMap }} dpr={mobile ? [0.75, 1] : [1, 1.5]} camera={{ position: [4, 6.4, 13], fov: 50, near: 0.1, far: 550 }}
     frameloop={active ? "always" : "demand"} gl={{ antialias: true, powerPreference: "high-performance", stencil: false }}
     onCreated={state => {
       state.gl.toneMappingExposure = 1.05;
@@ -70,7 +72,7 @@ export default function VolcanicStoryScene({ progress, reduced, active, locale, 
     <color attach="background" args={["#535256"]} />
     <fog attach="fog" args={["#535256", 35, 245]} />
     <hemisphereLight args={["#c7c9ce", "#211c1a", 1.7]} />
-    <View progress={progress} reduced={reduced} />
+    <View progress={progress} reduced={reduced} mobile={mobile} />
     <VolcanicScenery progress={progress} active={active} reduced={reduced}
       chessLoaded={<BoundaryLoaded id="chess" loaded={loaded} />} />
     <Suspense fallback={null}>

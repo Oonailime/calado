@@ -152,8 +152,3 @@
     opacity: 1;
   }
 }
-@media (max-width: 760px), (pointer: coarse) {
-  .loader {
-    display: none;
-  }
-}

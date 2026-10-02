@@ -20,6 +20,7 @@ import Grass from "./Grass";
 import RockPath from "./RockPath";
 import StoryMonkey from "./StoryMonkey";
 import { BoundaryLoaded, SceneReady } from "./sceneReady";
+import { useMobileGraphics } from "../useMobileGraphics";
 import type { Locale } from "@/content/story";
 
 export type StorySceneProps = {
@@ -188,6 +189,7 @@ export default function StoryScene({
   locale,
   onReady,
 }: StorySceneProps) {
+  const mobile = useMobileGraphics();
   const progressRef = useRef(progress);
   const loaded = useRef(new Set<string>());
   useLayoutEffect(() => {
@@ -197,7 +199,7 @@ export default function StoryScene({
     <Canvas
       onCreated={state => { if (process.env.NODE_ENV !== "production") (window as unknown as { __storyTest: unknown }).__storyTest = state; }}
       shadows={false}
-      dpr={[1, 1.5]}
+      dpr={mobile ? [0.75, 1] : [1, 1.5]}
       camera={{ position: [0, 3.6, 9], fov: 48, near: 0.1, far: 160 }}
       frameloop={active ? "always" : "demand"}
       gl={{

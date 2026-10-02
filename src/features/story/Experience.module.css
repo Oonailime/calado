@@ -226,41 +226,8 @@
   z-index: 20;
   background: #162822;
 }
-.mobile {
-  display: none;
-}
 .error {
   color: #edbe96 !important;
-}
-@media (max-width: 760px), (pointer: coarse) {
-  .journey {
-    display: none;
-  }
-  .mobile {
-    display: flex;
-    min-height: 100svh;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 40px;
-    text-align: center;
-    gap: 20px;
-    background: radial-gradient(circle, #2b4234, #10201b);
-  }
-  .mobile svg {
-    width: 150px;
-    height: 150px;
-  }
-  .mobile h1 {
-    font:
-      38px Georgia,
-      serif;
-  }
-  .mobile p {
-    color: #b9c0ae;
-    max-width: 300px;
-    line-height: 1.8;
-  }
 }
 
 .workCopy { top: 30%; width: 32%; }
@@ -288,4 +255,62 @@
 .volcanic .start { background: #ceb291; border-color: #e0c7aa; color: #242322; box-shadow: 0 16px 35px #00000055; }
 .volcanic .workCopy { top: 29%; width: 30%; }
 .volcanic .workCopy h1 { font-size: clamp(30px, 3.8vw, 60px); }
-.volcanicMobile { background: radial-gradient(circle, #414044, #1e1f22); }
+@media (max-width: 760px), (pointer: coarse) {
+  .journey { width: 100%; overflow: clip; }
+  .stage { width: 100%; }
+  .vignette {
+    background: linear-gradient(180deg, #10211bc9 0%, #10211b91 42%, #10211ba8 100%);
+  }
+  .volcanic .vignette {
+    background: linear-gradient(180deg, #141518d9 0%, #17181a99 48%, #121315ba 100%);
+  }
+  .header {
+    padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
+    gap: 8px;
+  }
+  .brand { gap: 5px; font-size: 9px; letter-spacing: 0.08em; white-space: nowrap; }
+  .brand svg { width: 28px; height: 28px; flex: none; }
+  .tools { gap: 3px; }
+  .tools button { width: 44px; height: 44px; flex: none; }
+  .tools .iconToggle + button:not(.iconToggle) { margin-left: 0; }
+  .copy, .volcanic .copy, .workCopy, .volcanic .workCopy {
+    top: clamp(76px, 16svh, 130px);
+    left: max(18px, env(safe-area-inset-left));
+    width: min(88vw, 480px);
+    max-width: none;
+  }
+  .copy h1, .workCopy h1, .volcanic .copy h1, .volcanic .workCopy h1 {
+    font-size: clamp(25px, 7vw, 42px);
+    margin: 10px 0;
+    line-height: 1.12;
+  }
+  .copy p { font-size: 12px; line-height: 1.4; margin: 7px 0; }
+  .rule { margin: 10px 0; }
+  .preview { display: none; }
+  .bottom {
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 18px;
+    right: 18px;
+    gap: 8px;
+  }
+  .scroll { font-size: 9px; letter-spacing: 0.04em; gap: 5px; }
+  .scroll span { font-size: 20px; }
+  .steps { gap: 6px; }
+  .count { margin-left: 3px; font-size: 9px; }
+  .playZone { right: 18px; bottom: 18%; }
+  .start { min-height: 44px; padding: 14px 24px; font-size: 14px; }
+}
+@media (max-width: 760px) and (orientation: landscape), (pointer: coarse) and (orientation: landscape) {
+  .copy, .volcanic .copy, .workCopy, .volcanic .workCopy {
+    top: clamp(58px, 18svh, 90px);
+    width: min(42vw, 420px);
+  }
+  .copy h1, .workCopy h1, .volcanic .copy h1, .volcanic .workCopy h1 {
+    font-size: clamp(23px, 4vw, 38px);
+  }
+  .copy p { font-size: 11px; }
+  .playZone { bottom: 20%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .start { transition: none; }
+}

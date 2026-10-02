@@ -191,3 +191,30 @@
     transition: none;
   }
 }
+@media (max-width: 760px), (pointer: coarse) {
+  .portfolio {
+    top: auto;
+    bottom: max(55px, calc(env(safe-area-inset-bottom) + 48px));
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: 49svh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0 4px 4px;
+  }
+  .heading { position: sticky; top: 0; z-index: 1; min-height: 44px; margin-bottom: 6px; }
+  .heading h2 { font-size: 18px; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .projectLink { min-height: 44px; padding: 10px; }
+  .card h3 { font-size: 15px; overflow-wrap: anywhere; }
+  .card p, .tags { font-size: 10px; }
+  .art { margin-bottom: 4px; }
+  .visit { margin-top: 5px; }
+  .postButton { min-height: 44px; margin: 0 10px 5px; }
+  .dialog { width: calc(100vw - 24px); max-height: 85svh; padding: 14px; }
+  .dialog header button, .dialog > a { min-height: 44px; min-width: 44px; }
+}
+@media (max-width: 760px) and (orientation: landscape), (pointer: coarse) and (orientation: landscape) {
+  .portfolio { top: 18%; bottom: 12%; left: auto; right: 2vw; width: 51vw; max-height: none; }
+}

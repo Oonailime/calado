@@ -2,7 +2,7 @@
 
 Portfólio pessoal interativo de Emiliano Calado. A história biográfica acompanha o scroll e conduz a uma experiência 3D jogável, **O Templo dos Três**. O projeto segue em desenvolvimento; veja o [estado atual](PLANO_IMPLEMENTACAO.md) e a [direção do produto](Prompt_portfolio_Emiliano_Calado.md).
 
-## Executar no PC
+## Executar no computador ou celular recente
 
 Node.js 22 ou superior.
 
@@ -19,7 +19,7 @@ npm run dev
 - `http://localhost:3000/?map=phase2&skip`: atalho local para inspecionar o desafio de xadrez.
 - `http://localhost:3000/estudo`: caderno e ferramentas internas de pré-produção. Em produção, a rota fica oculta a menos que `ENABLE_STUDIO=1` seja configurado.
 
-O jogo bloqueia o scroll. **Esc** abre pausa/configurações, de onde também dá para sair do modo jogo; **Retomar** preserva a progressão. Celulares recebem orientação para usar PC.
+No computador e no celular, a história avança com a rolagem. O jogo bloqueia o scroll e é usado na horizontal no celular. No computador, **Esc** abre pausa/configurações, de onde também dá para sair do modo jogo; **Retomar** preserva a progressão.
 
 ## Controles do jogo
 

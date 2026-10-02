@@ -134,7 +134,7 @@ test("caderno apresenta os 14 quadros e animatic editável", async ({
   await page.screenshot({ path: "test-results/caderno.png", fullPage: true });
 });
 
-test("celular recebe orientação para PC e não baixa o jogo", async ({
+test("celular percorre a história por scroll e mantém o jogo sob demanda", async ({
   browser,
 }) => {
   const context = await browser.newContext({
@@ -146,7 +146,9 @@ test("celular recebe orientação para PC e não baixa o jogo", async ({
   const requests: string[] = [];
   page.on("request", (r) => requests.push(r.url()));
   await page.goto(process.env.TEST_BASE_URL || "http://localhost:3000/");
-  await expect(page.getByText(/Use um PC com teclado/)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Meu nome é Emiliano Calado." })).toBeVisible();
+  await scrollTo(page, 0.45);
+  await expect(page.getByRole("heading", { name: "E comecei a construir minhas próprias respostas." })).toBeVisible();
   expect(requests.some((url) => /rapier|features_game_Game/.test(url))).toBe(
     false,
   );
